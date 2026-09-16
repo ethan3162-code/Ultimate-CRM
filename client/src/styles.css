@@ -362,9 +362,12 @@ table.list tbody tr:last-child td { border-bottom: none; }
   border-radius: 6px; background: var(--line-soft); border: 1px solid var(--line);
   overflow: hidden; min-width: 10px; cursor: pointer;
 }
-.gantt-bar .fill { position: absolute; inset: 0; width: 0; background: var(--accent-soft); border-right: 2px solid var(--accent); }
+.gantt-bar .seg { position: absolute; top: 0; bottom: 0; background: transparent; border-right: 1px solid var(--paper-raised); }
+.gantt-bar .seg:last-child { border-right: none; }
+.gantt-bar .seg.filled { background: var(--accent-soft); }
+.gantt-bar .seg.current { border-right: 2px solid var(--accent); }
 .gantt-bar .lbl { position: relative; z-index: 1; font-size: 10.5px; padding: 0 8px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; color: var(--ink-soft); font-weight: 600; }
-.gantt-bar.status-completed .fill { background: var(--accent-soft); }
+.gantt-bar.status-completed .seg.filled { background: var(--accent-soft); }
 .gantt-bar.status-completed { border-color: var(--accent-soft-line); }
 .gantt-bar.status-cancelled { opacity: 0.5; }
 .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--red); z-index: 2; }

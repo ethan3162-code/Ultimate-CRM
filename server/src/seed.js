@@ -160,19 +160,33 @@ insertEstimate({ job_id: j5, number: 'EST-1005', status: 'sent', tax_rate: 0.065
   { description: 'Motor + sensor service', qty: 1, unit_price: 340 },
 ]);
 
-// --- Project schedule: start/end dates + finish-out stage for the Gantt/schedule view ---
-// Progress is driven by a fixed stage checkpoint (demo=25%, material_order=50%,
-// installation=75%, final_walkthrough=100%) rather than a free-form percentage.
-const STAGE_PERCENT = { demo: 25, material_order: 50, installation: 75, final_walkthrough: 100 };
-function setSchedule(jobId, start_date, end_date, stage) {
-  db.prepare(`UPDATE jobs SET start_date = ?, end_date = ?, stage = ?, progress_percent = ? WHERE id = ?`)
-    .run(start_date, end_date, stage || null, stage ? STAGE_PERCENT[stage] : 0, jobId);
+// --- Project schedule: each job moves through four finish-out stages (demo, site prep,
+// installation, final walkthrough), each with its own day-length. The project's total
+// length (and therefore its end date) is the sum of those days, and progress is the
+// cumulative days through the current stage as a % of that total — not a free-form number.
+const STAGE_KEYS = ['demo', 'site_prep', 'installation', 'final_walkthrough'];
+function addDays(dateStr, days) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
-setSchedule(j1, '2026-09-10', '2026-09-25', 'installation');
-setSchedule(j2, '2026-09-01', '2026-09-08', 'final_walkthrough');
-setSchedule(j3, '2026-09-22', '2026-09-24', 'demo');
-setSchedule(j4, '2026-08-28', '2026-09-08', 'final_walkthrough');
-setSchedule(j5, '2026-09-15', '2026-09-20', 'material_order');
+function setSchedule(jobId, start_date, stage, days) {
+  const total = STAGE_KEYS.reduce((sum, k) => sum + (days[k] || 0), 0) || 1;
+  const idx = stage ? STAGE_KEYS.indexOf(stage) : -1;
+  const cumulative = idx < 0 ? 0 : STAGE_KEYS.slice(0, idx + 1).reduce((sum, k) => sum + (days[k] || 0), 0);
+  const progress_percent = Math.round((cumulative / total) * 100);
+  const end_date = addDays(start_date, total);
+  db.prepare(`
+    UPDATE jobs SET start_date = ?, end_date = ?, stage = ?, progress_percent = ?,
+      demo_days = ?, site_prep_days = ?, installation_days = ?, final_walkthrough_days = ?
+    WHERE id = ?
+  `).run(start_date, end_date, stage || null, progress_percent, days.demo, days.site_prep, days.installation, days.final_walkthrough, jobId);
+}
+setSchedule(j1, '2026-09-10', 'installation', { demo: 1, site_prep: 2, installation: 10, final_walkthrough: 1 });
+setSchedule(j2, '2026-09-01', 'final_walkthrough', { demo: 1, site_prep: 1, installation: 3, final_walkthrough: 1 });
+setSchedule(j3, '2026-09-22', 'demo', { demo: 1, site_prep: 1, installation: 1, final_walkthrough: 1 });
+setSchedule(j4, '2026-08-28', 'final_walkthrough', { demo: 1, site_prep: 2, installation: 4, final_walkthrough: 1 });
+setSchedule(j5, '2026-09-15', 'site_prep', { demo: 1, site_prep: 2, installation: 5, final_walkthrough: 1 });
 
 // --- Appointments (local + would sync to Google Calendar once connected) ---
 insertAppointment({

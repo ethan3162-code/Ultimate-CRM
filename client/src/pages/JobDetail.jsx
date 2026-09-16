@@ -9,11 +9,17 @@ const JOB_STATUSES = ['scheduled', 'in_progress', 'completed', 'cancelled'];
 const STATUS_PILL = { scheduled: '', in_progress: 'amber', completed: 'green', cancelled: 'red', draft: '', sent: 'amber', approved: 'green', partial: 'amber', paid: 'green', overdue: 'red' };
 const KIND_LABEL = { deposit: 'Deposit', standard: null };
 const STAGES = [
-  { key: 'demo', label: 'Demo' },
-  { key: 'material_order', label: 'Material order' },
-  { key: 'installation', label: 'Installation' },
-  { key: 'final_walkthrough', label: 'Final walkthrough' },
+  { key: 'demo', label: 'Demo', field: 'demo_days' },
+  { key: 'site_prep', label: 'Site prep', field: 'site_prep_days' },
+  { key: 'installation', label: 'Installation', field: 'installation_days' },
+  { key: 'final_walkthrough', label: 'Final walkthrough', field: 'final_walkthrough_days' },
 ];
+
+function addDays(dateStr, days) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d;
+}
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -24,13 +30,19 @@ export default function JobDetail() {
   const [depositPercent, setDepositPercent] = useState('');
   const [requestingDepositFor, setRequestingDepositFor] = useState(null);
   const [payingInvoice, setPayingInvoice] = useState(null);
-  const [schedule, setSchedule] = useState({ start_date: '', end_date: '' });
+  const [schedule, setSchedule] = useState({ start_date: '', demo_days: 1, site_prep_days: 2, installation_days: 5, final_walkthrough_days: 1 });
   const [savingStage, setSavingStage] = useState(false);
 
   function load() {
     api.job(id).then((j) => {
       setJob(j);
-      setSchedule({ start_date: j.start_date || '', end_date: j.end_date || '' });
+      setSchedule({
+        start_date: j.start_date || '',
+        demo_days: j.demo_days ?? 1,
+        site_prep_days: j.site_prep_days ?? 2,
+        installation_days: j.installation_days ?? 5,
+        final_walkthrough_days: j.final_walkthrough_days ?? 1,
+      });
     });
   }
   useEffect(load, [id]);
@@ -40,11 +52,17 @@ export default function JobDetail() {
     load();
   }
 
+  const totalDays = STAGES.reduce((sum, s) => sum + (Number(schedule[s.field]) || 0), 0);
+  const projectedEnd = schedule.start_date ? addDays(schedule.start_date, totalDays) : null;
+
   async function saveSchedule(e) {
     e.preventDefault();
     await api.updateJob(id, {
       start_date: schedule.start_date || null,
-      end_date: schedule.end_date || null,
+      demo_days: Number(schedule.demo_days) || 0,
+      site_prep_days: Number(schedule.site_prep_days) || 0,
+      installation_days: Number(schedule.installation_days) || 0,
+      final_walkthrough_days: Number(schedule.final_walkthrough_days) || 0,
     });
     load();
   }
@@ -117,11 +135,25 @@ export default function JobDetail() {
                 <input type="date" value={schedule.start_date || ''} onChange={(e) => setSchedule({ ...schedule, start_date: e.target.value })} />
               </div>
               <div className="field">
-                <label>End date</label>
-                <input type="date" value={schedule.end_date || ''} onChange={(e) => setSchedule({ ...schedule, end_date: e.target.value })} />
+                <label>Projected end date</label>
+                <input type="text" value={projectedEnd ? projectedEnd.toLocaleDateString() : '— set a start date —'} disabled />
               </div>
-              <div className="field" style={{ justifyContent: 'flex-end' }}>
-                <button className="btn primary sm" type="submit">Save dates</button>
+              {STAGES.map((s) => (
+                <div className="field" key={s.field}>
+                  <label>{s.label} — days</label>
+                  <input
+                    type="number" min="0"
+                    value={schedule[s.field]}
+                    onChange={(e) => setSchedule({ ...schedule, [s.field]: e.target.value })}
+                  />
+                </div>
+              ))}
+              <div className="field" style={{ gridColumn: '1 / -1', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="sub" style={{ margin: 0 }}>
+                  Total project length: <strong>{totalDays} day{totalDays === 1 ? '' : 's'}</strong>
+                  {projectedEnd ? ` — ends ${projectedEnd.toLocaleDateString()}` : ''}
+                </span>
+                <button className="btn primary sm" type="submit">Save schedule</button>
               </div>
             </form>
 
@@ -141,14 +173,21 @@ export default function JobDetail() {
                 ))}
               </div>
               <div className="stage-bar">
-                {STAGES.map((s, i) => (
-                  <div key={s.key} className={'segment' + (job.stage && STAGES.findIndex((x) => x.key === job.stage) >= i ? ' filled' : '')} />
-                ))}
+                {STAGES.map((s, i) => {
+                  const currentIdx = job.stage ? STAGES.findIndex((x) => x.key === job.stage) : -1;
+                  const share = Math.max(Number(job[s.field]) || 0, 0.15);
+                  return <div key={s.key} className={'segment' + (currentIdx >= i ? ' filled' : '')} style={{ flex: `${share} 0 0` }} />;
+                })}
               </div>
               <div className="stage-labels">
-                {STAGES.map((s) => (
-                  <span key={s.key} className={'lbl' + (job.stage === s.key ? ' active' : '')}>{s.label}</span>
-                ))}
+                {STAGES.map((s) => {
+                  const share = Math.max(Number(job[s.field]) || 0, 0.15);
+                  return (
+                    <span key={s.key} className={'lbl' + (job.stage === s.key ? ' active' : '')} style={{ flex: `${share} 0 0` }}>
+                      {s.label} · {job[s.field] ?? 0}d
+                    </span>
+                  );
+                })}
               </div>
             </div>
           </div>

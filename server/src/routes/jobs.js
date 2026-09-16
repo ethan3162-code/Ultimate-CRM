@@ -1,14 +1,26 @@
 const express = require('express');
 const db = require('../db');
-const { getJobFull, getEstimateFull, getInvoiceFull, logActivity } = require('../helpers');
+const {
+  getJobFull, getEstimateFull, getInvoiceFull, logActivity,
+  STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, computeProgress, computeEndDate,
+} = require('../helpers');
 const { fireTrigger } = require('../automationEngine');
 
 const router = express.Router();
 
-// Job progress is driven by a fixed set of finish-out stages rather than a free-form
-// percentage — picking a stage snaps progress_percent to its checkpoint value.
-const STAGE_PERCENT = { demo: 25, material_order: 50, installation: 75, final_walkthrough: 100 };
-const STAGE_LABEL = { demo: 'Demo', material_order: 'Material order', installation: 'Installation', final_walkthrough: 'Final walkthrough' };
+const DEFAULT_STAGE_DAYS = { demo: 1, site_prep: 2, installation: 5, final_walkthrough: 1 };
+
+/** Pulls the four *_days fields out of a body/job object, falling back to existing/default values. */
+function readStageDays(body, existing) {
+  const out = {};
+  for (const key of STAGE_KEYS) {
+    const field = STAGE_DAY_FIELD[key];
+    const fallback = existing ? existing[field] : DEFAULT_STAGE_DAYS[key];
+    const raw = body[field];
+    out[field] = raw === undefined ? fallback : Math.max(0, Number(raw) || 0);
+  }
+  return out;
+}
 
 router.get('/', (req, res) => {
   const rows = db.prepare(`
@@ -22,13 +34,22 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { contact_id, company_id, deal_id, title, status, address, scheduled_date, start_date, end_date, stage } = req.body;
+  const { contact_id, company_id, deal_id, title, status, address, scheduled_date, start_date, stage } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
-  const progress_percent = stage && STAGE_PERCENT[stage] != null ? STAGE_PERCENT[stage] : 0;
+  const days = readStageDays(req.body, null);
+  const progress_percent = computeProgress(days, stage);
+  const end_date = computeEndDate(days, start_date);
   const result = db.prepare(`
-    INSERT INTO jobs (contact_id, company_id, deal_id, title, status, address, scheduled_date, start_date, end_date, progress_percent, stage)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)
-  `).run(contact_id || null, company_id || null, deal_id || null, title, status || 'scheduled', address || null, scheduled_date || null, start_date || null, end_date || null, progress_percent, stage || null);
+    INSERT INTO jobs (
+      contact_id, company_id, deal_id, title, status, address, scheduled_date, start_date, end_date,
+      progress_percent, stage, demo_days, site_prep_days, installation_days, final_walkthrough_days
+    )
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    contact_id || null, company_id || null, deal_id || null, title, status || 'scheduled', address || null,
+    scheduled_date || null, start_date || null, end_date, progress_percent, stage || null,
+    days.demo_days, days.site_prep_days, days.installation_days, days.final_walkthrough_days
+  );
   logActivity('job', result.lastInsertRowid, 'note', `Job "${title}" created.`);
   res.status(201).json(getJobFull(result.lastInsertRowid));
 });
@@ -44,11 +65,22 @@ router.patch('/:id', (req, res) => {
   const existing = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'not found' });
   const updates = { ...existing, ...req.body };
-  if (req.body.stage !== undefined) {
-    updates.progress_percent = req.body.stage && STAGE_PERCENT[req.body.stage] != null ? STAGE_PERCENT[req.body.stage] : 0;
-  }
-  db.prepare(`UPDATE jobs SET title=?, status=?, address=?, scheduled_date=?, start_date=?, end_date=?, progress_percent=?, stage=? WHERE id=?`)
-    .run(updates.title, updates.status, updates.address, updates.scheduled_date, updates.start_date, updates.end_date, updates.progress_percent, updates.stage, req.params.id);
+  const days = readStageDays(req.body, existing);
+  Object.assign(updates, days);
+  const stage = req.body.stage !== undefined ? req.body.stage : existing.stage;
+  updates.stage = stage;
+  updates.progress_percent = computeProgress(days, stage);
+  updates.end_date = computeEndDate(days, updates.start_date);
+  db.prepare(`
+    UPDATE jobs SET
+      title=?, status=?, address=?, scheduled_date=?, start_date=?, end_date=?, progress_percent=?, stage=?,
+      demo_days=?, site_prep_days=?, installation_days=?, final_walkthrough_days=?
+    WHERE id=?
+  `).run(
+    updates.title, updates.status, updates.address, updates.scheduled_date, updates.start_date, updates.end_date,
+    updates.progress_percent, updates.stage, days.demo_days, days.site_prep_days, days.installation_days, days.final_walkthrough_days,
+    req.params.id
+  );
   if (req.body.stage !== undefined && req.body.stage !== existing.stage) {
     const label = req.body.stage ? (STAGE_LABEL[req.body.stage] || req.body.stage) : 'Not started';
     logActivity('job', existing.id, 'note', `Job stage set to "${label}".`);

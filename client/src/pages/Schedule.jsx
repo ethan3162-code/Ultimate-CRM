@@ -3,8 +3,27 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 
 const STATUS_LABEL = { scheduled: 'Scheduled', in_progress: 'In progress', completed: 'Completed', cancelled: 'Cancelled' };
-const STAGE_LABEL = { demo: 'Demo', material_order: 'Material order', installation: 'Installation', final_walkthrough: 'Final walkthrough' };
+const STAGES = [
+  { key: 'demo', label: 'Demo', field: 'demo_days' },
+  { key: 'site_prep', label: 'Site prep', field: 'site_prep_days' },
+  { key: 'installation', label: 'Installation', field: 'installation_days' },
+  { key: 'final_walkthrough', label: 'Final walkthrough', field: 'final_walkthrough_days' },
+];
+const STAGE_LABEL = STAGES.reduce((acc, s) => { acc[s.key] = s.label; return acc; }, {});
 const DAY_MS = 86400000;
+
+/** Each stage's share of the job's own bar, sized by its day-length, with the reached stages marked filled. */
+function stageSegments(job) {
+  const currentIdx = job.stage ? STAGES.findIndex((s) => s.key === job.stage) : -1;
+  const total = STAGES.reduce((sum, s) => sum + (Number(job[s.field]) || 0), 0) || 1;
+  let cursor = 0;
+  return STAGES.map((s, i) => {
+    const days = Number(job[s.field]) || 0;
+    const leftPct = (cursor / total) * 100;
+    cursor += days;
+    return { ...s, days, leftPct, widthPct: (days / total) * 100, filled: currentIdx >= i, current: currentIdx === i };
+  });
+}
 
 function toDate(d) {
   return new Date(d + 'T00:00:00');
@@ -92,9 +111,20 @@ export default function Schedule() {
                 </div>
                 <div className="gantt-track">
                   <div className="gantt-today" style={{ left: `${todayLeft}%` }} />
-                  <Link to={`/jobs/${job.id}`} className={`gantt-bar status-${job.status}`} style={barStyle(job)} title={job.stage ? `${STAGE_LABEL[job.stage] || job.stage} (${job.progress_percent || 0}%)` : `${job.progress_percent || 0}% complete`}>
-                    <div className="fill" style={{ width: `${job.progress_percent || 0}%` }} />
-                    <span className="lbl">{job.stage ? STAGE_LABEL[job.stage] || job.stage : `${job.progress_percent || 0}%`}</span>
+                  <Link
+                    to={`/jobs/${job.id}`}
+                    className={`gantt-bar status-${job.status}`}
+                    style={barStyle(job)}
+                    title={`${STAGES.map((s) => `${s.label}: ${Number(job[s.field]) || 0}d`).join(' · ')} — ${job.stage ? `currently ${STAGE_LABEL[job.stage]}` : 'not started'} (${job.progress_percent || 0}%)`}
+                  >
+                    {stageSegments(job).map((seg) => (
+                      <div
+                        key={seg.key}
+                        className={'seg' + (seg.filled ? ' filled' : '') + (seg.current ? ' current' : '')}
+                        style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%` }}
+                      />
+                    ))}
+                    <span className="lbl">{job.stage ? STAGE_LABEL[job.stage] : `${job.progress_percent || 0}%`}</span>
                   </Link>
                 </div>
               </div>
