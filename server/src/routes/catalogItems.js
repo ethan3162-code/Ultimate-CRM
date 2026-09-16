@@ -9,15 +9,15 @@ const router = express.Router();
 // are just general-purpose presets for building estimates by hand.
 
 router.get('/', (req, res) => {
-  const rows = db.prepare(`SELECT * FROM catalog_items ORDER BY description`).all();
+  const rows = db.prepare(`SELECT * FROM catalog_items ORDER BY name`).all();
   res.json(rows);
 });
 
 router.post('/', (req, res) => {
-  const { description, unit, unit_price, material_key } = req.body;
-  if (!description || !description.trim()) return res.status(400).json({ error: 'description is required' });
-  const result = db.prepare(`INSERT INTO catalog_items (description, unit, unit_price, material_key) VALUES (?,?,?,?)`)
-    .run(description.trim(), unit || null, Number(unit_price) || 0, material_key || null);
+  const { name, description, unit, unit_price, material_key } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'name is required' });
+  const result = db.prepare(`INSERT INTO catalog_items (name, description, unit, unit_price, material_key) VALUES (?,?,?,?,?)`)
+    .run(name.trim(), description || null, unit || null, Number(unit_price) || 0, material_key || null);
   res.status(201).json(db.prepare(`SELECT * FROM catalog_items WHERE id = ?`).get(result.lastInsertRowid));
 });
 
@@ -25,8 +25,8 @@ router.patch('/:id', (req, res) => {
   const existing = db.prepare(`SELECT * FROM catalog_items WHERE id = ?`).get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'not found' });
   const updates = { ...existing, ...req.body };
-  db.prepare(`UPDATE catalog_items SET description=?, unit=?, unit_price=?, material_key=?, updated_at=datetime('now') WHERE id=?`)
-    .run(updates.description, updates.unit || null, Number(updates.unit_price) || 0, updates.material_key || null, req.params.id);
+  db.prepare(`UPDATE catalog_items SET name=?, description=?, unit=?, unit_price=?, material_key=?, updated_at=datetime('now') WHERE id=?`)
+    .run(updates.name, updates.description || null, updates.unit || null, Number(updates.unit_price) || 0, updates.material_key || null, req.params.id);
   res.json(db.prepare(`SELECT * FROM catalog_items WHERE id = ?`).get(req.params.id));
 });
 

@@ -19,7 +19,7 @@ export default function LineItemEditor({ items, setItems, taxRate, setTaxRate, c
     if (!presetId) return;
     const item = (catalog || []).find((c) => String(c.id) === String(presetId));
     if (!item) return;
-    setItems([...items, { description: item.description, qty: 1, unit_price: item.unit_price }]);
+    setItems([...items, { description: item.name, qty: 1, unit_price: item.unit_price }]);
     setPresetId('');
   }
 
@@ -33,7 +33,7 @@ export default function LineItemEditor({ items, setItems, taxRate, setTaxRate, c
           <select value={presetId} onChange={(e) => setPresetId(e.target.value)} style={{ flex: 1 }}>
             <option value="">Add a saved item…</option>
             {catalog.map((c) => (
-              <option key={c.id} value={c.id}>{c.description} — {money(c.unit_price)}{c.unit ? ` / ${c.unit}` : ''}</option>
+              <option key={c.id} value={c.id}>{c.name} — {money(c.unit_price)}{c.unit ? ` / ${c.unit}` : ''}</option>
             ))}
           </select>
           <button type="button" className="btn sm" onClick={addPreset} disabled={!presetId}>+ Add</button>

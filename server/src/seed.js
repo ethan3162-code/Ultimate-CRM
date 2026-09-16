@@ -17,8 +17,8 @@ function insertDeal(d) {
     .run(d.contact_id, d.company_id, d.title, d.value, d.stage, d.probability, d.expected_close).lastInsertRowid;
 }
 function insertCatalogItem(c) {
-  return db.prepare(`INSERT INTO catalog_items (description, unit, unit_price, material_key) VALUES (?,?,?,?)`)
-    .run(c.description, c.unit, c.unit_price, c.material_key || null).lastInsertRowid;
+  return db.prepare(`INSERT INTO catalog_items (name, description, unit, unit_price, material_key) VALUES (?,?,?,?,?)`)
+    .run(c.name, c.description || null, c.unit, c.unit_price, c.material_key || null).lastInsertRowid;
 }
 function insertJob(j) {
   return db.prepare(`INSERT INTO jobs (contact_id, company_id, deal_id, title, status, address, scheduled_date) VALUES (?,?,?,?,?,?,?)`)
@@ -322,16 +322,16 @@ insertAutomation({
 // material_key ties a preset to a material-calculator row so its price can
 // auto-fill there; presets with no material_key are general-purpose (labor,
 // disposal, etc.) for building estimates by hand.
-insertCatalogItem({ description: 'Asphalt paving, installed', unit: 'ton', unit_price: 130, material_key: 'asphalt' });
-insertCatalogItem({ description: 'Concrete, installed', unit: 'yd³', unit_price: 155, material_key: 'concrete' });
-insertCatalogItem({ description: 'Pavers', unit: 'pallet', unit_price: 420, material_key: 'pavers' });
-insertCatalogItem({ description: 'Border / edging paver', unit: 'unit', unit_price: 3.25, material_key: 'border' });
-insertCatalogItem({ description: 'Bedding sand', unit: 'yd³', unit_price: 45, material_key: 'sand' });
-insertCatalogItem({ description: 'Portland cement', unit: 'bag', unit_price: 14, material_key: 'cement' });
-insertCatalogItem({ description: 'RCA base', unit: 'yd³', unit_price: 38, material_key: 'rcaBase' });
-insertCatalogItem({ description: 'Labor — install crew (per day)', unit: 'day', unit_price: 850, material_key: null });
-insertCatalogItem({ description: 'Dumpster + disposal', unit: 'each', unit_price: 375, material_key: null });
-insertCatalogItem({ description: 'Mobilization / equipment setup', unit: 'each', unit_price: 250, material_key: null });
+insertCatalogItem({ name: 'Asphalt Paving', description: 'Hot-mix asphalt, installed and compacted', unit: 'ton', unit_price: 130, material_key: 'asphalt' });
+insertCatalogItem({ name: 'Concrete', description: 'Ready-mix concrete, installed and finished', unit: 'yd³', unit_price: 155, material_key: 'concrete' });
+insertCatalogItem({ name: 'Pavers', description: 'Interlocking concrete pavers, by the pallet', unit: 'pallet', unit_price: 420, material_key: 'pavers' });
+insertCatalogItem({ name: 'Border / Edging Paver', description: 'Edge restraint paver units', unit: 'unit', unit_price: 3.25, material_key: 'border' });
+insertCatalogItem({ name: 'Bedding Sand', description: 'Drypack bedding sand under pavers', unit: 'yd³', unit_price: 45, material_key: 'sand' });
+insertCatalogItem({ name: 'Portland Cement', description: 'Portland cement for the drypack bedding mix', unit: 'bag', unit_price: 14, material_key: 'cement' });
+insertCatalogItem({ name: 'RCA Base', description: 'Recycled concrete aggregate base material', unit: 'yd³', unit_price: 38, material_key: 'rcaBase' });
+insertCatalogItem({ name: 'Labor', description: 'Install crew, per day', unit: 'day', unit_price: 850, material_key: null });
+insertCatalogItem({ name: 'Dumpster & Disposal', description: 'Dumpster rental and debris disposal', unit: 'each', unit_price: 375, material_key: null });
+insertCatalogItem({ name: 'Mobilization', description: 'Equipment setup and mobilization', unit: 'each', unit_price: 250, material_key: null });
 
 console.log('Seed complete:');
 console.log(` companies: ${db.prepare('SELECT COUNT(*) c FROM companies').get().c}`);

@@ -172,7 +172,8 @@ CREATE TABLE IF NOT EXISTS appointments (
 
 CREATE TABLE IF NOT EXISTS catalog_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  description TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
   unit TEXT,
   unit_price REAL NOT NULL DEFAULT 0,
   material_key TEXT,
@@ -212,6 +213,7 @@ ensureColumn('jobs', 'demo_days', 'demo_days INTEGER NOT NULL DEFAULT 1');
 ensureColumn('jobs', 'site_prep_days', 'site_prep_days INTEGER NOT NULL DEFAULT 2');
 ensureColumn('jobs', 'installation_days', 'installation_days INTEGER NOT NULL DEFAULT 5');
 ensureColumn('jobs', 'final_walkthrough_days', 'final_walkthrough_days INTEGER NOT NULL DEFAULT 1');
+ensureColumn('catalog_items', 'name', "name TEXT NOT NULL DEFAULT ''");
 // Rename of an earlier stage key ('material_order' -> 'site_prep') on any DB seeded before the rename.
 db.prepare(`UPDATE jobs SET stage = 'site_prep' WHERE stage = 'material_order'`).run();
 
