@@ -17,8 +17,8 @@ function insertDeal(d) {
     .run(d.contact_id, d.company_id, d.title, d.value, d.stage, d.probability, d.expected_close).lastInsertRowid;
 }
 function insertCatalogItem(c) {
-  return db.prepare(`INSERT INTO catalog_items (name, description, unit, unit_price, material_key) VALUES (?,?,?,?,?)`)
-    .run(c.name, c.description || null, c.unit, c.unit_price, c.material_key || null).lastInsertRowid;
+  return db.prepare(`INSERT INTO catalog_items (name, description, unit, unit_price, material_key, brand, sf_per_pallet) VALUES (?,?,?,?,?,?,?)`)
+    .run(c.name, c.description || null, c.unit, c.unit_price, c.material_key || null, c.brand || null, c.sf_per_pallet ?? null).lastInsertRowid;
 }
 function insertJob(j) {
   return db.prepare(`INSERT INTO jobs (contact_id, company_id, deal_id, title, status, address, scheduled_date) VALUES (?,?,?,?,?,?,?)`)
@@ -324,7 +324,9 @@ insertAutomation({
 // disposal, etc.) for building estimates by hand.
 insertCatalogItem({ name: 'Asphalt Paving', description: 'Hot-mix asphalt, installed and compacted', unit: 'ton', unit_price: 130, material_key: 'asphalt' });
 insertCatalogItem({ name: 'Concrete', description: 'Ready-mix concrete, installed and finished', unit: 'yd³', unit_price: 155, material_key: 'concrete' });
-insertCatalogItem({ name: 'Pavers', description: 'Interlocking concrete pavers, by the pallet', unit: 'pallet', unit_price: 420, material_key: 'pavers' });
+insertCatalogItem({ name: 'Pavers (generic)', description: 'Interlocking concrete pavers, by the pallet', unit: 'pallet', unit_price: 420, material_key: 'pavers', sf_per_pallet: 120 });
+insertCatalogItem({ name: 'Nicolock Pavers', brand: 'Nicolock', description: 'Placeholder SF/pallet and price — update to match the exact Nicolock style you order', unit: 'pallet', unit_price: 460, material_key: 'pavers', sf_per_pallet: 128 });
+insertCatalogItem({ name: 'Cambridge Pavers', brand: 'Cambridge', description: 'Placeholder SF/pallet and price — update to match the exact Cambridge style you order', unit: 'pallet', unit_price: 480, material_key: 'pavers', sf_per_pallet: 112 });
 insertCatalogItem({ name: 'Border / Edging Paver', description: 'Edge restraint paver units', unit: 'unit', unit_price: 3.25, material_key: 'border' });
 insertCatalogItem({ name: 'Bedding Sand', description: 'Drypack bedding sand under pavers', unit: 'yd³', unit_price: 45, material_key: 'sand' });
 insertCatalogItem({ name: 'Portland Cement', description: 'Portland cement for the drypack bedding mix', unit: 'bag', unit_price: 14, material_key: 'cement' });

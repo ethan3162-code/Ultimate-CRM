@@ -7,6 +7,10 @@ const router = express.Router();
 // (asphalt, concrete, pavers, border, sand, cement, rcaBase) so its saved
 // price can auto-fill that row. It's optional — items with no material_key
 // are just general-purpose presets for building estimates by hand.
+//
+// brand + sf_per_pallet are for paver products specifically (material_key =
+// 'pavers'): picking a branded product in the calculator fills in both its
+// SF-per-pallet coverage and its price in one step.
 
 router.get('/', (req, res) => {
   const rows = db.prepare(`SELECT * FROM catalog_items ORDER BY name`).all();
@@ -14,10 +18,10 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { name, description, unit, unit_price, material_key } = req.body;
+  const { name, description, unit, unit_price, material_key, brand, sf_per_pallet } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'name is required' });
-  const result = db.prepare(`INSERT INTO catalog_items (name, description, unit, unit_price, material_key) VALUES (?,?,?,?,?)`)
-    .run(name.trim(), description || null, unit || null, Number(unit_price) || 0, material_key || null);
+  const result = db.prepare(`INSERT INTO catalog_items (name, description, unit, unit_price, material_key, brand, sf_per_pallet) VALUES (?,?,?,?,?,?,?)`)
+    .run(name.trim(), description || null, unit || null, Number(unit_price) || 0, material_key || null, brand || null, sf_per_pallet === '' || sf_per_pallet == null ? null : Number(sf_per_pallet));
   res.status(201).json(db.prepare(`SELECT * FROM catalog_items WHERE id = ?`).get(result.lastInsertRowid));
 });
 
@@ -25,8 +29,9 @@ router.patch('/:id', (req, res) => {
   const existing = db.prepare(`SELECT * FROM catalog_items WHERE id = ?`).get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'not found' });
   const updates = { ...existing, ...req.body };
-  db.prepare(`UPDATE catalog_items SET name=?, description=?, unit=?, unit_price=?, material_key=?, updated_at=datetime('now') WHERE id=?`)
-    .run(updates.name, updates.description || null, updates.unit || null, Number(updates.unit_price) || 0, updates.material_key || null, req.params.id);
+  const sfPerPallet = updates.sf_per_pallet === '' || updates.sf_per_pallet == null ? null : Number(updates.sf_per_pallet);
+  db.prepare(`UPDATE catalog_items SET name=?, description=?, unit=?, unit_price=?, material_key=?, brand=?, sf_per_pallet=?, updated_at=datetime('now') WHERE id=?`)
+    .run(updates.name, updates.description || null, updates.unit || null, Number(updates.unit_price) || 0, updates.material_key || null, updates.brand || null, sfPerPallet, req.params.id);
   res.json(db.prepare(`SELECT * FROM catalog_items WHERE id = ?`).get(req.params.id));
 });
 

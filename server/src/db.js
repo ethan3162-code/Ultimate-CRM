@@ -177,6 +177,8 @@ CREATE TABLE IF NOT EXISTS catalog_items (
   unit TEXT,
   unit_price REAL NOT NULL DEFAULT 0,
   material_key TEXT,
+  brand TEXT,
+  sf_per_pallet REAL,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -214,6 +216,8 @@ ensureColumn('jobs', 'site_prep_days', 'site_prep_days INTEGER NOT NULL DEFAULT 
 ensureColumn('jobs', 'installation_days', 'installation_days INTEGER NOT NULL DEFAULT 5');
 ensureColumn('jobs', 'final_walkthrough_days', 'final_walkthrough_days INTEGER NOT NULL DEFAULT 1');
 ensureColumn('catalog_items', 'name', "name TEXT NOT NULL DEFAULT ''");
+ensureColumn('catalog_items', 'brand', 'brand TEXT');
+ensureColumn('catalog_items', 'sf_per_pallet', 'sf_per_pallet REAL');
 // Rename of an earlier stage key ('material_order' -> 'site_prep') on any DB seeded before the rename.
 db.prepare(`UPDATE jobs SET stage = 'site_prep' WHERE stage = 'material_order'`).run();
 

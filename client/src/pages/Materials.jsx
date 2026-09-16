@@ -24,6 +24,7 @@ export default function Materials() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [prices, setPrices] = useState({});
   const [catalog, setCatalog] = useState(null);
+  const [paverProductId, setPaverProductId] = useState('');
 
   const [jobs, setJobs] = useState(null);
   const [jobId, setJobId] = useState('');
@@ -34,6 +35,21 @@ export default function Materials() {
   useEffect(() => { setSent(false); }, [type, sf, asphalt, concrete, pavers, prices]);
 
   const sqft = Number(sf) || 0;
+
+  // Paver products in the price book (brand items like Nicolock or Cambridge)
+  // that carry an SF-per-pallet coverage — picking one below fills in both
+  // the pallet math and the price in one step.
+  const paverProducts = useMemo(
+    () => (catalog || []).filter((c) => c.material_key === 'pavers' && c.sf_per_pallet),
+    [catalog]
+  );
+  function selectPaverProduct(id) {
+    setPaverProductId(id);
+    const product = paverProducts.find((p) => String(p.id) === String(id));
+    if (!product) return;
+    setPavers((p) => ({ ...p, sfPerPallet: product.sf_per_pallet }));
+    setPrice('pavers', String(product.unit_price));
+  }
 
   const result = useMemo(() => {
     if (!sqft) return null;
@@ -98,7 +114,7 @@ export default function Materials() {
       <div className="page-head">
         <div>
           <h1>Material calculator</h1>
-          <p className="sub">Plug in square footage and get the material quantities and cost for a job — asphalt in tons, concrete in cubic yards, pavers by the pallet with sand, portland cement, and RCA base in cubic yards.</p>
+          <p className="sub">Plug in square footage and get the material quantities and cost for a job — asphalt in tons, concrete in cubic yards, pavers by the pallet (pick a brand like Nicolock or Cambridge from your <Link to="/items" className="link-strong">price book</Link> to fill in SF/pallet automatically) with sand, portland cement, and RCA base in cubic yards.</p>
         </div>
       </div>
 
@@ -131,17 +147,26 @@ export default function Materials() {
                 onChange={(e) => setConcrete((c) => ({ ...c, thicknessIn: e.target.value }))} />
             </div>
           )}
-          {type === 'pavers' && (
+          {type === 'pavers' && paverProducts.length > 0 && (
             <div className="field">
-              <label>SF per pallet</label>
-              <input type="number" min="0.01" step="1" value={pavers.sfPerPallet}
-                onChange={(e) => setPavers((p) => ({ ...p, sfPerPallet: e.target.value }))} />
+              <label>Paver product</label>
+              <select value={paverProductId} onChange={(e) => selectPaverProduct(e.target.value)}>
+                <option value="">Manual — enter SF/pallet myself</option>
+                {paverProducts.map((p) => (
+                  <option key={p.id} value={p.id}>{p.brand ? `${p.brand} — ` : ''}{p.name} ({p.sf_per_pallet} SF/pallet, {money(p.unit_price)})</option>
+                ))}
+              </select>
             </div>
           )}
         </div>
 
         {type === 'pavers' && (
           <div className="form-grid" style={{ marginTop: 12 }}>
+            <div className="field">
+              <label>SF per pallet</label>
+              <input type="number" min="0.01" step="1" value={pavers.sfPerPallet}
+                onChange={(e) => { setPaverProductId(''); setPavers((p) => ({ ...p, sfPerPallet: e.target.value })); }} />
+            </div>
             <div className="field">
               <label>Border / edging unit length (ft)</label>
               <input type="number" min="0.1" step="0.1" value={pavers.borderUnitLengthFt}
