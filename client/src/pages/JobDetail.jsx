@@ -4,6 +4,7 @@ import { api } from '../api';
 import { money, shortDate, timeAgo } from '../utils';
 import LineItemEditor from '../components/LineItemEditor';
 import PaymentModal from '../components/PaymentModal';
+import TaskList from '../components/TaskList';
 
 const JOB_STATUSES = ['scheduled', 'in_progress', 'completed', 'cancelled'];
 const STATUS_PILL = { scheduled: '', in_progress: 'amber', completed: 'green', cancelled: 'red', draft: '', sent: 'amber', approved: 'green', partial: 'amber', paid: 'green', overdue: 'red' };
@@ -21,6 +22,37 @@ function addDays(dateStr, days) {
   return d;
 }
 
+const PHOTO_LABELS = [
+  { key: 'before', label: 'Before' },
+  { key: 'progress', label: 'Progress' },
+  { key: 'after', label: 'After' },
+];
+
+/** Downscales an uploaded image client-side (max 1400px wide, JPEG ~0.75 quality) before
+    it goes into the DB as a data URL, so a phone photo doesn't blow up the database. */
+function resizeImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const maxW = 1400;
+        const scale = Math.min(1, maxW / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.75));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function JobDetail() {
   const { id } = useParams();
   const [job, setJob] = useState(null);
@@ -33,6 +65,9 @@ export default function JobDetail() {
   const [payingInvoice, setPayingInvoice] = useState(null);
   const [schedule, setSchedule] = useState({ start_date: '', demo_days: 1, site_prep_days: 2, installation_days: 5, final_walkthrough_days: 1 });
   const [savingStage, setSavingStage] = useState(false);
+  const [photoLabel, setPhotoLabel] = useState('progress');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(null);
 
   function load() {
     api.job(id).then((j) => {
@@ -122,6 +157,32 @@ export default function JobDetail() {
     await api.recordPayment(payingInvoice.id, paymentData);
     setPayingInvoice(null);
     load();
+  }
+
+  async function uploadPhoto(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const data_url = await resizeImageFile(file);
+      await api.addJobPhoto(id, { label: photoLabel, data_url });
+      load();
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
+  async function removePhoto(photoId) {
+    await api.deleteJobPhoto(photoId);
+    load();
+  }
+
+  function copyApprovalLink(estimate) {
+    const url = `${window.location.origin}/approve/${estimate.sign_token}`;
+    navigator.clipboard?.writeText(url);
+    setCopiedLink(estimate.id);
+    setTimeout(() => setCopiedLink(null), 1500);
   }
 
   if (!job) return <div className="loading">Loading…</div>;
@@ -242,8 +303,16 @@ export default function JobDetail() {
                       <span className="muted">Total{est.deposit_percent > 0 ? ` (${est.deposit_percent}% deposit set)` : ''}</span>
                       <span className="mono" style={{ fontWeight: 600 }}>{money(est.total)}</span>
                     </div>
+                    {est.signed_at ? (
+                      <div className="sub" style={{ margin: '6px 0 0', color: 'var(--accent-ink)' }}>
+                        ✓ Signed by {est.signed_name} — {shortDate(est.signed_at)}
+                      </div>
+                    ) : (
+                      <div className="sub" style={{ margin: '6px 0 0' }}>Not signed by the customer yet.</div>
+                    )}
                     <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: 'wrap' }}>
                       <button className="btn sm" onClick={() => convert(est.id)}>Convert to invoice →</button>
+                      <button className="btn sm" onClick={() => copyApprovalLink(est)}>{copiedLink === est.id ? 'Copied!' : 'Copy approval link'}</button>
                       {requestingDepositFor === est.id ? (
                         <>
                           <input
@@ -307,6 +376,36 @@ export default function JobDetail() {
                 ))}
               </div>
             )}
+          </div>
+
+          <div className="card">
+            <h2>Photos</h2>
+            <p className="sub" style={{ margin: '-4px 0 10px' }}>Before/progress/after shots for this job — kept with the record, not a separate app.</p>
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <select value={photoLabel} onChange={(e) => setPhotoLabel(e.target.value)}>
+                {PHOTO_LABELS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+              </select>
+              <label className="btn sm" style={{ cursor: 'pointer' }}>
+                {uploadingPhoto ? 'Uploading…' : '+ Add photo'}
+                <input type="file" accept="image/*" onChange={uploadPhoto} disabled={uploadingPhoto} style={{ display: 'none' }} />
+              </label>
+            </div>
+            {job.photos.length === 0 ? <div className="empty" style={{ marginTop: 10 }}>No photos yet.</div> : (
+              <div className="photo-grid">
+                {job.photos.map((p) => (
+                  <div className="photo-tile" key={p.id}>
+                    <a href={p.data_url} target="_blank" rel="noreferrer"><img src={p.data_url} alt={p.label} /></a>
+                    <span className="label">{p.label}</span>
+                    <button type="button" className="remove" onClick={() => removePhoto(p.id)}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <h2>Next steps</h2>
+            <TaskList relatedType="job" relatedId={job.id} />
           </div>
 
           <div className="card">

@@ -198,6 +198,26 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS tasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  related_type TEXT NOT NULL,
+  related_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  due_date TEXT,
+  done INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS job_photos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  label TEXT NOT NULL DEFAULT 'progress',
+  caption TEXT,
+  data_url TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `);
 
 // --- Lightweight migrations ---
@@ -225,6 +245,12 @@ ensureColumn('catalog_items', 'brand', 'brand TEXT');
 ensureColumn('catalog_items', 'sf_per_pallet', 'sf_per_pallet REAL');
 ensureColumn('contacts', 'source', 'source TEXT');
 ensureColumn('deals', 'source', 'source TEXT');
+ensureColumn('estimates', 'sign_token', 'sign_token TEXT');
+ensureColumn('estimates', 'signed_name', 'signed_name TEXT');
+ensureColumn('estimates', 'signed_at', 'signed_at TEXT');
+ensureColumn('estimates', 'signature_data_url', 'signature_data_url TEXT');
+// Back-fill a sign token for any estimate created before this column existed.
+db.prepare(`UPDATE estimates SET sign_token = lower(hex(randomblob(16))) WHERE sign_token IS NULL`).run();
 // Rename of an earlier stage key ('material_order' -> 'site_prep') on any DB seeded before the rename.
 db.prepare(`UPDATE jobs SET stage = 'site_prep' WHERE stage = 'material_order'`).run();
 

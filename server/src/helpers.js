@@ -41,7 +41,8 @@ function getJobFull(id) {
   const invoiceRows = db.prepare(`SELECT id FROM invoices WHERE job_id = ? ORDER BY id`).all(id);
   const estimates = estimateRows.map(r => getEstimateFull(r.id));
   const invoices = invoiceRows.map(r => getInvoiceFull(r.id));
-  return { ...job, estimates, invoices };
+  const photos = db.prepare(`SELECT * FROM job_photos WHERE job_id = ? ORDER BY created_at DESC`).all(id);
+  return { ...job, estimates, invoices, photos };
 }
 
 function logActivity(related_type, related_id, type, note) {

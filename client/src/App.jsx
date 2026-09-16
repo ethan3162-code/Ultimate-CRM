@@ -17,10 +17,12 @@ import Schedule from './pages/Schedule';
 import Materials from './pages/Materials';
 import Items from './pages/Items';
 import Integrations from './pages/Integrations';
+import EstimateApproval from './pages/EstimateApproval';
 
 export default function App() {
   return (
     <Routes>
+      <Route path="/approve/:token" element={<EstimateApproval />} />
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/pipeline" element={<Pipeline />} />

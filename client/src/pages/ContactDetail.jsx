@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { money, shortDate, timeAgo, initials } from '../utils';
+import TaskList from '../components/TaskList';
 
 const STAGE_PILL = { new: '', qualified: '', proposal: 'amber', negotiation: 'amber', won: 'green', lost: 'red' };
 
@@ -50,6 +51,10 @@ export default function ContactDetail() {
         </div>
 
         <div className="stack">
+          <div className="card">
+            <h2>Next steps</h2>
+            <TaskList relatedType="contact" relatedId={contact.id} />
+          </div>
           <div className="card">
             <h2>Deals ({contact.deals.length})</h2>
             {contact.deals.length === 0 ? <div className="empty">No deals.</div> : contact.deals.map((d) => (

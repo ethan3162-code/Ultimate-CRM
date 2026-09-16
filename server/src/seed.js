@@ -1,6 +1,6 @@
 const db = require('./db');
 
-const tables = ['appointments', 'automation_runs', 'automations', 'tickets', 'payments', 'invoice_items', 'invoices', 'estimate_items', 'estimates', 'jobs', 'deals', 'activities', 'contacts', 'companies', 'catalog_items'];
+const tables = ['appointments', 'automation_runs', 'automations', 'tickets', 'payments', 'invoice_items', 'invoices', 'estimate_items', 'estimates', 'jobs', 'deals', 'activities', 'contacts', 'companies', 'catalog_items', 'tasks', 'job_photos', 'settings'];
 for (const t of tables) db.prepare(`DELETE FROM ${t}`).run();
 for (const t of tables) db.prepare(`DELETE FROM sqlite_sequence WHERE name = ?`).run(t);
 

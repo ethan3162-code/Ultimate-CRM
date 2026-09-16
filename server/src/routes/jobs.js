@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const express = require('express');
 const db = require('../db');
 const {
@@ -110,8 +111,9 @@ router.post('/:id/estimates', (req, res) => {
   const { number, tax_rate, items, deposit_percent } = req.body;
   if (!items || !items.length) return res.status(400).json({ error: 'at least one line item is required' });
   const count = db.prepare(`SELECT COUNT(*) c FROM estimates`).get().c;
-  const result = db.prepare(`INSERT INTO estimates (job_id, number, status, tax_rate, deposit_percent) VALUES (?,?,?,?,?)`)
-    .run(job.id, number || `EST-${1000 + count + 1}`, 'draft', tax_rate || 0, deposit_percent || 0);
+  const signToken = crypto.randomBytes(12).toString('hex');
+  const result = db.prepare(`INSERT INTO estimates (job_id, number, status, tax_rate, deposit_percent, sign_token) VALUES (?,?,?,?,?,?)`)
+    .run(job.id, number || `EST-${1000 + count + 1}`, 'draft', tax_rate || 0, deposit_percent || 0, signToken);
   const estimateId = result.lastInsertRowid;
   for (const it of items) {
     db.prepare(`INSERT INTO estimate_items (estimate_id, description, qty, unit_price) VALUES (?,?,?,?)`)
@@ -222,6 +224,25 @@ router.post('/invoices/:invoiceId/payments', (req, res) => {
     });
   }
   res.status(201).json(getInvoiceFull(invoice.id));
+});
+
+// --- Job photos (before/progress/after) ---
+router.post('/:id/photos', (req, res) => {
+  const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(req.params.id);
+  if (!job) return res.status(404).json({ error: 'job not found' });
+  const { label, caption, data_url } = req.body;
+  if (!data_url) return res.status(400).json({ error: 'data_url is required' });
+  const result = db.prepare(`INSERT INTO job_photos (job_id, label, caption, data_url) VALUES (?,?,?,?)`)
+    .run(job.id, label || 'progress', caption || null, data_url);
+  logActivity('job', job.id, 'note', `Photo added (${label || 'progress'}).`);
+  res.status(201).json(db.prepare(`SELECT * FROM job_photos WHERE id = ?`).get(result.lastInsertRowid));
+});
+
+router.delete('/photos/:photoId', (req, res) => {
+  const photo = db.prepare(`SELECT * FROM job_photos WHERE id = ?`).get(req.params.photoId);
+  if (!photo) return res.status(404).json({ error: 'not found' });
+  db.prepare(`DELETE FROM job_photos WHERE id = ?`).run(req.params.photoId);
+  res.status(204).end();
 });
 
 module.exports = router;

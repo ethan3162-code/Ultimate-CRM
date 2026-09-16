@@ -456,3 +456,35 @@ table.list tbody tr:last-child td { border-bottom: none; }
 .chart-legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 .chart-legend-label { color: var(--ink-soft); flex: 1; }
 .chart-legend-value { color: var(--muted); }
+
+/* --- Tasks --- */
+.task-list { display: flex; flex-direction: column; }
+.task-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line-soft); font-size: 13.5px; }
+.task-row:last-of-type { border-bottom: none; }
+.task-row.done .task-title { text-decoration: line-through; color: var(--muted); }
+.task-title { flex: 1; }
+.task-due { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.task-due.overdue { color: var(--red); font-weight: 600; }
+
+/* --- Deal score pill --- */
+.score-pill { display: inline-flex; align-items: center; gap: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+.score-pill.hot { background: var(--red-soft); color: var(--red); }
+.score-pill.warm { background: var(--amber-soft); color: var(--amber); }
+.score-pill.cool { background: var(--line-soft); color: var(--ink-soft); }
+.score-pill.won { background: var(--accent-soft); color: var(--accent-ink); }
+.score-pill.lost { background: var(--line-soft); color: var(--muted); }
+
+/* --- Job photos --- */
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin-top: 10px; }
+.photo-tile { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--line-soft); aspect-ratio: 1; background: var(--line-soft); }
+.photo-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-tile .label { position: absolute; top: 4px; left: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; background: rgba(0,0,0,.55); color: #fff; padding: 2px 6px; border-radius: 10px; }
+.photo-tile .remove { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,.55); color: #fff; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; font-size: 11px; line-height: 1; }
+
+/* --- Pipeline table/calendar views --- */
+.deal-table td, .deal-table th { white-space: nowrap; }
+.deal-table td.title-cell { white-space: normal; }
+
+/* --- Public estimate approval page --- */
+.approval-shell { max-width: 640px; margin: 0 auto; padding: 32px 16px 60px; }
+.sign-pad { border: 1px dashed var(--line); border-radius: 10px; background: var(--paper); touch-action: none; cursor: crosshair; width: 100%; height: 160px; }

@@ -25,6 +25,8 @@ app.use('/api/catalog-items', require('./routes/catalogItems'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/leads', require('./routes/leadIntake'));
 app.use('/api/integrations', require('./routes/integrations'));
+app.use('/api/tasks', require('./routes/tasks'));
+app.use('/api/public', require('./routes/public'));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 

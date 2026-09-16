@@ -7,6 +7,32 @@ const router = express.Router();
 
 const STAGES = ['new', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
 
+// Deterministic deal score (Salesforce/HubSpot-style lead scoring, no ML) — a plain
+// 0-100 number plus a Hot/Warm/Cool label, so reps can tell at a glance what to work
+// next. Inputs: sales-set probability, deal size, whether the lead has an attributed
+// source, and how long it's been since anything happened on the deal.
+function scoreDeal(deal, lastActivityAt) {
+  if (deal.stage === 'won') return { score: 100, label: 'Won' };
+  if (deal.stage === 'lost') return { score: 0, label: 'Lost' };
+  let score = Number(deal.probability) || 0;
+  if (deal.value >= 50000) score += 15;
+  else if (deal.value >= 20000) score += 8;
+  else if (deal.value >= 5000) score += 3;
+  if (deal.source) score += 5;
+  const referenceDate = lastActivityAt || deal.updated_at || deal.created_at;
+  const daysSince = referenceDate ? Math.floor((Date.now() - new Date(referenceDate.replace(' ', 'T') + 'Z').getTime()) / 86400000) : 0;
+  if (daysSince > 14) score -= 20;
+  else if (daysSince > 7) score -= 10;
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  const label = score >= 70 ? 'Hot' : score >= 40 ? 'Warm' : 'Cool';
+  return { score, label, days_since_activity: daysSince };
+}
+
+function withScore(deal) {
+  const lastActivity = db.prepare(`SELECT MAX(created_at) AS d FROM activities WHERE related_type = 'deal' AND related_id = ?`).get(deal.id).d;
+  return { ...deal, ...scoreDeal(deal, lastActivity) };
+}
+
 router.get('/', (req, res) => {
   const rows = db.prepare(`
     SELECT d.*, c.first_name, c.last_name, co.name AS company_name
@@ -15,7 +41,7 @@ router.get('/', (req, res) => {
     LEFT JOIN companies co ON co.id = d.company_id
     ORDER BY d.updated_at DESC
   `).all();
-  res.json(rows);
+  res.json(rows.map(withScore));
 });
 
 router.post('/', (req, res) => {
@@ -49,7 +75,7 @@ router.get('/:id', (req, res) => {
   `).get(req.params.id);
   if (!deal) return res.status(404).json({ error: 'not found' });
   const activities = db.prepare(`SELECT * FROM activities WHERE related_type = 'deal' AND related_id = ? ORDER BY created_at DESC`).all(req.params.id);
-  res.json({ ...deal, activities });
+  res.json({ ...withScore(deal), activities });
 });
 
 router.patch('/:id', (req, res) => {

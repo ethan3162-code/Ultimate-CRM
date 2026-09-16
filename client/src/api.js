@@ -73,4 +73,15 @@ export const api = {
   regenerateWebhook: () => request('/integrations/webhook/regenerate', { method: 'POST' }),
   emailStatus: () => request('/integrations/email'),
   sendTestEmail: (to) => request('/integrations/email/test', { method: 'POST', body: JSON.stringify({ to }) }),
+
+  tasks: (params) => request(`/tasks${params ? `?${new URLSearchParams(params)}` : ''}`),
+  createTask: (data) => request('/tasks', { method: 'POST', body: JSON.stringify(data) }),
+  updateTask: (id, data) => request(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteTask: (id) => request(`/tasks/${id}`, { method: 'DELETE' }),
+
+  addJobPhoto: (jobId, data) => request(`/jobs/${jobId}/photos`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteJobPhoto: (photoId) => request(`/jobs/photos/${photoId}`, { method: 'DELETE' }),
+
+  publicEstimate: (token) => request(`/public/estimates/${token}`),
+  signEstimate: (token, data) => request(`/public/estimates/${token}/sign`, { method: 'POST', body: JSON.stringify(data) }),
 };

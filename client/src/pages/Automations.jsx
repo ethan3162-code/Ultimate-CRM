@@ -16,6 +16,7 @@ const TRIGGERS = [
   ] },
   { key: 'invoice_paid', label: 'Invoice is paid in full', fields: [] },
   { key: 'job_completed', label: 'Job is marked completed', fields: [] },
+  { key: 'estimate_signed', label: 'Customer signs an estimate', fields: [] },
 ];
 
 const ACTIONS = [

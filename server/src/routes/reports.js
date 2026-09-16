@@ -22,6 +22,16 @@ function lastMonths(count) {
   return out;
 }
 
+/** Next `count` months starting with the current one, as UTC month-start Dates. */
+function nextMonths(count) {
+  const now = new Date();
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    out.push(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + i, 1)));
+  }
+  return out;
+}
+
 router.get('/', (req, res) => {
   // --- Revenue by month (collected payments, last 6 months) ---
   const months = lastMonths(6);
@@ -94,7 +104,23 @@ router.get('/', (req, res) => {
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5);
 
-  res.json({ revenueByMonth, jobsByMonth, pipelineByStage, jobsByStatus, invoiceAging, topCustomers });
+  // --- Revenue forecast (next 4 months): open deals' value × probability, bucketed by
+  // expected_close month (Salesforce-style weighted forecasting). Deals with no
+  // expected_close date aren't guessable to a month, so they're left out of the chart
+  // and called out separately instead of silently dropped.
+  const forecastMonths = nextMonths(4);
+  const openDeals = db.prepare(`SELECT value, probability, expected_close FROM deals WHERE stage NOT IN ('won','lost')`).all();
+  const revenueForecast = forecastMonths.map((m) => {
+    const key = monthKey(m);
+    const weighted = openDeals
+      .filter((d) => d.expected_close && d.expected_close.slice(0, 7) === key)
+      .reduce((s, d) => s + d.value * ((Number(d.probability) || 0) / 100), 0);
+    return { month: monthLabel(m), key, total: +weighted.toFixed(2) };
+  });
+  const undated = openDeals.filter((d) => !d.expected_close);
+  const undatedForecastValue = +undated.reduce((s, d) => s + d.value * ((Number(d.probability) || 0) / 100), 0).toFixed(2);
+
+  res.json({ revenueByMonth, jobsByMonth, pipelineByStage, jobsByStatus, invoiceAging, topCustomers, revenueForecast, undatedForecastValue });
 });
 
 module.exports = router;

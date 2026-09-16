@@ -3,6 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { money, shortDate, timeAgo } from '../utils';
 import AiDraftModal from '../components/AiDraftModal';
+import TaskList from '../components/TaskList';
 
 const STAGES = ['new', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
 
@@ -57,10 +58,11 @@ export default function DealDetail() {
       <div className="page-head">
         <div>
           <p className="sub" style={{ margin: '0 0 4px' }}><Link to="/pipeline">Pipeline</Link> / {deal.title}</p>
-          <h1>{deal.title}</h1>
+          <h1>{deal.title} <span className={'score-pill ' + deal.label.toLowerCase()}>{deal.label} · {deal.score}</span></h1>
           <p className="sub">
             {deal.company_name || (deal.first_name ? `${deal.first_name} ${deal.last_name}` : 'No contact linked')}
             {' · '}{money(deal.value)} · expected close {shortDate(deal.expected_close)}
+            {deal.source ? ` · source: ${deal.source}` : ''}
           </p>
         </div>
         <div className="row" style={{ gap: 8 }}>
@@ -89,19 +91,25 @@ export default function DealDetail() {
           )}
         </div>
 
-        <div className="card">
-          <h2>Stage</h2>
-          <div className="stack" style={{ gap: 6 }}>
-            {STAGES.map((s) => (
-              <button
-                key={s}
-                className={'btn sm' + (deal.stage === s ? ' primary' : '')}
-                style={{ justifyContent: 'flex-start', textTransform: 'capitalize' }}
-                onClick={() => changeStage(s)}
-              >
-                {s}
-              </button>
-            ))}
+        <div className="stack">
+          <div className="card">
+            <h2>Stage</h2>
+            <div className="stack" style={{ gap: 6 }}>
+              {STAGES.map((s) => (
+                <button
+                  key={s}
+                  className={'btn sm' + (deal.stage === s ? ' primary' : '')}
+                  style={{ justifyContent: 'flex-start', textTransform: 'capitalize' }}
+                  onClick={() => changeStage(s)}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="card">
+            <h2>Next steps</h2>
+            <TaskList relatedType="deal" relatedId={deal.id} />
           </div>
         </div>
       </div>

@@ -6,6 +6,7 @@ import { TrendChart, ColumnChart, BarList, DonutChart } from '../components/char
 
 const STAGE_LABELS = { new: 'New', qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
 const AGING_COLORS = ['var(--accent)', 'var(--amber)', 'var(--amber)', 'var(--red)'];
+const TASK_LINK = { contact: '/contacts', deal: '/pipeline', job: '/jobs', ticket: '/tickets' };
 
 function attentionCount(insights) {
   if (!insights) return 0;
@@ -16,11 +17,13 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [insights, setInsights] = useState(null);
   const [reports, setReports] = useState(null);
+  const [tasks, setTasks] = useState(null);
 
   useEffect(() => {
     api.dashboard().then(setData);
     api.insights().then(setInsights);
     api.reports().then(setReports);
+    api.tasks({ open: '1' }).then(setTasks);
   }, []);
 
   if (!data) return <div className="loading">Loading dashboard…</div>;
@@ -112,6 +115,24 @@ export default function Dashboard() {
         </div>
       )}
 
+      {tasks && tasks.length > 0 && (
+        <div className="card" style={{ marginBottom: 18 }}>
+          <h2>Open tasks <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}>({tasks.length})</span></h2>
+          <p className="sub" style={{ margin: '-4px 0 12px' }}>Next steps you've added on contacts, deals, jobs, and tickets — nothing here unless someone added it.</p>
+          <div className="stack" style={{ gap: 2 }}>
+            {tasks.slice(0, 8).map((t) => {
+              const overdue = t.due_date && t.due_date < new Date().toISOString().slice(0, 10);
+              return (
+                <Link key={t.id} to={`${TASK_LINK[t.related_type] || ''}/${t.related_id}`} className="attention-row">
+                  <span>{t.title}</span>
+                  <span className="mono" style={{ color: overdue ? 'var(--red)' : 'var(--muted)' }}>{t.due_date || 'no due date'}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="grid-2">
         <div className="card">
           <h2>Pipeline by stage</h2>
@@ -167,6 +188,18 @@ export default function Dashboard() {
               <div className="report-card-total">{money(reports.revenueByMonth.reduce((s, m) => s + m.total, 0))}</div>
             </div>
             <TrendChart data={reports.revenueByMonth} valueKey="total" labelKey="month" formatValue={money} />
+          </div>
+
+          <div className="card span-2">
+            <div className="report-card-head">
+              <h2>Revenue forecast</h2>
+              <div className="report-card-total">{money(reports.revenueForecast.reduce((s, m) => s + m.total, 0))}</div>
+            </div>
+            <p className="sub" style={{ margin: '-4px 0 10px' }}>Open deals' value × probability, by expected close month — a weighted look at what's likely coming in next, not a guarantee.</p>
+            <ColumnChart data={reports.revenueForecast} valueKey="total" labelKey="month" formatValue={money} color="var(--amber)" />
+            {reports.undatedForecastValue > 0 && (
+              <p className="sub" style={{ margin: '10px 0 0' }}>Plus {money(reports.undatedForecastValue)} weighted in open deals with no expected close date set yet.</p>
+            )}
           </div>
 
           <div className="card">

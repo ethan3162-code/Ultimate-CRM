@@ -108,6 +108,7 @@ function matchesTrigger(automation, triggerType, ctx) {
       return config.max_satisfaction === undefined || (ctx.satisfaction_score != null && ctx.satisfaction_score <= Number(config.max_satisfaction));
     case 'invoice_paid':
     case 'job_completed':
+    case 'estimate_signed':
       return true;
     default:
       return false;
