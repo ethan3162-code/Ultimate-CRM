@@ -37,33 +37,26 @@ export const PAVER_DEFAULTS = {
   wastePercent: 10,
   perimeterFt: '',
   drypackDepthIn: 1.5,
-  drypackRatio: 4,
-  cementBagVolumeFt3: 1,
+  cementBagsPerYardSand: 4,
   baseDepthIn: 6,
-  footingWidthFt: 0.5,
-  footingDepthFt: 0.5,
-  bagYieldFt3: 0.6,
 };
 
 /**
  * Pavers: SF -> pallets of pavers, border linear feet (single units — borders
- * aren't palletized), drypack bedding (sand + portland cement, by volume) split
- * into sand yards and cement bags, RCA base yards, and footing cement bags for
- * the edge restraint.
+ * aren't palletized), drypack sand + portland cement, and RCA base.
  *
  * Pavers are ordered by the pallet, so the individual-unit count is rounded up
  * to whole pallets using how many units the supplier packs per pallet.
  *
- * Drypack is the sand/cement bedding course under the pavers, sized by its own
- * height. It's split by a sand:cement ratio (parts sand per 1 part cement, 4:1
- * is a common structural mix) into a sand volume and a cement volume, and the
- * cement volume is converted to bags via the bag's loose volume (~1 ft3 for a
- * standard 94lb bag of portland cement).
+ * Drypack is the sand bedding course under the pavers, sized by its own height
+ * in inches. Portland cement is then added at a fixed rate per cubic yard of
+ * that sand — a standard field ratio for dry-pack mortar beds, e.g. 4 bags of
+ * cement per cubic yard of sand.
  *
- * RCA base volume is sized the same way, by its own height.
+ * RCA base volume is sized the same way, by its own height, in cubic yards.
  *
- * Perimeter is used only for the border/edge-restraint run and its footing; if
- * left blank it's estimated from SF assuming a roughly square area (4 x sqrt(SF)).
+ * Perimeter is used only for the border/edging run; if left blank it's
+ * estimated from SF assuming a roughly square area (4 x sqrt(SF)).
  */
 export function calcPavers({
   sf,
@@ -72,12 +65,8 @@ export function calcPavers({
   wastePercent,
   perimeterFt,
   drypackDepthIn,
-  drypackRatio,
-  cementBagVolumeFt3,
+  cementBagsPerYardSand,
   baseDepthIn,
-  footingWidthFt,
-  footingDepthFt,
-  bagYieldFt3,
 }) {
   const sqft = Number(sf) || 0;
   const coverage = Number(paverSfCoverage) || 1;
@@ -91,32 +80,19 @@ export function calcPavers({
   const palletCount = Math.ceil(paverCount / perPallet);
 
   const drypackDepth = Number(drypackDepthIn) || 0;
-  const drypackVolumeFt3 = sqft * (drypackDepth / 12);
-  const drypackYd3 = round(drypackVolumeFt3 / 27);
-  const ratio = Number(drypackRatio) || 1;
-  const sandShare = ratio / (ratio + 1);
-  const cementShare = 1 / (ratio + 1);
-  const drypackSandYd3 = round(drypackYd3 * sandShare);
-  const cementBagVolume = Number(cementBagVolumeFt3) || 1;
-  const drypackCementBags = Math.ceil((drypackVolumeFt3 * cementShare) / cementBagVolume);
+  const drypackSandYd3 = round((sqft * (drypackDepth / 12)) / 27);
+  const ratio = Number(cementBagsPerYardSand) || 0;
+  const drypackCementBags = Math.ceil(drypackSandYd3 * ratio);
 
   const baseDepth = Number(baseDepthIn) || 0;
   const rcaBaseYd3 = round((sqft * (baseDepth / 12)) / 27);
-
-  const footingWidth = Number(footingWidthFt) || 0;
-  const footingDepth = Number(footingDepthFt) || 0;
-  const bagYield = Number(bagYieldFt3) || 1;
-  const footingVolumeFt3 = perimeter * footingWidth * footingDepth;
-  const footingCementBags = Math.ceil(footingVolumeFt3 / bagYield);
 
   return {
     paverCount,
     palletCount,
     perimeterFt: round(perimeter, 1),
-    drypackYd3,
     drypackSandYd3,
     drypackCementBags,
     rcaBaseYd3,
-    footingCementBags,
   };
 }
