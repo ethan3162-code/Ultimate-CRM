@@ -26,3 +26,15 @@ export function timeAgo(s) {
 export function initials(first, last) {
   return `${(first || '?')[0] || ''}${(last || '')[0] || ''}`.toUpperCase();
 }
+
+// Keyless Google Maps links for a street address — no API key/billing needed.
+// `view` opens Maps in a new tab in hybrid (satellite + labels) mode; `embed`
+// is a same-origin-safe iframe src for dropping the map straight into a page.
+export function mapLinks(address) {
+  if (!address) return null;
+  const q = encodeURIComponent(address);
+  return {
+    view: `https://www.google.com/maps?q=${q}&t=k`,
+    embed: `https://maps.google.com/maps?q=${q}&t=k&z=17&output=embed`,
+  };
+}

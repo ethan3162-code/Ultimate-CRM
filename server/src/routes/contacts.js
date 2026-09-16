@@ -14,10 +14,10 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { company_id, first_name, last_name, email, phone, title } = req.body;
+  const { company_id, first_name, last_name, email, phone, title, address } = req.body;
   if (!first_name || !last_name) return res.status(400).json({ error: 'first_name and last_name are required' });
-  const result = db.prepare(`INSERT INTO contacts (company_id, first_name, last_name, email, phone, title) VALUES (?,?,?,?,?,?)`)
-    .run(company_id || null, first_name, last_name, email || null, phone || null, title || null);
+  const result = db.prepare(`INSERT INTO contacts (company_id, first_name, last_name, email, phone, title, address) VALUES (?,?,?,?,?,?,?)`)
+    .run(company_id || null, first_name, last_name, email || null, phone || null, title || null, address || null);
   const contact = db.prepare(`SELECT * FROM contacts WHERE id = ?`).get(result.lastInsertRowid);
   logActivity('contact', contact.id, 'note', `Contact "${contact.first_name} ${contact.last_name}" created.`);
   res.status(201).json(contact);
@@ -53,8 +53,8 @@ router.patch('/:id', (req, res) => {
   const existing = db.prepare(`SELECT * FROM contacts WHERE id = ?`).get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'not found' });
   const updates = { ...existing, ...req.body };
-  db.prepare(`UPDATE contacts SET company_id=?, first_name=?, last_name=?, email=?, phone=?, title=? WHERE id=?`)
-    .run(updates.company_id, updates.first_name, updates.last_name, updates.email, updates.phone, updates.title, req.params.id);
+  db.prepare(`UPDATE contacts SET company_id=?, first_name=?, last_name=?, email=?, phone=?, title=?, address=? WHERE id=?`)
+    .run(updates.company_id, updates.first_name, updates.last_name, updates.email, updates.phone, updates.title, updates.address, req.params.id);
   res.json(db.prepare(`SELECT * FROM contacts WHERE id = ?`).get(req.params.id));
 });
 

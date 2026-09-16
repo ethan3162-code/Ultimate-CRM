@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate } from '../utils';
+import { money, shortDate, mapLinks } from '../utils';
 
 const STAGES = ['new', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
 const STAGE_LABELS = { new: 'New', qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
@@ -144,6 +144,23 @@ export default function Pipeline() {
                     <span>{deal.company_name || (deal.first_name ? `${deal.first_name} ${deal.last_name}` : '—')}</span>
                     <span className="val">{money(deal.value)}</span>
                   </div>
+                  {(deal.customer_phone || deal.customer_address) && (
+                    <div className="deal-card-contact">
+                      {deal.customer_phone && <span>{deal.customer_phone}</span>}
+                      {deal.customer_address && (
+                        <a
+                          href={mapLinks(deal.customer_address).view}
+                          target="_blank" rel="noreferrer"
+                          className="map-link"
+                          title="View on Google Maps (satellite)"
+                          onClick={(e) => e.stopPropagation()}
+                          draggable={false}
+                        >
+                          📍 {deal.customer_address}
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
               {list.length === 0 && <div className="empty" style={{ fontSize: 12, padding: '10px 0' }}>No deals</div>}
@@ -157,20 +174,31 @@ export default function Pipeline() {
         <div className="table-wrap">
           <table className="list deal-table">
             <thead>
-              <tr><th>Deal</th><th>Contact / company</th><th>Stage</th><th>Value</th><th>Score</th><th>Expected close</th></tr>
+              <tr><th>Deal</th><th>Contact / company</th><th>Phone</th><th>Address</th><th>Stage</th><th>Value</th><th>Score</th><th>Expected close</th></tr>
             </thead>
             <tbody>
-              {deals.map((deal) => (
-                <tr key={deal.id}>
-                  <td className="title-cell"><Link to={`/pipeline/${deal.id}`} className="link-strong">{deal.title}</Link></td>
-                  <td className="muted">{deal.company_name || (deal.first_name ? `${deal.first_name} ${deal.last_name}` : '—')}</td>
-                  <td>{STAGE_LABELS[deal.stage]}</td>
-                  <td className="mono">{money(deal.value)}</td>
-                  <td>{deal.label && <span className={'score-pill ' + deal.label.toLowerCase()}>{deal.label} · {deal.score}</span>}</td>
-                  <td className="muted">{shortDate(deal.expected_close)}</td>
-                </tr>
-              ))}
-              {deals.length === 0 && <tr><td colSpan={6}><div className="empty">No deals yet.</div></td></tr>}
+              {deals.map((deal) => {
+                const links = deal.customer_address ? mapLinks(deal.customer_address) : null;
+                return (
+                  <tr key={deal.id}>
+                    <td className="title-cell"><Link to={`/pipeline/${deal.id}`} className="link-strong">{deal.title}</Link></td>
+                    <td className="muted">{deal.company_name || (deal.first_name ? `${deal.first_name} ${deal.last_name}` : '—')}</td>
+                    <td className="muted">{deal.customer_phone || '—'}</td>
+                    <td className="muted">
+                      {links ? (
+                        <a href={links.view} target="_blank" rel="noreferrer" className="map-link" title="View on Google Maps (satellite)">
+                          📍 {deal.customer_address}
+                        </a>
+                      ) : '—'}
+                    </td>
+                    <td>{STAGE_LABELS[deal.stage]}</td>
+                    <td className="mono">{money(deal.value)}</td>
+                    <td>{deal.label && <span className={'score-pill ' + deal.label.toLowerCase()}>{deal.label} · {deal.score}</span>}</td>
+                    <td className="muted">{shortDate(deal.expected_close)}</td>
+                  </tr>
+                );
+              })}
+              {deals.length === 0 && <tr><td colSpan={8}><div className="empty">No deals yet.</div></td></tr>}
             </tbody>
           </table>
         </div>

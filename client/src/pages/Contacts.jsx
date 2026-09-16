@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { initials } from '../utils';
+import { initials, mapLinks } from '../utils';
 
 export default function Contacts() {
   const [contacts, setContacts] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '', title: '', company_id: '' });
+  const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '', title: '', company_id: '', address: '' });
 
   function load() {
     api.contacts().then(setContacts);
@@ -18,7 +18,7 @@ export default function Contacts() {
     e.preventDefault();
     if (!form.first_name.trim() || !form.last_name.trim()) return;
     await api.createContact({ ...form, company_id: form.company_id || null });
-    setForm({ first_name: '', last_name: '', email: '', phone: '', title: '', company_id: '' });
+    setForm({ first_name: '', last_name: '', email: '', phone: '', title: '', company_id: '', address: '' });
     setShowForm(false);
     load();
   }
@@ -41,6 +41,7 @@ export default function Contacts() {
             <div className="field"><label>Email</label><input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
             <div className="field"><label>Phone</label><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
             <div className="field"><label>Title</label><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
+            <div className="field"><label>Address</label><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Street, city, state" /></div>
             <div className="field">
               <label>Company</label>
               <select value={form.company_id} onChange={(e) => setForm({ ...form, company_id: e.target.value })}>
@@ -56,21 +57,28 @@ export default function Contacts() {
       {!contacts ? <div className="loading">Loading…</div> : (
         <div className="table-wrap">
           <table className="list">
-            <thead><tr><th></th><th>Name</th><th>Title</th><th>Company</th><th>Email</th></tr></thead>
+            <thead><tr><th></th><th>Name</th><th>Title</th><th>Company</th><th>Email</th><th>Phone</th><th>Address</th></tr></thead>
             <tbody>
-              {contacts.map((c) => (
-                <tr key={c.id}>
-                  <td>
-                    <div style={{ width: 26, height: 26, borderRadius: 7, background: 'var(--accent-soft)', color: 'var(--accent-ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
-                      {initials(c.first_name, c.last_name)}
-                    </div>
-                  </td>
-                  <td><Link to={`/contacts/${c.id}`} className="link-strong">{c.first_name} {c.last_name}</Link></td>
-                  <td className="muted">{c.title || '—'}</td>
-                  <td>{c.company_name || '—'}</td>
-                  <td className="muted">{c.email || '—'}</td>
-                </tr>
-              ))}
+              {contacts.map((c) => {
+                const links = c.address ? mapLinks(c.address) : null;
+                return (
+                  <tr key={c.id}>
+                    <td>
+                      <div style={{ width: 26, height: 26, borderRadius: 7, background: 'var(--accent-soft)', color: 'var(--accent-ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
+                        {initials(c.first_name, c.last_name)}
+                      </div>
+                    </td>
+                    <td><Link to={`/contacts/${c.id}`} className="link-strong">{c.first_name} {c.last_name}</Link></td>
+                    <td className="muted">{c.title || '—'}</td>
+                    <td>{c.company_name || '—'}</td>
+                    <td className="muted">{c.email || '—'}</td>
+                    <td className="muted">{c.phone || '—'}</td>
+                    <td className="muted">
+                      {links ? <a href={links.view} target="_blank" rel="noreferrer" className="map-link" title="View on Google Maps (satellite)">📍 {c.address}</a> : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, timeAgo, initials } from '../utils';
+import { money, shortDate, timeAgo, initials, mapLinks } from '../utils';
 import TaskList from '../components/TaskList';
 
 const STAGE_PILL = { new: '', qualified: '', proposal: 'amber', negotiation: 'amber', won: 'green', lost: 'red' };
@@ -9,10 +9,27 @@ const STAGE_PILL = { new: '', qualified: '', proposal: 'amber', negotiation: 'am
 export default function ContactDetail() {
   const { id } = useParams();
   const [contact, setContact] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [info, setInfo] = useState({ phone: '', address: '' });
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => { api.contact(id).then(setContact); }, [id]);
+  function load() {
+    api.contact(id).then((c) => { setContact(c); setInfo({ phone: c.phone || '', address: c.address || '' }); });
+  }
+  useEffect(load, [id]);
+
+  async function saveInfo(e) {
+    e.preventDefault();
+    setSaving(true);
+    await api.updateContact(id, info);
+    setSaving(false);
+    setEditing(false);
+    load();
+  }
 
   if (!contact) return <div className="loading">Loading…</div>;
+
+  const links = contact.address ? mapLinks(contact.address) : null;
 
   return (
     <>
@@ -51,6 +68,35 @@ export default function ContactDetail() {
         </div>
 
         <div className="stack">
+          <div className="card">
+            <div className="row between" style={{ marginBottom: editing ? 10 : 0 }}>
+              <h2 style={{ margin: 0 }}>Contact info</h2>
+              {!editing && <button className="btn sm subtle" onClick={() => setEditing(true)}>Edit</button>}
+            </div>
+            {editing ? (
+              <form onSubmit={saveInfo} className="stack" style={{ gap: 10 }}>
+                <div className="field"><label>Phone</label><input value={info.phone} onChange={(e) => setInfo({ ...info, phone: e.target.value })} /></div>
+                <div className="field"><label>Address</label><input value={info.address} onChange={(e) => setInfo({ ...info, address: e.target.value })} placeholder="Street, city, state" /></div>
+                <div className="row" style={{ gap: 8 }}>
+                  <button className="btn primary sm" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+                  <button className="btn sm subtle" type="button" onClick={() => { setEditing(false); setInfo({ phone: contact.phone || '', address: contact.address || '' }); }}>Cancel</button>
+                </div>
+              </form>
+            ) : (
+              <div className="stack" style={{ gap: 6, marginTop: 10 }}>
+                <div className="row between"><span className="muted">Phone</span>{contact.phone ? <a href={`tel:${contact.phone}`}>{contact.phone}</a> : <span className="muted">—</span>}</div>
+                <div className="row between" style={{ alignItems: 'flex-start' }}>
+                  <span className="muted">Address</span>
+                  <span style={{ textAlign: 'right' }}>{contact.address || '—'}</span>
+                </div>
+                {links && (
+                  <a href={links.view} target="_blank" rel="noreferrer" className="btn sm primary map-cta" style={{ marginTop: 6 }}>
+                    🛰️ View satellite location →
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
           <div className="card">
             <h2>Next steps</h2>
             <TaskList relatedType="contact" relatedId={contact.id} />

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate } from '../utils';
+import { money, shortDate, mapLinks } from '../utils';
 
 const STAGE_PILL = { new: '', qualified: '', proposal: 'amber', negotiation: 'amber', won: 'green', lost: 'red' };
 
@@ -13,13 +13,18 @@ export default function CompanyDetail() {
 
   if (!company) return <div className="loading">Loading…</div>;
 
+  const links = company.address ? mapLinks(company.address) : null;
+
   return (
     <>
       <div className="page-head">
         <div>
           <p className="sub" style={{ margin: '0 0 4px' }}><Link to="/companies">Companies</Link> / {company.name}</p>
           <h1>{company.name}</h1>
-          <p className="sub">{company.industry || 'No industry set'} · {company.address || 'No address on file'}</p>
+          <p className="sub">
+            {company.industry || 'No industry set'} ·{' '}
+            {links ? <a href={links.view} target="_blank" rel="noreferrer" className="map-link">📍 {company.address}</a> : 'No address on file'}
+          </p>
         </div>
       </div>
 

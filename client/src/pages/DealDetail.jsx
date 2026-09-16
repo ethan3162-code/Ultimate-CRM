@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, timeAgo } from '../utils';
+import { money, shortDate, timeAgo, mapLinks } from '../utils';
 import AiDraftModal from '../components/AiDraftModal';
 import TaskList from '../components/TaskList';
 
@@ -53,6 +53,8 @@ export default function DealDetail() {
 
   if (!deal) return <div className="loading">Loading…</div>;
 
+  const links = deal.customer_address ? mapLinks(deal.customer_address) : null;
+
   return (
     <>
       <div className="page-head">
@@ -92,6 +94,27 @@ export default function DealDetail() {
         </div>
 
         <div className="stack">
+          {(deal.customer_phone || deal.customer_address) && (
+            <div className="card">
+              <h2>Customer info</h2>
+              <div className="stack" style={{ gap: 6, marginBottom: links ? 12 : 0 }}>
+                {deal.customer_phone && (
+                  <div className="row between"><span className="muted">Phone</span><a href={`tel:${deal.customer_phone}`}>{deal.customer_phone}</a></div>
+                )}
+                {deal.customer_address && (
+                  <div className="row between" style={{ alignItems: 'flex-start' }}>
+                    <span className="muted">Address</span>
+                    <span style={{ textAlign: 'right' }}>{deal.customer_address}</span>
+                  </div>
+                )}
+              </div>
+              {links && (
+                <a href={links.view} target="_blank" rel="noreferrer" className="btn sm primary map-cta">
+                  🛰️ View satellite location →
+                </a>
+              )}
+            </div>
+          )}
           <div className="card">
             <h2>Stage</h2>
             <div className="stack" style={{ gap: 6 }}>

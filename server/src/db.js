@@ -244,6 +244,7 @@ ensureColumn('catalog_items', 'name', "name TEXT NOT NULL DEFAULT ''");
 ensureColumn('catalog_items', 'brand', 'brand TEXT');
 ensureColumn('catalog_items', 'sf_per_pallet', 'sf_per_pallet REAL');
 ensureColumn('contacts', 'source', 'source TEXT');
+ensureColumn('contacts', 'address', 'address TEXT');
 ensureColumn('deals', 'source', 'source TEXT');
 ensureColumn('estimates', 'sign_token', 'sign_token TEXT');
 ensureColumn('estimates', 'signed_name', 'signed_name TEXT');

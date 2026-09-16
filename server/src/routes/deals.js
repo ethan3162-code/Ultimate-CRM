@@ -33,15 +33,28 @@ function withScore(deal) {
   return { ...deal, ...scoreDeal(deal, lastActivity) };
 }
 
+// Customer info shown on the pipeline (Joist/Salesforce-style): prefer the
+// linked contact's own phone/address, and fall back to the company's when the
+// contact doesn't have one set.
+function withCustomerInfo(deal) {
+  return {
+    ...deal,
+    customer_phone: deal.contact_phone || deal.company_phone || null,
+    customer_address: deal.contact_address || deal.company_address || null,
+  };
+}
+
+const DEAL_SELECT = `
+  SELECT d.*, c.first_name, c.last_name, c.phone AS contact_phone, c.address AS contact_address,
+         co.name AS company_name, co.phone AS company_phone, co.address AS company_address
+  FROM deals d
+  LEFT JOIN contacts c ON c.id = d.contact_id
+  LEFT JOIN companies co ON co.id = d.company_id
+`;
+
 router.get('/', (req, res) => {
-  const rows = db.prepare(`
-    SELECT d.*, c.first_name, c.last_name, co.name AS company_name
-    FROM deals d
-    LEFT JOIN contacts c ON c.id = d.contact_id
-    LEFT JOIN companies co ON co.id = d.company_id
-    ORDER BY d.updated_at DESC
-  `).all();
-  res.json(rows.map(withScore));
+  const rows = db.prepare(`${DEAL_SELECT} ORDER BY d.updated_at DESC`).all();
+  res.json(rows.map(withCustomerInfo).map(withScore));
 });
 
 router.post('/', (req, res) => {
@@ -66,16 +79,10 @@ router.post('/', (req, res) => {
 });
 
 router.get('/:id', (req, res) => {
-  const deal = db.prepare(`
-    SELECT d.*, c.first_name, c.last_name, co.name AS company_name
-    FROM deals d
-    LEFT JOIN contacts c ON c.id = d.contact_id
-    LEFT JOIN companies co ON co.id = d.company_id
-    WHERE d.id = ?
-  `).get(req.params.id);
+  const deal = db.prepare(`${DEAL_SELECT} WHERE d.id = ?`).get(req.params.id);
   if (!deal) return res.status(404).json({ error: 'not found' });
   const activities = db.prepare(`SELECT * FROM activities WHERE related_type = 'deal' AND related_id = ? ORDER BY created_at DESC`).all(req.params.id);
-  res.json({ ...withScore(deal), activities });
+  res.json({ ...withScore(withCustomerInfo(deal)), activities });
 });
 
 router.patch('/:id', (req, res) => {

@@ -23,6 +23,7 @@ export const api = {
   contacts: () => request('/contacts'),
   contact: (id) => request(`/contacts/${id}`),
   createContact: (data) => request('/contacts', { method: 'POST', body: JSON.stringify(data) }),
+  updateContact: (id, data) => request(`/contacts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   deals: () => request('/deals'),
   deal: (id) => request(`/deals/${id}`),
