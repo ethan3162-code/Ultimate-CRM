@@ -88,12 +88,13 @@ router.patch('/:id', (req, res) => {
   if (req.body.status && req.body.status !== existing.status) {
     logActivity('job', existing.id, 'status_change', `Job status changed from "${existing.status}" to "${req.body.status}".`);
     if (req.body.status === 'completed') {
-      const contact = existing.contact_id ? db.prepare(`SELECT first_name, last_name FROM contacts WHERE id = ?`).get(existing.contact_id) : null;
+      const contact = existing.contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(existing.contact_id) : null;
       const company = existing.company_id ? db.prepare(`SELECT name FROM companies WHERE id = ?`).get(existing.company_id) : null;
       fireTrigger('job_completed', {
         related_type: 'job', related_id: existing.id,
         title: updates.title, address: updates.address,
         contact_name: contact ? `${contact.first_name} ${contact.last_name}` : null,
+        contact_email: contact ? contact.email : null,
         company_name: company ? company.name : null,
         job_contact_id: existing.contact_id, job_company_id: existing.company_id,
       });
@@ -211,12 +212,13 @@ router.post('/invoices/:invoiceId/payments', (req, res) => {
   if (updated.balance <= 0.001) {
     db.prepare(`UPDATE invoices SET status = 'paid' WHERE id = ?`).run(invoice.id);
     const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(invoice.job_id);
-    const contact = job?.contact_id ? db.prepare(`SELECT first_name, last_name FROM contacts WHERE id = ?`).get(job.contact_id) : null;
+    const contact = job?.contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(job.contact_id) : null;
     fireTrigger('invoice_paid', {
       related_type: 'job', related_id: invoice.job_id,
       dedupe_id: `invoice-paid:${invoice.id}`,
       number: invoice.number, total: updated.total, job_title: job?.title,
       contact_name: contact ? `${contact.first_name} ${contact.last_name}` : null,
+      contact_email: contact ? contact.email : null,
     });
   }
   res.status(201).json(getInvoiceFull(invoice.id));

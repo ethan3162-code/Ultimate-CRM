@@ -68,4 +68,9 @@ export const api = {
   createCatalogItem: (data) => request('/catalog-items', { method: 'POST', body: JSON.stringify(data) }),
   updateCatalogItem: (id, data) => request(`/catalog-items/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteCatalogItem: (id) => request(`/catalog-items/${id}`, { method: 'DELETE' }),
+
+  webhookInfo: () => request('/integrations/webhook'),
+  regenerateWebhook: () => request('/integrations/webhook/regenerate', { method: 'POST' }),
+  emailStatus: () => request('/integrations/email'),
+  sendTestEmail: (to) => request('/integrations/email/test', { method: 'POST', body: JSON.stringify({ to }) }),
 };

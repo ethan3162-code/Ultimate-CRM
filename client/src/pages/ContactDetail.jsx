@@ -23,7 +23,7 @@ export default function ContactDetail() {
               {initials(contact.first_name, contact.last_name)}
             </div>
             <div>
-              <h1>{contact.first_name} {contact.last_name}</h1>
+              <h1>{contact.first_name} {contact.last_name} {contact.source && <span className="pill" style={{ marginLeft: 8, verticalAlign: 'middle' }}>{contact.source}</span>}</h1>
               <p className="sub">{contact.title || 'Contact'}{contact.company_name ? ` at ${contact.company_name}` : ''}{contact.email ? ` · ${contact.email}` : ''}</p>
             </div>
           </div>

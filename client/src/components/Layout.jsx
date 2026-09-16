@@ -20,7 +20,7 @@ const NAV = [
     ],
   },
   { group: 'Service', items: [{ to: '/tickets', label: 'Tickets' }] },
-  { group: 'System', items: [{ to: '/automations', label: 'Automations' }] },
+  { group: 'System', items: [{ to: '/automations', label: 'Automations' }, { to: '/integrations', label: 'Integrations' }] },
 ];
 
 export default function Layout() {

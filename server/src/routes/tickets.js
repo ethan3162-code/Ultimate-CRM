@@ -36,11 +36,12 @@ router.post('/', (req, res) => {
   const ticket = db.prepare(`SELECT * FROM tickets WHERE id = ?`).get(result.lastInsertRowid);
   logActivity('ticket', ticket.id, 'note', `Ticket "${ticket.subject}" opened (${p} priority).`);
 
-  const contact = contact_id ? db.prepare(`SELECT first_name, last_name FROM contacts WHERE id = ?`).get(contact_id) : null;
+  const contact = contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(contact_id) : null;
   fireTrigger('ticket_created', {
     related_type: 'ticket', related_id: ticket.id,
     subject: ticket.subject, priority: p,
     contact_name: contact ? `${contact.first_name} ${contact.last_name}` : null,
+    contact_email: contact ? contact.email : null,
   });
   res.status(201).json(ticket);
 });
@@ -78,12 +79,13 @@ router.patch('/:id', (req, res) => {
     logActivity('ticket', existing.id, 'status_change', `Ticket status changed from "${existing.status}" to "${req.body.status}".`);
   }
   if (isResolving) {
-    const contact = existing.contact_id ? db.prepare(`SELECT first_name, last_name FROM contacts WHERE id = ?`).get(existing.contact_id) : null;
+    const contact = existing.contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(existing.contact_id) : null;
     fireTrigger('ticket_resolved', {
       related_type: 'ticket', related_id: existing.id,
       dedupe_id: `ticket-resolved:${existing.id}`,
       subject: updates.subject, satisfaction_score: satisfaction,
       contact_name: contact ? `${contact.first_name} ${contact.last_name}` : null,
+      contact_email: contact ? contact.email : null,
     });
   }
   res.json(db.prepare(`SELECT * FROM tickets WHERE id = ?`).get(req.params.id));

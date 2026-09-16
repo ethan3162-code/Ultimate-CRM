@@ -27,9 +27,14 @@ router.post('/', (req, res) => {
   `).run(contact_id || null, company_id || null, title, value || 0, stage || 'new', probability ?? 20, expected_close || null);
   const deal = db.prepare(`SELECT * FROM deals WHERE id = ?`).get(result.lastInsertRowid);
   logActivity('deal', deal.id, 'note', `Deal "${deal.title}" created.`);
+  const dealContact = deal.contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(deal.contact_id) : null;
   fireTrigger('deal_created', {
     related_type: 'deal', related_id: deal.id,
     title: deal.title, value: deal.value, stage: deal.stage,
+    deal_id: deal.id,
+    contact_name: dealContact ? `${dealContact.first_name} ${dealContact.last_name}` : null,
+    contact_email: dealContact ? dealContact.email : null,
+    source: deal.source || null,
   });
   res.status(201).json(deal);
 });
@@ -61,13 +66,14 @@ router.patch('/:id', (req, res) => {
 
   if (req.body.stage && req.body.stage !== existing.stage) {
     logActivity('deal', existing.id, 'stage_change', `Stage moved from "${existing.stage}" to "${req.body.stage}".`);
-    const contact = updates.contact_id ? db.prepare(`SELECT first_name, last_name FROM contacts WHERE id = ?`).get(updates.contact_id) : null;
+    const contact = updates.contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(updates.contact_id) : null;
     const company = updates.company_id ? db.prepare(`SELECT name FROM companies WHERE id = ?`).get(updates.company_id) : null;
     fireTrigger('deal_stage_changed', {
       related_type: 'deal', related_id: existing.id,
       dedupe_id: `${existing.id}:${req.body.stage}`,
       title: updates.title, value: updates.value, from_stage: existing.stage, to_stage: req.body.stage,
       contact_name: contact ? `${contact.first_name} ${contact.last_name}` : null,
+      contact_email: contact ? contact.email : null,
       company_name: company ? company.name : null,
       deal_id: existing.id,
     });

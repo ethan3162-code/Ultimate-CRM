@@ -1,5 +1,6 @@
 const db = require('./db');
 const { logActivity } = require('./helpers');
+const mailer = require('./mailer');
 
 // --- template rendering: replaces {{field}} with values from context ---
 function render(template, ctx) {
@@ -48,6 +49,13 @@ function runAction(automation, ctx) {
       const body = render(config.body || '', ctx);
       note = `Auto-email "${subject}" sent${ctx.contact_name ? ` to ${ctx.contact_name}` : ''}: ${body}`;
       logActivity(relatedType, relatedId, 'email', note);
+      // Best-effort real delivery via Gmail (see mailer.js) — never blocks the automation,
+      // and quietly does nothing until GMAIL_USER/GMAIL_APP_PASSWORD are configured.
+      mailer.sendEmail({ to: ctx.contact_email, subject, text: body }).then((result) => {
+        if (!result.sent && mailer.isConfigured()) {
+          logActivity(relatedType, relatedId, 'email', `Email delivery failed: ${result.reason}`);
+        }
+      }).catch(() => {});
       break;
     }
     case 'send_sms': {

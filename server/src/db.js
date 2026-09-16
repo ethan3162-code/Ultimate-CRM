@@ -193,6 +193,11 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
   calendar_id TEXT NOT NULL DEFAULT 'primary',
   updated_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
 `);
 
 // --- Lightweight migrations ---
@@ -218,6 +223,8 @@ ensureColumn('jobs', 'final_walkthrough_days', 'final_walkthrough_days INTEGER N
 ensureColumn('catalog_items', 'name', "name TEXT NOT NULL DEFAULT ''");
 ensureColumn('catalog_items', 'brand', 'brand TEXT');
 ensureColumn('catalog_items', 'sf_per_pallet', 'sf_per_pallet REAL');
+ensureColumn('contacts', 'source', 'source TEXT');
+ensureColumn('deals', 'source', 'source TEXT');
 // Rename of an earlier stage key ('material_order' -> 'site_prep') on any DB seeded before the rename.
 db.prepare(`UPDATE jobs SET stage = 'site_prep' WHERE stage = 'material_order'`).run();
 

@@ -23,6 +23,8 @@ app.use('/api/appointments', require('./routes/appointments'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/catalog-items', require('./routes/catalogItems'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/leads', require('./routes/leadIntake'));
+app.use('/api/integrations', require('./routes/integrations'));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
@@ -40,13 +42,14 @@ function checkOverdueInvoices() {
     }
     const daysOverdue = Math.floor((Date.now() - new Date(invoice.due_date + 'T00:00:00Z').getTime()) / 86400000);
     const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(invoice.job_id);
-    const contact = job?.contact_id ? db.prepare(`SELECT first_name, last_name FROM contacts WHERE id = ?`).get(job.contact_id) : null;
+    const contact = job?.contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(job.contact_id) : null;
     fireTrigger('invoice_overdue', {
       related_type: 'job', related_id: invoice.job_id,
       dedupe_id: `invoice-overdue:${invoice.id}`,
       number: invoice.number, total: invoice.total, balance: invoice.balance,
       days_overdue: daysOverdue, job_title: job?.title,
       contact_name: contact ? `${contact.first_name} ${contact.last_name}` : null,
+      contact_email: contact ? contact.email : null,
     });
   }
 }
@@ -60,12 +63,13 @@ function checkOverdueTickets() {
     SELECT * FROM tickets WHERE status IN ('open', 'pending') AND sla_due_at IS NOT NULL AND sla_due_at < ?
   `).all(nowIso);
   for (const ticket of candidates) {
-    const contact = ticket.contact_id ? db.prepare(`SELECT first_name, last_name FROM contacts WHERE id = ?`).get(ticket.contact_id) : null;
+    const contact = ticket.contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(ticket.contact_id) : null;
     fireTrigger('ticket_overdue', {
       related_type: 'ticket', related_id: ticket.id,
       dedupe_id: `ticket-overdue:${ticket.id}`,
       subject: ticket.subject, priority: ticket.priority,
       contact_name: contact ? `${contact.first_name} ${contact.last_name}` : null,
+      contact_email: contact ? contact.email : null,
     });
   }
 }

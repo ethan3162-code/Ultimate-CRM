@@ -22,7 +22,7 @@ const ACTIONS = [
   { key: 'log_activity', label: 'Log a note on the record', fields: [
     { key: 'message', label: 'Note text', type: 'textarea', placeholder: 'e.g. Follow up on {{title}} within 48 hours' },
   ] },
-  { key: 'send_email', label: 'Send an email (simulated)', fields: [
+  { key: 'send_email', label: 'Send an email (live once Gmail is connected in Integrations)', fields: [
     { key: 'subject', label: 'Subject', placeholder: 'e.g. Following up on your proposal' },
     { key: 'body', label: 'Body', type: 'textarea', placeholder: 'Hi {{contact_name}}, …' },
   ] },
