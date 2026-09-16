@@ -32,26 +32,30 @@ export function calcConcrete({ sf, thicknessIn }) {
 }
 
 export const PAVER_DEFAULTS = {
-  paverSfCoverage: 0.45,
-  paversPerPallet: 100,
+  sfPerPallet: 120,
   wastePercent: 10,
   perimeterFt: '',
+  borderUnitLengthFt: 1,
   drypackDepthIn: 1.5,
   cementBagsPerYardSand: 4,
   baseDepthIn: 6,
 };
 
 /**
- * Pavers: SF -> pallets of pavers, border linear feet (single units — borders
- * aren't palletized), drypack sand + portland cement, and RCA base.
+ * Pavers: SF -> pallets of pavers (by SF coverage per pallet), border units
+ * (perimeter split into border-piece lengths), sand, portland cement, and
+ * RCA base.
  *
- * Pavers are ordered by the pallet, so the individual-unit count is rounded up
- * to whole pallets using how many units the supplier packs per pallet.
+ * Pallets are sized by how much SF one pallet covers (as printed on the
+ * supplier's pallet tag), not by counting individual paver units.
  *
- * Drypack is the sand bedding course under the pavers, sized by its own height
- * in inches. Portland cement is then added at a fixed rate per cubic yard of
- * that sand — a standard field ratio for dry-pack mortar beds, e.g. 4 bags of
- * cement per cubic yard of sand.
+ * Border/edging pieces come in their own size, so the linear-foot perimeter
+ * is converted into a count of border units using that piece's length.
+ *
+ * Sand is the bedding course under the pavers, sized by its own height in
+ * inches. Portland cement is then added at a fixed rate per cubic yard of
+ * that sand — a standard field ratio for dry-pack mortar beds, e.g. 4 bags
+ * of cement per cubic yard of sand.
  *
  * RCA base volume is sized the same way, by its own height, in cubic yards.
  *
@@ -60,24 +64,25 @@ export const PAVER_DEFAULTS = {
  */
 export function calcPavers({
   sf,
-  paverSfCoverage,
-  paversPerPallet,
+  sfPerPallet,
   wastePercent,
   perimeterFt,
+  borderUnitLengthFt,
   drypackDepthIn,
   cementBagsPerYardSand,
   baseDepthIn,
 }) {
   const sqft = Number(sf) || 0;
-  const coverage = Number(paverSfCoverage) || 1;
   const waste = Number(wastePercent) || 0;
+  const sfWithWaste = round(sqft * (1 + waste / 100), 1);
+  const perPallet = Number(sfPerPallet) || 1;
+  const palletCount = Math.ceil(sfWithWaste / perPallet);
+
   const perimeter = perimeterFt !== '' && perimeterFt != null && !Number.isNaN(Number(perimeterFt))
     ? Number(perimeterFt)
     : 4 * Math.sqrt(sqft || 0);
-
-  const paverCount = Math.ceil((sqft / coverage) * (1 + waste / 100));
-  const perPallet = Number(paversPerPallet) || 1;
-  const palletCount = Math.ceil(paverCount / perPallet);
+  const unitLength = Number(borderUnitLengthFt) || 1;
+  const borderUnitCount = Math.ceil(perimeter / unitLength);
 
   const drypackDepth = Number(drypackDepthIn) || 0;
   const drypackSandYd3 = round((sqft * (drypackDepth / 12)) / 27);
@@ -88,9 +93,10 @@ export function calcPavers({
   const rcaBaseYd3 = round((sqft * (baseDepth / 12)) / 27);
 
   return {
-    paverCount,
     palletCount,
+    sfWithWaste,
     perimeterFt: round(perimeter, 1),
+    borderUnitCount,
     drypackSandYd3,
     drypackCementBags,
     rcaBaseYd3,

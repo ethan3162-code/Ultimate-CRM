@@ -62,4 +62,9 @@ export const api = {
 
   googleStatus: () => request('/auth/google/status'),
   googleDisconnect: () => request('/auth/google/disconnect', { method: 'POST' }),
+
+  catalogItems: () => request('/catalog-items'),
+  createCatalogItem: (data) => request('/catalog-items', { method: 'POST', body: JSON.stringify(data) }),
+  updateCatalogItem: (id, data) => request(`/catalog-items/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteCatalogItem: (id) => request(`/catalog-items/${id}`, { method: 'DELETE' }),
 };

@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { money } from '../utils';
 
-export default function LineItemEditor({ items, setItems, taxRate, setTaxRate }) {
+export default function LineItemEditor({ items, setItems, taxRate, setTaxRate, catalog }) {
+  const [presetId, setPresetId] = useState('');
+
   function updateItem(i, field, value) {
     const next = items.slice();
     next[i] = { ...next[i], [field]: value };
@@ -12,12 +15,30 @@ export default function LineItemEditor({ items, setItems, taxRate, setTaxRate })
   function removeRow(i) {
     setItems(items.filter((_, idx) => idx !== i));
   }
+  function addPreset() {
+    if (!presetId) return;
+    const item = (catalog || []).find((c) => String(c.id) === String(presetId));
+    if (!item) return;
+    setItems([...items, { description: item.description, qty: 1, unit_price: item.unit_price }]);
+    setPresetId('');
+  }
 
   const subtotal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.unit_price) || 0), 0);
   const tax = subtotal * (Number(taxRate) || 0);
 
   return (
     <div>
+      {catalog && catalog.length > 0 && (
+        <div className="row" style={{ marginBottom: 10, gap: 8 }}>
+          <select value={presetId} onChange={(e) => setPresetId(e.target.value)} style={{ flex: 1 }}>
+            <option value="">Add a saved item…</option>
+            {catalog.map((c) => (
+              <option key={c.id} value={c.id}>{c.description} — {money(c.unit_price)}{c.unit ? ` / ${c.unit}` : ''}</option>
+            ))}
+          </select>
+          <button type="button" className="btn sm" onClick={addPreset} disabled={!presetId}>+ Add</button>
+        </div>
+      )}
       <table className="line-items">
         <thead>
           <tr><th>Description</th><th className="num">Qty</th><th className="num">Unit price</th><th></th></tr>

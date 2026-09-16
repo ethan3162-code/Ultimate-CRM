@@ -15,6 +15,7 @@ import TicketDetail from './pages/TicketDetail';
 import Calendar from './pages/Calendar';
 import Schedule from './pages/Schedule';
 import Materials from './pages/Materials';
+import Items from './pages/Items';
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/materials" element={<Materials />} />
+        <Route path="/items" element={<Items />} />
       </Route>
     </Routes>
   );

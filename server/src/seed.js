@@ -1,6 +1,6 @@
 const db = require('./db');
 
-const tables = ['appointments', 'automation_runs', 'automations', 'tickets', 'payments', 'invoice_items', 'invoices', 'estimate_items', 'estimates', 'jobs', 'deals', 'activities', 'contacts', 'companies'];
+const tables = ['appointments', 'automation_runs', 'automations', 'tickets', 'payments', 'invoice_items', 'invoices', 'estimate_items', 'estimates', 'jobs', 'deals', 'activities', 'contacts', 'companies', 'catalog_items'];
 for (const t of tables) db.prepare(`DELETE FROM ${t}`).run();
 for (const t of tables) db.prepare(`DELETE FROM sqlite_sequence WHERE name = ?`).run(t);
 
@@ -15,6 +15,10 @@ function insertContact(c) {
 function insertDeal(d) {
   return db.prepare(`INSERT INTO deals (contact_id, company_id, title, value, stage, probability, expected_close) VALUES (?,?,?,?,?,?,?)`)
     .run(d.contact_id, d.company_id, d.title, d.value, d.stage, d.probability, d.expected_close).lastInsertRowid;
+}
+function insertCatalogItem(c) {
+  return db.prepare(`INSERT INTO catalog_items (description, unit, unit_price, material_key) VALUES (?,?,?,?)`)
+    .run(c.description, c.unit, c.unit_price, c.material_key || null).lastInsertRowid;
 }
 function insertJob(j) {
   return db.prepare(`INSERT INTO jobs (contact_id, company_id, deal_id, title, status, address, scheduled_date) VALUES (?,?,?,?,?,?,?)`)
@@ -314,6 +318,21 @@ insertAutomation({
   action_config: { message: 'Ticket "{{subject}}" resolved with a low satisfaction score ({{satisfaction_score}}/5) — worth a personal follow-up.' },
 });
 
+// --- Preset items (price book) ---
+// material_key ties a preset to a material-calculator row so its price can
+// auto-fill there; presets with no material_key are general-purpose (labor,
+// disposal, etc.) for building estimates by hand.
+insertCatalogItem({ description: 'Asphalt paving, installed', unit: 'ton', unit_price: 130, material_key: 'asphalt' });
+insertCatalogItem({ description: 'Concrete, installed', unit: 'yd³', unit_price: 155, material_key: 'concrete' });
+insertCatalogItem({ description: 'Pavers', unit: 'pallet', unit_price: 420, material_key: 'pavers' });
+insertCatalogItem({ description: 'Border / edging paver', unit: 'unit', unit_price: 3.25, material_key: 'border' });
+insertCatalogItem({ description: 'Bedding sand', unit: 'yd³', unit_price: 45, material_key: 'sand' });
+insertCatalogItem({ description: 'Portland cement', unit: 'bag', unit_price: 14, material_key: 'cement' });
+insertCatalogItem({ description: 'RCA base', unit: 'yd³', unit_price: 38, material_key: 'rcaBase' });
+insertCatalogItem({ description: 'Labor — install crew (per day)', unit: 'day', unit_price: 850, material_key: null });
+insertCatalogItem({ description: 'Dumpster + disposal', unit: 'each', unit_price: 375, material_key: null });
+insertCatalogItem({ description: 'Mobilization / equipment setup', unit: 'each', unit_price: 250, material_key: null });
+
 console.log('Seed complete:');
 console.log(` companies: ${db.prepare('SELECT COUNT(*) c FROM companies').get().c}`);
 console.log(` contacts: ${db.prepare('SELECT COUNT(*) c FROM contacts').get().c}`);
@@ -326,3 +345,4 @@ console.log(` activities: ${db.prepare('SELECT COUNT(*) c FROM activities').get(
 console.log(` automations: ${db.prepare('SELECT COUNT(*) c FROM automations').get().c}`);
 console.log(` tickets: ${db.prepare('SELECT COUNT(*) c FROM tickets').get().c}`);
 console.log(` appointments: ${db.prepare('SELECT COUNT(*) c FROM appointments').get().c}`);
+console.log(` catalog_items: ${db.prepare('SELECT COUNT(*) c FROM catalog_items').get().c}`);

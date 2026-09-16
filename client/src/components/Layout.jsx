@@ -11,7 +11,7 @@ const NAV = [
       { to: '/contacts', label: 'Contacts' },
     ],
   },
-  { group: 'Field ops', items: [{ to: '/jobs', label: 'Jobs & billing' }, { to: '/materials', label: 'Material calculator' }] },
+  { group: 'Field ops', items: [{ to: '/jobs', label: 'Jobs & billing' }, { to: '/materials', label: 'Material calculator' }, { to: '/items', label: 'Items & price book' }] },
   {
     group: 'Scheduling',
     items: [

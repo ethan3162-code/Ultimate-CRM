@@ -21,6 +21,7 @@ app.use('/api/insights', require('./routes/insights'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/appointments', require('./routes/appointments'));
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/catalog-items', require('./routes/catalogItems'));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 

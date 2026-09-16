@@ -170,6 +170,16 @@ CREATE TABLE IF NOT EXISTS appointments (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS catalog_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  description TEXT NOT NULL,
+  unit TEXT,
+  unit_price REAL NOT NULL DEFAULT 0,
+  material_key TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS oauth_tokens (
   provider TEXT PRIMARY KEY,
   access_token TEXT,

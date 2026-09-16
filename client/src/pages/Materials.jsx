@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../api';
+import { money } from '../utils';
 import {
   calcAsphalt, ASPHALT_DEFAULTS,
   calcConcrete, CONCRETE_DEFAULTS,
@@ -21,13 +22,16 @@ export default function Materials() {
   const [concrete, setConcrete] = useState(CONCRETE_DEFAULTS);
   const [pavers, setPavers] = useState(PAVER_DEFAULTS);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [prices, setPrices] = useState({});
+  const [catalog, setCatalog] = useState(null);
 
   const [jobs, setJobs] = useState(null);
   const [jobId, setJobId] = useState('');
   const [sent, setSent] = useState(false);
 
   useEffect(() => { api.jobs().then(setJobs); }, []);
-  useEffect(() => { setSent(false); }, [type, sf, asphalt, concrete, pavers]);
+  useEffect(() => { api.catalogItems().then(setCatalog); }, []);
+  useEffect(() => { setSent(false); }, [type, sf, asphalt, concrete, pavers, prices]);
 
   const sqft = Number(sf) || 0;
 
@@ -38,26 +42,53 @@ export default function Materials() {
     return calcPavers({ sf: sqft, ...pavers });
   }, [type, sqft, asphalt, concrete, pavers]);
 
-  function lineItems() {
+  // The raw material quantities for the active type — description, qty, and unit
+  // only. Unit prices live in `prices` (keyed so pavers/border/sand/etc never
+  // collide across tabs), so switching tabs or SF doesn't lose what was typed.
+  const rows = useMemo(() => {
     if (!result) return [];
     if (type === 'asphalt') {
-      return [{ description: `Asphalt paving — ${asphalt.thicknessIn}" compacted, ${sqft} SF`, qty: result.tons, unit_price: 0 }];
+      return [{ key: 'asphalt', description: `Asphalt paving — ${asphalt.thicknessIn}" compacted, ${sqft} SF`, qty: result.tons, unit: 'tons' }];
     }
     if (type === 'concrete') {
-      return [{ description: `Concrete — ${concrete.thicknessIn}" slab, ${sqft} SF`, qty: result.cubicYards, unit_price: 0 }];
+      return [{ key: 'concrete', description: `Concrete — ${concrete.thicknessIn}" slab, ${sqft} SF`, qty: result.cubicYards, unit: 'yd³' }];
     }
     return [
-      { description: `Pavers — ${sqft} SF, ${pavers.paversPerPallet}/pallet (${result.paverCount} pcs)`, qty: result.palletCount, unit_price: 0 },
-      { description: `Border / edge restraint — ${result.perimeterFt} linear ft`, qty: result.perimeterFt, unit_price: 0 },
-      { description: `Drypack sand (${pavers.drypackDepthIn}" bedding)`, qty: result.drypackSandYd3, unit_price: 0 },
-      { description: `Portland cement, drypack bedding (${pavers.cementBagsPerYardSand} bags per yd³ sand)`, qty: result.drypackCementBags, unit_price: 0 },
-      { description: `RCA base (${pavers.baseDepthIn}" depth)`, qty: result.rcaBaseYd3, unit_price: 0 },
+      { key: 'pavers', description: `Pavers — ${sqft} SF incl. ${pavers.wastePercent}% waste (${result.sfWithWaste} SF, ${pavers.sfPerPallet} SF/pallet)`, qty: result.palletCount, unit: 'pallets' },
+      { key: 'border', description: `Border / edging — ${result.perimeterFt} linear ft, ${pavers.borderUnitLengthFt} ft/unit`, qty: result.borderUnitCount, unit: 'units' },
+      { key: 'sand', description: `Sand — drypack bedding, ${pavers.drypackDepthIn}" depth`, qty: result.drypackSandYd3, unit: 'yd³' },
+      { key: 'cement', description: `Portland cement — ${pavers.cementBagsPerYardSand} bags per yd³ of sand`, qty: result.drypackCementBags, unit: 'bags' },
+      { key: 'rcaBase', description: `RCA base — ${pavers.baseDepthIn}" depth`, qty: result.rcaBaseYd3, unit: 'yd³' },
     ];
+  }, [type, result, sqft, asphalt, concrete, pavers]);
+
+  // Pre-fill a row's price from the price book the first time it appears —
+  // never overwrites a price the user already typed (including a deliberate
+  // blank), since a key is only missing from `prices` before that first fill.
+  useEffect(() => {
+    if (!catalog || !catalog.length || !rows.length) return;
+    setPrices((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const r of rows) {
+        if (!(r.key in next)) {
+          const match = catalog.find((c) => c.material_key === r.key);
+          if (match) { next[r.key] = String(match.unit_price); changed = true; }
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [catalog, rows]);
+
+  const priceFor = (key) => prices[key] ?? '';
+  function setPrice(key, value) {
+    setPrices((p) => ({ ...p, [key]: value }));
   }
+  const totalCost = rows.reduce((sum, r) => sum + (Number(r.qty) || 0) * (Number(priceFor(r.key)) || 0), 0);
 
   function sendToEstimate() {
     if (!jobId || !result) return;
-    const items = lineItems();
+    const items = rows.map((r) => ({ description: r.description, qty: r.qty, unit_price: Number(priceFor(r.key)) || 0 }));
     sessionStorage.setItem('pendingEstimateItems', JSON.stringify(items));
     navigate(`/jobs/${jobId}`);
   }
@@ -67,7 +98,7 @@ export default function Materials() {
       <div className="page-head">
         <div>
           <h1>Material calculator</h1>
-          <p className="sub">Plug in square footage and get the material quantities for a job — asphalt in tons, concrete in cubic yards, pavers by the pallet with drypack sand, portland cement, and RCA base in cubic yards.</p>
+          <p className="sub">Plug in square footage and get the material quantities and cost for a job — asphalt in tons, concrete in cubic yards, pavers by the pallet with sand, portland cement, and RCA base in cubic yards.</p>
         </div>
       </div>
 
@@ -102,9 +133,9 @@ export default function Materials() {
           )}
           {type === 'pavers' && (
             <div className="field">
-              <label>SF covered per paver</label>
-              <input type="number" min="0.01" step="0.01" value={pavers.paverSfCoverage}
-                onChange={(e) => setPavers((p) => ({ ...p, paverSfCoverage: e.target.value }))} />
+              <label>SF per pallet</label>
+              <input type="number" min="0.01" step="1" value={pavers.sfPerPallet}
+                onChange={(e) => setPavers((p) => ({ ...p, sfPerPallet: e.target.value }))} />
             </div>
           )}
         </div>
@@ -112,9 +143,9 @@ export default function Materials() {
         {type === 'pavers' && (
           <div className="form-grid" style={{ marginTop: 12 }}>
             <div className="field">
-              <label>Pavers per pallet</label>
-              <input type="number" min="1" step="1" value={pavers.paversPerPallet}
-                onChange={(e) => setPavers((p) => ({ ...p, paversPerPallet: e.target.value }))} />
+              <label>Border / edging unit length (ft)</label>
+              <input type="number" min="0.1" step="0.1" value={pavers.borderUnitLengthFt}
+                onChange={(e) => setPavers((p) => ({ ...p, borderUnitLengthFt: e.target.value }))} />
             </div>
             <div className="field">
               <label>Drypack depth (in) — sand bedding</label>
@@ -165,57 +196,34 @@ export default function Materials() {
         <div className="card"><div className="empty">Enter a square footage above to see material quantities.</div></div>
       ) : (
         <>
-          <div className="kpi-grid" style={{ marginTop: 18, marginBottom: 0 }}>
-            {type === 'asphalt' && (
-              <>
-                <div className="kpi">
-                  <div className="label">Asphalt needed</div>
-                  <div className="value">{result.tons} tons</div>
-                  <div className="delta">{result.cubicFt} ft³ compacted volume</div>
-                </div>
-              </>
-            )}
-            {type === 'concrete' && (
-              <div className="kpi">
-                <div className="label">Concrete needed</div>
-                <div className="value">{result.cubicYards} yd³</div>
-                <div className="delta">{result.cubicFt} ft³</div>
-              </div>
-            )}
-            {type === 'pavers' && (
-              <>
-                <div className="kpi">
-                  <div className="label">Pavers</div>
-                  <div className="value">{result.palletCount} pallets</div>
-                  <div className="delta">{result.paverCount} pcs incl. {pavers.wastePercent}% waste, {pavers.paversPerPallet}/pallet</div>
-                </div>
-                <div className="kpi">
-                  <div className="label">Border / edging</div>
-                  <div className="value">{result.perimeterFt} ft</div>
-                  <div className="delta">linear feet</div>
-                </div>
-                <div className="kpi">
-                  <div className="label">Drypack sand</div>
-                  <div className="value">{result.drypackSandYd3} yd³</div>
-                  <div className="delta">{pavers.drypackDepthIn}" depth</div>
-                </div>
-                <div className="kpi">
-                  <div className="label">Portland cement</div>
-                  <div className="value">{result.drypackCementBags} bags</div>
-                  <div className="delta">{pavers.cementBagsPerYardSand} bags per yd³ of sand</div>
-                </div>
-                <div className="kpi">
-                  <div className="label">RCA base</div>
-                  <div className="value">{result.rcaBaseYd3} yd³</div>
-                  <div className="delta">{pavers.baseDepthIn}" depth</div>
-                </div>
-              </>
-            )}
+          <div className="card" style={{ marginTop: 18 }}>
+            <h2>Materials &amp; cost</h2>
+            <p className="sub" style={{ marginBottom: 12 }}>Prices pre-fill from your <Link to="/items" className="link-strong">items &amp; price book</Link> when a match exists — override any of them below.</p>
+            <table className="line-items">
+              <thead>
+                <tr><th>Material</th><th className="num">Qty</th><th>Unit</th><th className="num">Unit price</th><th className="num">Total</th></tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.key}>
+                    <td>{r.description}</td>
+                    <td className="num mono">{r.qty}</td>
+                    <td className="mono">{r.unit}</td>
+                    <td className="num">
+                      <input type="number" min="0" step="0.01" value={priceFor(r.key)} placeholder="0"
+                        onChange={(e) => setPrice(r.key, e.target.value)} />
+                    </td>
+                    <td className="num mono">{money((Number(r.qty) || 0) * (Number(priceFor(r.key)) || 0))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="totals-row"><span className="lbl">Total material cost</span><span className="amt">{money(totalCost)}</span></div>
           </div>
 
           <div className="card" style={{ marginTop: 18 }}>
             <h2>Send to a job's estimate</h2>
-            <p className="sub" style={{ marginBottom: 12 }}>Adds these quantities as line items on the job — prices start at $0 so you can fill in your own numbers before sending it to the customer.</p>
+            <p className="sub" style={{ marginBottom: 12 }}>Adds these quantities and prices as line items on the job, ready to review before sending it to the customer.</p>
             <div className="form-grid">
               <div className="field">
                 <label>Job</label>
