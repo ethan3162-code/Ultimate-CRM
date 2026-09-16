@@ -47,6 +47,20 @@ export default function JobDetail() {
   }
   useEffect(load, [id]);
 
+  // Pick up material-calculator results handed off from the Materials page, if any.
+  useEffect(() => {
+    const raw = sessionStorage.getItem('pendingEstimateItems');
+    if (!raw) return;
+    sessionStorage.removeItem('pendingEstimateItems');
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length) {
+        setItems(parsed);
+        setShowEstimateForm(true);
+      }
+    } catch { /* ignore malformed handoff data */ }
+  }, [id]);
+
   async function changeStatus(status) {
     await api.updateJob(id, { status });
     load();
