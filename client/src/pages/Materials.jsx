@@ -47,11 +47,12 @@ export default function Materials() {
       return [{ description: `Concrete — ${concrete.thicknessIn}" slab, ${sqft} SF`, qty: result.cubicYards, unit_price: 0 }];
     }
     return [
-      { description: `Pavers — ${sqft} SF`, qty: result.paverCount, unit_price: 0 },
+      { description: `Pavers — ${sqft} SF, ${pavers.paversPerPallet}/pallet (${result.paverCount} pcs)`, qty: result.palletCount, unit_price: 0 },
       { description: `Border / edge restraint — ${result.perimeterFt} linear ft`, qty: result.perimeterFt, unit_price: 0 },
-      { description: `Bedding sand`, qty: result.sandTons, unit_price: 0 },
-      { description: `RCA base`, qty: result.rcaBaseTons, unit_price: 0 },
-      { description: `Cement (footing, ${pavers.bagYieldFt3}ft³ bags)`, qty: result.cementBags, unit_price: 0 },
+      { description: `Drypack sand (${pavers.drypackDepthIn}" bedding)`, qty: result.drypackSandYd3, unit_price: 0 },
+      { description: `Portland cement, drypack bedding (${pavers.cementBagVolumeFt3}ft³ bags)`, qty: result.drypackCementBags, unit_price: 0 },
+      { description: `RCA base (${pavers.baseDepthIn}" depth)`, qty: result.rcaBaseYd3, unit_price: 0 },
+      { description: `Cement, edge footing (${pavers.bagYieldFt3}ft³ bags)`, qty: result.footingCementBags, unit_price: 0 },
     ];
   }
 
@@ -67,7 +68,7 @@ export default function Materials() {
       <div className="page-head">
         <div>
           <h1>Material calculator</h1>
-          <p className="sub">Plug in square footage and get the material quantities for a job — asphalt in tons, concrete in cubic yards, pavers with base, sand, borders, and footing cement.</p>
+          <p className="sub">Plug in square footage and get the material quantities for a job — asphalt in tons, concrete in cubic yards, pavers by the pallet with drypack and RCA base in cubic yards, plus borders and footing cement.</p>
         </div>
       </div>
 
@@ -112,6 +113,26 @@ export default function Materials() {
         {type === 'pavers' && (
           <div className="form-grid" style={{ marginTop: 12 }}>
             <div className="field">
+              <label>Pavers per pallet</label>
+              <input type="number" min="1" step="1" value={pavers.paversPerPallet}
+                onChange={(e) => setPavers((p) => ({ ...p, paversPerPallet: e.target.value }))} />
+            </div>
+          </div>
+        )}
+
+        {type === 'pavers' && (
+          <div className="form-grid" style={{ marginTop: 12 }}>
+            <div className="field">
+              <label>Drypack depth (in) — sand + cement bedding</label>
+              <input type="number" min="0" step="0.25" value={pavers.drypackDepthIn}
+                onChange={(e) => setPavers((p) => ({ ...p, drypackDepthIn: e.target.value }))} />
+            </div>
+            <div className="field">
+              <label>RCA base depth (in)</label>
+              <input type="number" min="0" step="0.5" value={pavers.baseDepthIn}
+                onChange={(e) => setPavers((p) => ({ ...p, baseDepthIn: e.target.value }))} />
+            </div>
+            <div className="field">
               <label>Waste / cut allowance (%)</label>
               <input type="number" min="0" value={pavers.wastePercent}
                 onChange={(e) => setPavers((p) => ({ ...p, wastePercent: e.target.value }))} />
@@ -125,7 +146,7 @@ export default function Materials() {
         )}
 
         <button type="button" className="btn subtle" style={{ marginTop: 10, paddingLeft: 0 }} onClick={() => setShowAdvanced((v) => !v)}>
-          {showAdvanced ? 'Hide' : 'Show'} advanced settings (densities &amp; base depths)
+          {showAdvanced ? 'Hide' : 'Show'} advanced settings
         </button>
 
         {showAdvanced && (
@@ -140,24 +161,14 @@ export default function Materials() {
             {type === 'pavers' && (
               <>
                 <div className="field">
-                  <label>Bedding sand depth (in)</label>
-                  <input type="number" min="0" step="0.25" value={pavers.sandDepthIn}
-                    onChange={(e) => setPavers((p) => ({ ...p, sandDepthIn: e.target.value }))} />
+                  <label>Drypack sand : cement ratio (parts sand per 1 part cement)</label>
+                  <input type="number" min="1" step="0.5" value={pavers.drypackRatio}
+                    onChange={(e) => setPavers((p) => ({ ...p, drypackRatio: e.target.value }))} />
                 </div>
                 <div className="field">
-                  <label>Sand density (lb/ft³)</label>
-                  <input type="number" min="0" value={pavers.sandDensityLbFt3}
-                    onChange={(e) => setPavers((p) => ({ ...p, sandDensityLbFt3: e.target.value }))} />
-                </div>
-                <div className="field">
-                  <label>RCA base depth (in)</label>
-                  <input type="number" min="0" step="0.5" value={pavers.baseDepthIn}
-                    onChange={(e) => setPavers((p) => ({ ...p, baseDepthIn: e.target.value }))} />
-                </div>
-                <div className="field">
-                  <label>RCA base density (lb/ft³)</label>
-                  <input type="number" min="0" value={pavers.baseDensityLbFt3}
-                    onChange={(e) => setPavers((p) => ({ ...p, baseDensityLbFt3: e.target.value }))} />
+                  <label>Portland cement bag volume (ft³/bag)</label>
+                  <input type="number" min="0.1" step="0.1" value={pavers.cementBagVolumeFt3}
+                    onChange={(e) => setPavers((p) => ({ ...p, cementBagVolumeFt3: e.target.value }))} />
                 </div>
                 <div className="field">
                   <label>Footing width (ft)</label>
@@ -170,7 +181,7 @@ export default function Materials() {
                     onChange={(e) => setPavers((p) => ({ ...p, footingDepthFt: e.target.value }))} />
                 </div>
                 <div className="field">
-                  <label>Cement bag yield (ft³/bag)</label>
+                  <label>Footing cement bag yield (ft³/bag)</label>
                   <input type="number" min="0.1" step="0.1" value={pavers.bagYieldFt3}
                     onChange={(e) => setPavers((p) => ({ ...p, bagYieldFt3: e.target.value }))} />
                 </div>
@@ -205,8 +216,8 @@ export default function Materials() {
               <>
                 <div className="kpi">
                   <div className="label">Pavers</div>
-                  <div className="value">{result.paverCount}</div>
-                  <div className="delta">incl. {pavers.wastePercent}% waste</div>
+                  <div className="value">{result.palletCount} pallets</div>
+                  <div className="delta">{result.paverCount} pcs incl. {pavers.wastePercent}% waste, {pavers.paversPerPallet}/pallet</div>
                 </div>
                 <div className="kpi">
                   <div className="label">Border / edging</div>
@@ -214,19 +225,19 @@ export default function Materials() {
                   <div className="delta">linear feet</div>
                 </div>
                 <div className="kpi">
-                  <div className="label">Bedding sand</div>
-                  <div className="value">{result.sandTons} tons</div>
-                  <div className="delta">{pavers.sandDepthIn}" depth</div>
+                  <div className="label">Drypack (sand + cement)</div>
+                  <div className="value">{result.drypackYd3} yd³</div>
+                  <div className="delta">{pavers.drypackDepthIn}" depth — {result.drypackSandYd3} yd³ sand + {result.drypackCementBags} cement bags</div>
                 </div>
                 <div className="kpi">
                   <div className="label">RCA base</div>
-                  <div className="value">{result.rcaBaseTons} tons</div>
+                  <div className="value">{result.rcaBaseYd3} yd³</div>
                   <div className="delta">{pavers.baseDepthIn}" depth</div>
                 </div>
                 <div className="kpi">
-                  <div className="label">Cement bags</div>
-                  <div className="value">{result.cementBags}</div>
-                  <div className="delta">for edge footing</div>
+                  <div className="label">Footing cement bags</div>
+                  <div className="value">{result.footingCementBags}</div>
+                  <div className="delta">for edge restraint footing</div>
                 </div>
               </>
             )}
