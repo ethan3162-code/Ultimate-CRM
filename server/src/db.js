@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   start_date TEXT,
   end_date TEXT,
   progress_percent INTEGER NOT NULL DEFAULT 0,
+  stage TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -192,5 +193,6 @@ function ensureColumn(table, column, ddl) {
 ensureColumn('jobs', 'start_date', 'start_date TEXT');
 ensureColumn('jobs', 'end_date', 'end_date TEXT');
 ensureColumn('jobs', 'progress_percent', 'progress_percent INTEGER NOT NULL DEFAULT 0');
+ensureColumn('jobs', 'stage', 'stage TEXT');
 
 module.exports = db;

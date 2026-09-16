@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 
 const STATUS_LABEL = { scheduled: 'Scheduled', in_progress: 'In progress', completed: 'Completed', cancelled: 'Cancelled' };
+const STAGE_LABEL = { demo: 'Demo', material_order: 'Material order', installation: 'Installation', final_walkthrough: 'Final walkthrough' };
 const DAY_MS = 86400000;
 
 function toDate(d) {
@@ -91,9 +92,9 @@ export default function Schedule() {
                 </div>
                 <div className="gantt-track">
                   <div className="gantt-today" style={{ left: `${todayLeft}%` }} />
-                  <Link to={`/jobs/${job.id}`} className={`gantt-bar status-${job.status}`} style={barStyle(job)} title={`${job.progress_percent || 0}% complete`}>
+                  <Link to={`/jobs/${job.id}`} className={`gantt-bar status-${job.status}`} style={barStyle(job)} title={job.stage ? `${STAGE_LABEL[job.stage] || job.stage} (${job.progress_percent || 0}%)` : `${job.progress_percent || 0}% complete`}>
                     <div className="fill" style={{ width: `${job.progress_percent || 0}%` }} />
-                    <span className="lbl">{job.progress_percent || 0}%</span>
+                    <span className="lbl">{job.stage ? STAGE_LABEL[job.stage] || job.stage : `${job.progress_percent || 0}%`}</span>
                   </Link>
                 </div>
               </div>

@@ -160,11 +160,19 @@ insertEstimate({ job_id: j5, number: 'EST-1005', status: 'sent', tax_rate: 0.065
   { description: 'Motor + sensor service', qty: 1, unit_price: 340 },
 ]);
 
-// --- Project schedule: start/end dates + progress for the Gantt/schedule view ---
-db.prepare(`UPDATE jobs SET start_date = ?, end_date = ?, progress_percent = ? WHERE id = ?`).run('2026-09-10', '2026-09-25', 40, j1);
-db.prepare(`UPDATE jobs SET start_date = ?, end_date = ?, progress_percent = ? WHERE id = ?`).run('2026-09-01', '2026-09-08', 100, j2);
-db.prepare(`UPDATE jobs SET start_date = ?, end_date = ?, progress_percent = ? WHERE id = ?`).run('2026-09-22', '2026-09-24', 0, j3);
-db.prepare(`UPDATE jobs SET start_date = ?, end_date = ?, progress_percent = ? WHERE id = ?`).run('2026-09-15', '2026-09-20', 65, j5);
+// --- Project schedule: start/end dates + finish-out stage for the Gantt/schedule view ---
+// Progress is driven by a fixed stage checkpoint (demo=25%, material_order=50%,
+// installation=75%, final_walkthrough=100%) rather than a free-form percentage.
+const STAGE_PERCENT = { demo: 25, material_order: 50, installation: 75, final_walkthrough: 100 };
+function setSchedule(jobId, start_date, end_date, stage) {
+  db.prepare(`UPDATE jobs SET start_date = ?, end_date = ?, stage = ?, progress_percent = ? WHERE id = ?`)
+    .run(start_date, end_date, stage || null, stage ? STAGE_PERCENT[stage] : 0, jobId);
+}
+setSchedule(j1, '2026-09-10', '2026-09-25', 'installation');
+setSchedule(j2, '2026-09-01', '2026-09-08', 'final_walkthrough');
+setSchedule(j3, '2026-09-22', '2026-09-24', 'demo');
+setSchedule(j4, '2026-08-28', '2026-09-08', 'final_walkthrough');
+setSchedule(j5, '2026-09-15', '2026-09-20', 'material_order');
 
 // --- Appointments (local + would sync to Google Calendar once connected) ---
 insertAppointment({

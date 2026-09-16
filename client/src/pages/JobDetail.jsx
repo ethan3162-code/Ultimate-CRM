@@ -8,6 +8,12 @@ import PaymentModal from '../components/PaymentModal';
 const JOB_STATUSES = ['scheduled', 'in_progress', 'completed', 'cancelled'];
 const STATUS_PILL = { scheduled: '', in_progress: 'amber', completed: 'green', cancelled: 'red', draft: '', sent: 'amber', approved: 'green', partial: 'amber', paid: 'green', overdue: 'red' };
 const KIND_LABEL = { deposit: 'Deposit', standard: null };
+const STAGES = [
+  { key: 'demo', label: 'Demo' },
+  { key: 'material_order', label: 'Material order' },
+  { key: 'installation', label: 'Installation' },
+  { key: 'final_walkthrough', label: 'Final walkthrough' },
+];
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -18,12 +24,13 @@ export default function JobDetail() {
   const [depositPercent, setDepositPercent] = useState('');
   const [requestingDepositFor, setRequestingDepositFor] = useState(null);
   const [payingInvoice, setPayingInvoice] = useState(null);
-  const [schedule, setSchedule] = useState({ start_date: '', end_date: '', progress_percent: 0 });
+  const [schedule, setSchedule] = useState({ start_date: '', end_date: '' });
+  const [savingStage, setSavingStage] = useState(false);
 
   function load() {
     api.job(id).then((j) => {
       setJob(j);
-      setSchedule({ start_date: j.start_date || '', end_date: j.end_date || '', progress_percent: j.progress_percent || 0 });
+      setSchedule({ start_date: j.start_date || '', end_date: j.end_date || '' });
     });
   }
   useEffect(load, [id]);
@@ -38,9 +45,15 @@ export default function JobDetail() {
     await api.updateJob(id, {
       start_date: schedule.start_date || null,
       end_date: schedule.end_date || null,
-      progress_percent: Number(schedule.progress_percent) || 0,
     });
     load();
+  }
+
+  async function setStage(stage) {
+    setSavingStage(true);
+    await api.updateJob(id, { stage: job.stage === stage ? null : stage });
+    await load();
+    setSavingStage(false);
   }
 
   async function submitEstimate(e) {
@@ -107,19 +120,37 @@ export default function JobDetail() {
                 <label>End date</label>
                 <input type="date" value={schedule.end_date || ''} onChange={(e) => setSchedule({ ...schedule, end_date: e.target.value })} />
               </div>
-              <div className="field" style={{ gridColumn: '1 / -1' }}>
-                <label>Progress — {schedule.progress_percent}%</label>
-                <input
-                  type="range" min="0" max="100" step="5"
-                  value={schedule.progress_percent}
-                  onChange={(e) => setSchedule({ ...schedule, progress_percent: e.target.value })}
-                />
-                <div className="progress-bar"><div className="fill" style={{ width: `${schedule.progress_percent}%` }} /></div>
-              </div>
               <div className="field" style={{ justifyContent: 'flex-end' }}>
-                <button className="btn primary sm" type="submit">Save schedule</button>
+                <button className="btn primary sm" type="submit">Save dates</button>
               </div>
             </form>
+
+            <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--line-soft)' }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>Finish-out stage</label>
+              <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                {STAGES.map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    className={'btn sm' + (job.stage === s.key ? ' primary' : '')}
+                    disabled={savingStage}
+                    onClick={() => setStage(s.key)}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <div className="stage-bar">
+                {STAGES.map((s, i) => (
+                  <div key={s.key} className={'segment' + (job.stage && STAGES.findIndex((x) => x.key === job.stage) >= i ? ' filled' : '')} />
+                ))}
+              </div>
+              <div className="stage-labels">
+                {STAGES.map((s) => (
+                  <span key={s.key} className={'lbl' + (job.stage === s.key ? ' active' : '')}>{s.label}</span>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="card">

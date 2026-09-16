@@ -332,6 +332,18 @@ table.list tbody tr:last-child td { border-bottom: none; }
 .progress-bar .fill { height: 100%; background: var(--accent); border-radius: 5px; transition: width 0.2s ease; }
 .progress-bar.tiny { height: 5px; margin-top: 4px; }
 
+.stage-bar { display: flex; gap: 4px; margin-top: 10px; }
+.stage-bar .segment { flex: 1; height: 10px; border-radius: 4px; background: var(--line-soft); transition: background 0.2s ease; }
+.stage-bar .segment.filled { background: var(--accent); }
+.stage-labels { display: flex; justify-content: space-between; margin-top: 6px; }
+.stage-labels .lbl { font-size: 10.5px; color: var(--muted); text-align: center; flex: 1; }
+.stage-labels .lbl:first-child { text-align: left; }
+.stage-labels .lbl:last-child { text-align: right; }
+.stage-labels .lbl.active { color: var(--accent-ink); font-weight: 600; }
+@media (max-width: 600px) {
+  .stage-labels .lbl { font-size: 9.5px; }
+}
+
 /* --- Project schedule / Gantt --- */
 .gantt { border: 1px solid var(--line); background: var(--paper-raised); border-radius: 12px; overflow: hidden; }
 .gantt-header { display: flex; border-bottom: 1px solid var(--line); }
