@@ -1,6 +1,6 @@
 const db = require('./db');
 
-const tables = ['appointments', 'automation_runs', 'automations', 'tickets', 'payments', 'invoice_items', 'invoices', 'estimate_items', 'estimates', 'jobs', 'deals', 'activities', 'contacts', 'companies', 'catalog_items', 'tasks', 'job_photos', 'settings'];
+const tables = ['appointments', 'automation_runs', 'automations', 'tickets', 'payments', 'invoice_items', 'invoices', 'estimate_items', 'estimates', 'jobs', 'deals', 'activities', 'contacts', 'companies', 'catalog_items', 'tasks', 'job_photos', 'job_expenses', 'settings'];
 for (const t of tables) db.prepare(`DELETE FROM ${t}`).run();
 for (const t of tables) db.prepare(`DELETE FROM sqlite_sequence WHERE name = ?`).run(t);
 
@@ -9,12 +9,12 @@ function insertCompany(c) {
     .run(c.name, c.industry, c.phone, c.email, c.address).lastInsertRowid;
 }
 function insertContact(c) {
-  return db.prepare(`INSERT INTO contacts (company_id, first_name, last_name, email, phone, title) VALUES (?,?,?,?,?,?)`)
-    .run(c.company_id, c.first_name, c.last_name, c.email, c.phone, c.title).lastInsertRowid;
+  return db.prepare(`INSERT INTO contacts (company_id, first_name, last_name, email, phone, title, address, source) VALUES (?,?,?,?,?,?,?,?)`)
+    .run(c.company_id, c.first_name, c.last_name, c.email, c.phone, c.title, c.address || null, c.source || null).lastInsertRowid;
 }
 function insertDeal(d) {
-  return db.prepare(`INSERT INTO deals (contact_id, company_id, title, value, stage, probability, expected_close) VALUES (?,?,?,?,?,?,?)`)
-    .run(d.contact_id, d.company_id, d.title, d.value, d.stage, d.probability, d.expected_close).lastInsertRowid;
+  return db.prepare(`INSERT INTO deals (contact_id, company_id, title, value, stage, probability, expected_close, source) VALUES (?,?,?,?,?,?,?,?)`)
+    .run(d.contact_id, d.company_id, d.title, d.value, d.stage, d.probability, d.expected_close, d.source || null).lastInsertRowid;
 }
 function insertCatalogItem(c) {
   return db.prepare(`INSERT INTO catalog_items (name, description, unit, unit_price, material_key, brand, sf_per_pallet) VALUES (?,?,?,?,?,?,?)`)
@@ -45,6 +45,10 @@ function insertInvoice(inv, items, payments) {
       .run(id, p.amount, p.method, p.paid_at);
   }
   return id;
+}
+function insertExpense(e) {
+  return db.prepare(`INSERT INTO job_expenses (job_id, category, description, qty, unit_cost, incurred_on) VALUES (?,?,?,?,?,?)`)
+    .run(e.job_id, e.category, e.description, e.qty, e.unit_cost, e.incurred_on).lastInsertRowid;
 }
 function insertAppointment(a) {
   return db.prepare(`
@@ -94,20 +98,22 @@ const cJohn = insertContact({ company_id: acme, first_name: 'John', last_name: '
 const cPriya = insertContact({ company_id: brightline, first_name: 'Priya', last_name: 'Shah', email: 'priya@brightline.io', phone: '(555) 934-1121', title: 'VP Sales' });
 const cDana = insertContact({ company_id: northwood, first_name: 'Dana', last_name: 'Ruiz', email: 'dana@northwooddental.com', phone: '(555) 662-7711', title: 'Office Manager' });
 const cTom = insertContact({ company_id: summit, first_name: 'Tom', last_name: 'Whitfield', email: 'tom@summitretail.com', phone: '(555) 447-2201', title: 'Director of Ops' });
-const cElena = insertContact({ company_id: harbor, first_name: 'Elena', last_name: 'Cho', email: 'elena@harborlogistics.com', phone: '(555) 331-9983', title: 'COO' });
-const cMarcus = insertContact({ company_id: graystone, first_name: 'Marcus', last_name: 'Bell', email: 'marcus@graystonepm.com', phone: '(555) 809-3346', title: 'Property Manager' });
+const cElena = insertContact({ company_id: harbor, first_name: 'Elena', last_name: 'Cho', email: 'elena@harborlogistics.com', phone: '(555) 331-9983', title: 'COO', source: 'SEO (organic)' });
+const cMarcus = insertContact({ company_id: graystone, first_name: 'Marcus', last_name: 'Bell', email: 'marcus@graystonepm.com', phone: '(555) 809-3346', title: 'Property Manager', source: 'Referral' });
 const cSara = insertContact({ company_id: acme, first_name: 'Sara', last_name: 'Meyer', email: 'sara@acmeroofing.com', phone: '(555) 210-4490', title: 'Office Admin' });
 const cLeo = insertContact({ company_id: brightline, first_name: 'Leo', last_name: 'Nakamura', email: 'leo@brightline.io', phone: '(555) 934-1122', title: 'Head of RevOps' });
+const cKaren = insertContact({ first_name: 'Karen', last_name: 'Whitfield', email: 'karen.whitfield@gmail.com', phone: '(555) 402-7788', title: 'Homeowner', address: '58 Maple Ridge Dr, Madison, WI', source: 'Web forms' });
 
 // --- Deals across pipeline stages ---
 const d1 = insertDeal({ contact_id: cPriya, company_id: brightline, title: 'Brightline — Growth plan upgrade', value: 42000, stage: 'negotiation', probability: 70, expected_close: '2026-10-15' });
 const d2 = insertDeal({ contact_id: cTom, company_id: summit, title: 'Summit Retail — POS rollout (12 stores)', value: 68000, stage: 'proposal', probability: 50, expected_close: '2026-11-01' });
 const d3 = insertDeal({ contact_id: cElena, company_id: harbor, title: 'Harbor Logistics — Fleet tracking pilot', value: 25000, stage: 'qualified', probability: 30, expected_close: '2026-11-20' });
-const d4 = insertDeal({ contact_id: cMarcus, company_id: graystone, title: 'Graystone — Portfolio-wide onboarding', value: 15500, stage: 'new', probability: 15, expected_close: '2026-12-05' });
+const d4 = insertDeal({ contact_id: cMarcus, company_id: graystone, title: 'Graystone — Portfolio-wide onboarding', value: 15500, stage: 'new', probability: 15, expected_close: '2026-12-05', source: 'Referral' });
 const d5 = insertDeal({ contact_id: cLeo, company_id: brightline, title: 'Brightline — Add-on seats (Q4)', value: 9800, stage: 'won', probability: 100, expected_close: '2026-09-01' });
 const d6 = insertDeal({ contact_id: cDana, company_id: northwood, title: 'Northwood Dental — Front desk suite', value: 6200, stage: 'lost', probability: 0, expected_close: '2026-08-20' });
 const d7 = insertDeal({ contact_id: cTom, company_id: summit, title: 'Summit Retail — Loyalty module', value: 18000, stage: 'qualified', probability: 35, expected_close: '2026-12-15' });
-const d8 = insertDeal({ contact_id: cElena, company_id: harbor, title: 'Harbor Logistics — Full fleet contract', value: 88000, stage: 'new', probability: 10, expected_close: '2027-01-10' });
+const d8 = insertDeal({ contact_id: cElena, company_id: harbor, title: 'Harbor Logistics — Full fleet contract', value: 88000, stage: 'new', probability: 10, expected_close: '2027-01-10', source: 'SEO (organic)' });
+const d9 = insertDeal({ contact_id: cKaren, title: 'Karen Whitfield — Web forms', value: 8200, stage: 'new', probability: 20, expected_close: null, source: 'Web forms' });
 
 // --- Field ops: jobs -> estimates -> invoices -> payments (Joist-style) ---
 const j1 = insertJob({ contact_id: cJohn, company_id: acme, title: 'Roof replacement — 412 Cedar St', status: 'in_progress', address: '412 Cedar St, Madison, WI', scheduled_date: '2026-09-18' });
@@ -126,6 +132,12 @@ insertInvoice({ job_id: j1, estimate_id: e1, number: 'INV-2001', status: 'partia
   ],
   [{ amount: 4000, method: 'ach', paid_at: '2026-09-10 14:22:00' }]
 );
+// Actual job costs — real profitability once these are weighed against the invoice above.
+insertExpense({ job_id: j1, category: 'Materials', description: 'Architectural shingles, 3-bundle/sq (28 sq)', qty: 28, unit_cost: 98, incurred_on: '2026-09-18' });
+insertExpense({ job_id: j1, category: 'Materials', description: 'Ice & water shield + synthetic underlayment', qty: 1, unit_cost: 310, incurred_on: '2026-09-18' });
+insertExpense({ job_id: j1, category: 'Labor', description: 'Crew labor — tear-off & install (3-man crew × 3 days)', qty: 72, unit_cost: 42, incurred_on: '2026-09-20' });
+insertExpense({ job_id: j1, category: 'Disposal', description: 'Dumpster rental & disposal fee', qty: 1, unit_cost: 340, incurred_on: '2026-09-18' });
+insertExpense({ job_id: j1, category: 'Permits & fees', description: 'Reroofing permit', qty: 1, unit_cost: 150, incurred_on: '2026-09-15' });
 
 const j2 = insertJob({ contact_id: cSara, company_id: acme, title: 'Gutter repair — rear addition', status: 'completed', address: '412 Cedar St, Madison, WI', scheduled_date: '2026-09-05' });
 const e2 = insertEstimate({ job_id: j2, number: 'EST-1002', status: 'approved', tax_rate: 0.055 }, [
@@ -139,6 +151,9 @@ insertInvoice({ job_id: j2, estimate_id: e2, number: 'INV-2002', status: 'paid',
   ],
   [{ amount: 926.35, method: 'card', paid_at: '2026-09-06 09:14:00' }]
 );
+insertExpense({ job_id: j2, category: 'Materials', description: 'Aluminum gutter stock (40 ft) + downspouts', qty: 1, unit_cost: 310, incurred_on: '2026-09-05' });
+insertExpense({ job_id: j2, category: 'Labor', description: 'Crew labor — gutter & downspout install (1-man, half day)', qty: 4, unit_cost: 45, incurred_on: '2026-09-05' });
+insertExpense({ job_id: j2, category: 'Equipment', description: 'Ladder & tool use', qty: 1, unit_cost: 40, incurred_on: '2026-09-05' });
 
 const j3 = insertJob({ contact_id: cMarcus, company_id: graystone, title: 'Storm damage inspection — Unit 4B', status: 'scheduled', address: '245 Elm Ct, Nashville, TN', scheduled_date: '2026-09-22' });
 insertEstimate({ job_id: j3, number: 'EST-1003', status: 'draft', tax_rate: 0.0475 }, [
@@ -157,6 +172,11 @@ insertInvoice({ job_id: j4, estimate_id: e4, number: 'INV-2003', status: 'overdu
   ],
   []
 );
+// This one came in over cost — a good example of the report surfacing a job that
+// actually lost money once labor and materials are logged against the invoice.
+insertExpense({ job_id: j4, category: 'Materials', description: 'Sealcoat mix (3,200 sq ft coverage)', qty: 1, unit_cost: 380, incurred_on: '2026-08-28' });
+insertExpense({ job_id: j4, category: 'Labor', description: 'Crew labor — sealcoating & striping (2-man, 1 day)', qty: 16, unit_cost: 40, incurred_on: '2026-08-28' });
+insertExpense({ job_id: j4, category: 'Equipment', description: 'Striping machine rental', qty: 1, unit_cost: 65, incurred_on: '2026-08-28' });
 
 const j5 = insertJob({ contact_id: cElena, company_id: harbor, title: 'Warehouse dock door repair', status: 'in_progress', address: '77 Pier Rd, Seattle, WA', scheduled_date: '2026-09-19' });
 insertEstimate({ job_id: j5, number: 'EST-1005', status: 'sent', tax_rate: 0.065 }, [
@@ -253,6 +273,7 @@ log('deal', d1, 'email', 'Sent revised proposal with add-on seat pricing.', 5);
 log('deal', d2, 'call', '30-min call with Tom — walked through rollout timeline for all 12 stores.', 3);
 log('deal', d2, 'note', 'Waiting on legal review from Summit before signature.', 1);
 log('deal', d3, 'email', 'Introduced fleet tracking pilot scope to Elena.', 6);
+log('deal', d9, 'note', 'Submitted the website contact form asking about a driveway resurface quote.', 1);
 log('job', j1, 'note', 'Crew started tear-off this morning, weather holding.', 5);
 log('job', j1, 'payment', 'Deposit of $4,000 received via ACH.', 5);
 log('job', j2, 'payment', 'Invoice INV-2002 paid in full.', 9);

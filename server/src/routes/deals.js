@@ -58,12 +58,12 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { contact_id, company_id, title, value, stage, probability, expected_close } = req.body;
+  const { contact_id, company_id, title, value, stage, probability, expected_close, source } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
   const result = db.prepare(`
-    INSERT INTO deals (contact_id, company_id, title, value, stage, probability, expected_close)
-    VALUES (?,?,?,?,?,?,?)
-  `).run(contact_id || null, company_id || null, title, value || 0, stage || 'new', probability ?? 20, expected_close || null);
+    INSERT INTO deals (contact_id, company_id, title, value, stage, probability, expected_close, source)
+    VALUES (?,?,?,?,?,?,?,?)
+  `).run(contact_id || null, company_id || null, title, value || 0, stage || 'new', probability ?? 20, expected_close || null, source || null);
   const deal = db.prepare(`SELECT * FROM deals WHERE id = ?`).get(result.lastInsertRowid);
   logActivity('deal', deal.id, 'note', `Deal "${deal.title}" created.`);
   const dealContact = deal.contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(deal.contact_id) : null;
@@ -82,7 +82,8 @@ router.get('/:id', (req, res) => {
   const deal = db.prepare(`${DEAL_SELECT} WHERE d.id = ?`).get(req.params.id);
   if (!deal) return res.status(404).json({ error: 'not found' });
   const activities = db.prepare(`SELECT * FROM activities WHERE related_type = 'deal' AND related_id = ? ORDER BY created_at DESC`).all(req.params.id);
-  res.json({ ...withScore(withCustomerInfo(deal)), activities });
+  const jobs = db.prepare(`SELECT id, title, status FROM jobs WHERE deal_id = ? ORDER BY created_at DESC`).all(req.params.id);
+  res.json({ ...withScore(withCustomerInfo(deal)), activities, jobs });
 });
 
 router.patch('/:id', (req, res) => {
@@ -93,9 +94,9 @@ router.patch('/:id', (req, res) => {
   }
   const updates = { ...existing, ...req.body };
   db.prepare(`
-    UPDATE deals SET contact_id=?, company_id=?, title=?, value=?, stage=?, probability=?, expected_close=?, updated_at=datetime('now')
+    UPDATE deals SET contact_id=?, company_id=?, title=?, value=?, stage=?, probability=?, expected_close=?, source=?, updated_at=datetime('now')
     WHERE id=?
-  `).run(updates.contact_id, updates.company_id, updates.title, updates.value, updates.stage, updates.probability, updates.expected_close, req.params.id);
+  `).run(updates.contact_id, updates.company_id, updates.title, updates.value, updates.stage, updates.probability, updates.expected_close, updates.source, req.params.id);
 
   if (req.body.stage && req.body.stage !== existing.stage) {
     logActivity('deal', existing.id, 'stage_change', `Stage moved from "${existing.stage}" to "${req.body.stage}".`);

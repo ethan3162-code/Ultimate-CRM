@@ -2,9 +2,20 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { money, shortDate, timeAgo } from '../utils';
+import { EXPENSE_CATEGORIES } from '../constants';
 import LineItemEditor from '../components/LineItemEditor';
 import PaymentModal from '../components/PaymentModal';
 import TaskList from '../components/TaskList';
+
+const REVENUE_BASIS_LABEL = { invoiced: 'Invoiced', estimated: 'Approved estimate (projected — not yet invoiced)', none: 'No invoice or approved estimate yet' };
+const BLANK_EXPENSE = { category: 'Materials', description: '', qty: '1', unit_cost: '', incurred_on: '' };
+
+function marginColor(margin) {
+  if (margin === null || margin === undefined) return 'var(--ink-soft)';
+  if (margin < 0) return 'var(--red)';
+  if (margin < 20) return 'var(--amber)';
+  return 'var(--accent-ink)';
+}
 
 const JOB_STATUSES = ['scheduled', 'in_progress', 'completed', 'cancelled'];
 const STATUS_PILL = { scheduled: '', in_progress: 'amber', completed: 'green', cancelled: 'red', draft: '', sent: 'amber', approved: 'green', partial: 'amber', paid: 'green', overdue: 'red' };
@@ -68,6 +79,8 @@ export default function JobDetail() {
   const [photoLabel, setPhotoLabel] = useState('progress');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [copiedLink, setCopiedLink] = useState(null);
+  const [expenseForm, setExpenseForm] = useState(BLANK_EXPENSE);
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
 
   function load() {
     api.job(id).then((j) => {
@@ -175,6 +188,26 @@ export default function JobDetail() {
 
   async function removePhoto(photoId) {
     await api.deleteJobPhoto(photoId);
+    load();
+  }
+
+  async function addExpense(e) {
+    e.preventDefault();
+    if (!expenseForm.description.trim()) return;
+    await api.addJobExpense(id, {
+      category: expenseForm.category,
+      description: expenseForm.description,
+      qty: Number(expenseForm.qty) || 1,
+      unit_cost: Number(expenseForm.unit_cost) || 0,
+      incurred_on: expenseForm.incurred_on || undefined,
+    });
+    setExpenseForm(BLANK_EXPENSE);
+    setShowExpenseForm(false);
+    load();
+  }
+
+  async function removeExpense(expenseId) {
+    await api.deleteJobExpense(expenseId);
     load();
   }
 
@@ -335,6 +368,94 @@ export default function JobDetail() {
         </div>
 
         <div className="stack">
+          <div className="card">
+            <div className="row between" style={{ alignItems: 'flex-start' }}>
+              <h2 style={{ marginBottom: 0 }}>Job costing</h2>
+              <button className="btn sm" onClick={() => setShowExpenseForm((v) => !v)}>+ Log expense</button>
+            </div>
+            <p className="sub" style={{ margin: '4px 0 12px' }}>
+              Revenue basis: {REVENUE_BASIS_LABEL[job.costing.revenueBasis]}
+            </p>
+
+            {showExpenseForm && (
+              <form onSubmit={addExpense} className="form-grid" style={{ marginBottom: 14, borderBottom: '1px solid var(--line-soft)', paddingBottom: 14 }}>
+                <div className="field">
+                  <label>Category</label>
+                  <select value={expenseForm.category} onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}>
+                    {EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="field">
+                  <label>Date incurred</label>
+                  <input type="date" value={expenseForm.incurred_on} onChange={(e) => setExpenseForm({ ...expenseForm, incurred_on: e.target.value })} />
+                </div>
+                <div className="field" style={{ gridColumn: '1 / -1' }}>
+                  <label>Description</label>
+                  <input value={expenseForm.description} onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })} placeholder="e.g. Asphalt mix — 12 tons" required />
+                </div>
+                <div className="field">
+                  <label>Qty</label>
+                  <input type="number" min="0" step="any" value={expenseForm.qty} onChange={(e) => setExpenseForm({ ...expenseForm, qty: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label>Unit cost ($)</label>
+                  <input type="number" min="0" step="0.01" value={expenseForm.unit_cost} onChange={(e) => setExpenseForm({ ...expenseForm, unit_cost: e.target.value })} />
+                </div>
+                <div className="field" style={{ gridColumn: '1 / -1', justifyContent: 'flex-end' }}>
+                  <button className="btn primary sm" type="submit">Save expense</button>
+                </div>
+              </form>
+            )}
+
+            <div className="stack" style={{ gap: 6, marginBottom: 12 }}>
+              <div className="totals-row" style={{ justifyContent: 'space-between', padding: '2px 0' }}>
+                <span className="lbl">Revenue</span><span className="amt">{money(job.costing.revenue)}</span>
+              </div>
+              <div className="totals-row" style={{ justifyContent: 'space-between', padding: '2px 0' }}>
+                <span className="lbl">Total expenses</span><span className="amt">{money(job.costing.cost)}</span>
+              </div>
+              <div className="totals-row" style={{ justifyContent: 'space-between', padding: '4px 0', borderTop: '1px solid var(--line-soft)', marginTop: 4 }}>
+                <span className="lbl" style={{ fontWeight: 600 }}>Profit</span>
+                <span className="amt" style={{ fontWeight: 700, color: marginColor(job.costing.margin) }}>{money(job.costing.profit)}</span>
+              </div>
+              <div className="row between">
+                <span className="muted" style={{ fontSize: 13 }}>Margin</span>
+                <span className="mono" style={{ fontWeight: 600, color: marginColor(job.costing.margin) }}>
+                  {job.costing.margin === null ? '—' : `${job.costing.margin}%`}
+                </span>
+              </div>
+            </div>
+
+            {job.costing.byCategory.length > 0 && (
+              <div className="stack" style={{ gap: 4, marginBottom: 12 }}>
+                <div className="kicker">Cost breakdown</div>
+                {job.costing.byCategory.map((c) => (
+                  <div key={c.category} className="row between" style={{ fontSize: 13 }}>
+                    <span className="muted">{c.category}</span>
+                    <span className="mono">{money(c.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {job.costing.expenses.length === 0 ? <div className="empty">No expenses logged yet.</div> : (
+              <div className="stack" style={{ gap: 2 }}>
+                {job.costing.expenses.map((exp) => (
+                  <div key={exp.id} className="attention-row">
+                    <span>
+                      {exp.description}
+                      <span className="muted" style={{ marginLeft: 6 }}>{exp.category} · {shortDate(exp.incurred_on)}</span>
+                    </span>
+                    <span className="row" style={{ gap: 8 }}>
+                      <span className="mono">{money(exp.qty * exp.unit_cost)}</span>
+                      <button type="button" className="btn subtle sm" onClick={() => removeExpense(exp.id)}>✕</button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="card">
             <h2>Invoices &amp; payments</h2>
             {job.invoices.length === 0 ? <div className="empty">No invoices yet.</div> : (

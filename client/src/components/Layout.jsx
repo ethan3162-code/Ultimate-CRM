@@ -6,12 +6,13 @@ const NAV = [
   {
     group: 'Sales',
     items: [
-      { to: '/pipeline', label: 'Pipeline' },
+      { to: '/leads', label: 'Leads' },
+      { to: '/pipeline', label: 'Opportunities' },
       { to: '/companies', label: 'Companies' },
       { to: '/contacts', label: 'Contacts' },
     ],
   },
-  { group: 'Field ops', items: [{ to: '/jobs', label: 'Jobs & billing' }, { to: '/materials', label: 'Material calculator' }, { to: '/items', label: 'Items & price book' }] },
+  { group: 'Field ops', items: [{ to: '/jobs', label: 'Projects & billing' }, { to: '/materials', label: 'Material calculator' }, { to: '/items', label: 'Items & price book' }] },
   {
     group: 'Scheduling',
     items: [

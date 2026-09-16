@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
+import Leads from './pages/Leads';
 import Pipeline from './pages/Pipeline';
 import DealDetail from './pages/DealDetail';
 import Companies from './pages/Companies';
@@ -25,6 +26,7 @@ export default function App() {
       <Route path="/approve/:token" element={<EstimateApproval />} />
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/leads" element={<Leads />} />
         <Route path="/pipeline" element={<Pipeline />} />
         <Route path="/pipeline/:id" element={<DealDetail />} />
         <Route path="/companies" element={<Companies />} />

@@ -7,6 +7,7 @@ import { TrendChart, ColumnChart, BarList, DonutChart } from '../components/char
 const STAGE_LABELS = { new: 'New', qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
 const AGING_COLORS = ['var(--accent)', 'var(--amber)', 'var(--amber)', 'var(--red)'];
 const TASK_LINK = { contact: '/contacts', deal: '/pipeline', job: '/jobs', ticket: '/tickets' };
+const OPP_STAGES = ['qualified', 'proposal', 'negotiation', 'won', 'lost'];
 
 function attentionCount(insights) {
   if (!insights) return 0;
@@ -28,7 +29,8 @@ export default function Dashboard() {
 
   if (!data) return <div className="loading">Loading dashboard…</div>;
 
-  const maxStageValue = Math.max(...Object.values(data.stageCounts).map((s) => s.v), 1);
+  const maxStageValue = Math.max(...OPP_STAGES.map((s) => data.stageCounts[s].v), 1);
+  const newLeadsCount = data.stageCounts.new.c;
 
   return (
     <>
@@ -135,22 +137,32 @@ export default function Dashboard() {
 
       <div className="grid-2">
         <div className="card">
-          <h2>Pipeline by stage</h2>
+          <div className="row between" style={{ alignItems: 'flex-start' }}>
+            <h2>Opportunities by stage</h2>
+            {newLeadsCount > 0 && (
+              <Link to="/leads" className="pill amber" style={{ textDecoration: 'none' }}>
+                🔥 {newLeadsCount} new lead{newLeadsCount === 1 ? '' : 's'} waiting →
+              </Link>
+            )}
+          </div>
           <div className="stack" style={{ gap: 10 }}>
-            {Object.entries(data.stageCounts).map(([stage, s]) => (
-              <div key={stage}>
-                <div className="row between" style={{ marginBottom: 4 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>{STAGE_LABELS[stage]} <span className="muted">({s.c})</span></span>
-                  <span className="mono" style={{ fontSize: 12.5 }}>{money(s.v)}</span>
+            {OPP_STAGES.map((stage) => {
+              const s = data.stageCounts[stage];
+              return (
+                <div key={stage}>
+                  <div className="row between" style={{ marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{STAGE_LABELS[stage]} <span className="muted">({s.c})</span></span>
+                    <span className="mono" style={{ fontSize: 12.5 }}>{money(s.v)}</span>
+                  </div>
+                  <div style={{ height: 8, background: 'var(--line-soft)', borderRadius: 5, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${(s.v / maxStageValue) * 100}%`, background: stage === 'lost' ? 'var(--red)' : stage === 'won' ? 'var(--accent)' : 'var(--amber)', borderRadius: 5 }} />
+                  </div>
                 </div>
-                <div style={{ height: 8, background: 'var(--line-soft)', borderRadius: 5, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${(s.v / maxStageValue) * 100}%`, background: stage === 'lost' ? 'var(--red)' : stage === 'won' ? 'var(--accent)' : 'var(--amber)', borderRadius: 5 }} />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div style={{ marginTop: 14 }}>
-            <Link to="/pipeline" className="btn sm">Open pipeline board →</Link>
+            <Link to="/pipeline" className="btn sm">Open opportunities board →</Link>
           </div>
         </div>
 
@@ -231,6 +243,33 @@ export default function Dashboard() {
               <div className="empty">No paid invoices yet.</div>
             ) : (
               <BarList data={reports.topCustomers} valueKey="amount" labelKey="name" formatValue={money} />
+            )}
+          </div>
+
+          <div className="card span-2">
+            <div className="report-card-head">
+              <h2>Job profitability</h2>
+              <div className="report-card-total" style={{ color: reports.jobProfitability.totalProfit < 0 ? 'var(--red)' : undefined }}>
+                {money(reports.jobProfitability.totalProfit)}
+              </div>
+            </div>
+            <p className="sub" style={{ margin: '-4px 0 10px' }}>
+              Actual expenses logged against jobs, weighed against invoiced (or approved-estimate) revenue.
+              {reports.jobProfitability.margin !== null && ` Overall margin: ${reports.jobProfitability.margin}%.`}
+            </p>
+            {reports.jobProfitability.byJob.length === 0 ? (
+              <div className="empty">Log expenses on a job to see profitability here.</div>
+            ) : (
+              <div className="stack" style={{ gap: 2 }}>
+                {reports.jobProfitability.byJob.map((j) => (
+                  <Link key={j.id} to={`/jobs/${j.id}`} className="attention-row">
+                    <span>{j.title}</span>
+                    <span className="mono" style={{ color: j.profit < 0 ? 'var(--red)' : 'var(--accent-ink)' }}>
+                      {money(j.profit)}{j.margin !== null ? ` · ${j.margin}%` : ''}
+                    </span>
+                  </Link>
+                ))}
+              </div>
             )}
           </div>
         </div>

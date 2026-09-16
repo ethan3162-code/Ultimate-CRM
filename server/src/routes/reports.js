@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { getInvoiceFull } = require('../helpers');
+const { getInvoiceFull, getJobCosting } = require('../helpers');
 
 const router = express.Router();
 
@@ -120,7 +120,28 @@ router.get('/', (req, res) => {
   const undated = openDeals.filter((d) => !d.expected_close);
   const undatedForecastValue = +undated.reduce((s, d) => s + d.value * ((Number(d.probability) || 0) / 100), 0).toFixed(2);
 
-  res.json({ revenueByMonth, jobsByMonth, pipelineByStage, jobsByStatus, invoiceAging, topCustomers, revenueForecast, undatedForecastValue });
+  // --- Job profitability: real revenue vs. logged expenses, per job and in aggregate.
+  // Jobs with neither an invoice/approved estimate nor any expense logged yet are left
+  // out — nothing to report until at least one side of the ledger has activity.
+  const jobRowsForCosting = db.prepare(`SELECT id, title FROM jobs ORDER BY created_at DESC`).all();
+  const jobCostings = jobRowsForCosting
+    .map((j) => ({ id: j.id, title: j.title, ...getJobCosting(j.id) }))
+    .filter((j) => j.revenue > 0 || j.cost > 0);
+  const totalRevenue = jobCostings.reduce((s, j) => s + j.revenue, 0);
+  const totalCost = jobCostings.reduce((s, j) => s + j.cost, 0);
+  const totalProfit = totalRevenue - totalCost;
+  const jobProfitability = {
+    totalRevenue: +totalRevenue.toFixed(2),
+    totalCost: +totalCost.toFixed(2),
+    totalProfit: +totalProfit.toFixed(2),
+    margin: totalRevenue > 0 ? +((totalProfit / totalRevenue) * 100).toFixed(1) : null,
+    byJob: jobCostings
+      .map((j) => ({ id: j.id, title: j.title, revenue: j.revenue, cost: j.cost, profit: j.profit, margin: j.margin, revenueBasis: j.revenueBasis }))
+      .sort((a, b) => b.profit - a.profit)
+      .slice(0, 8),
+  };
+
+  res.json({ revenueByMonth, jobsByMonth, pipelineByStage, jobsByStatus, invoiceAging, topCustomers, revenueForecast, undatedForecastValue, jobProfitability });
 });
 
 module.exports = router;

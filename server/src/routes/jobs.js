@@ -245,4 +245,27 @@ router.delete('/photos/:photoId', (req, res) => {
   res.status(204).end();
 });
 
+// --- Job costing: actual expenses logged against a job, so revenue vs. cost vs. profit is real ---
+router.post('/:id/expenses', (req, res) => {
+  const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(req.params.id);
+  if (!job) return res.status(404).json({ error: 'job not found' });
+  const { category, description, qty, unit_cost, incurred_on } = req.body;
+  if (!description) return res.status(400).json({ error: 'description is required' });
+  const result = db.prepare(`
+    INSERT INTO job_expenses (job_id, category, description, qty, unit_cost, incurred_on)
+    VALUES (?,?,?,?,?,?)
+  `).run(job.id, category || 'Materials', description, Number(qty) || 1, Number(unit_cost) || 0, incurred_on || new Date().toISOString().slice(0, 10));
+  const amount = (Number(qty) || 1) * (Number(unit_cost) || 0);
+  logActivity('job', job.id, 'expense', `Expense logged: ${description} — $${amount.toFixed(2)} (${category || 'Materials'}).`);
+  res.status(201).json(getJobFull(job.id));
+});
+
+router.delete('/expenses/:expenseId', (req, res) => {
+  const expense = db.prepare(`SELECT * FROM job_expenses WHERE id = ?`).get(req.params.expenseId);
+  if (!expense) return res.status(404).json({ error: 'not found' });
+  db.prepare(`DELETE FROM job_expenses WHERE id = ?`).run(req.params.expenseId);
+  logActivity('job', expense.job_id, 'expense', `Expense removed: ${expense.description}.`);
+  res.json(getJobFull(expense.job_id));
+});
+
 module.exports = router;

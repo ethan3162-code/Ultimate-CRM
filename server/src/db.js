@@ -218,6 +218,17 @@ CREATE TABLE IF NOT EXISTS job_photos (
   data_url TEXT NOT NULL,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS job_expenses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  category TEXT NOT NULL DEFAULT 'Materials',
+  description TEXT NOT NULL,
+  qty REAL NOT NULL DEFAULT 1,
+  unit_cost REAL NOT NULL DEFAULT 0,
+  incurred_on TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `);
 
 // --- Lightweight migrations ---

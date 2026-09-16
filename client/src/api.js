@@ -83,6 +83,9 @@ export const api = {
   addJobPhoto: (jobId, data) => request(`/jobs/${jobId}/photos`, { method: 'POST', body: JSON.stringify(data) }),
   deleteJobPhoto: (photoId) => request(`/jobs/photos/${photoId}`, { method: 'DELETE' }),
 
+  addJobExpense: (jobId, data) => request(`/jobs/${jobId}/expenses`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteJobExpense: (expenseId) => request(`/jobs/expenses/${expenseId}`, { method: 'DELETE' }),
+
   publicEstimate: (token) => request(`/public/estimates/${token}`),
   signEstimate: (token, data) => request(`/public/estimates/${token}/sign`, { method: 'POST', body: JSON.stringify(data) }),
 };

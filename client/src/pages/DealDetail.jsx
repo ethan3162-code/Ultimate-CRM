@@ -25,6 +25,14 @@ export default function DealDetail() {
     load();
   }
 
+  async function createProject() {
+    const job = await api.createJob({
+      contact_id: deal.contact_id || null, company_id: deal.company_id || null, deal_id: deal.id,
+      title: deal.title, status: 'scheduled', address: deal.customer_address || null,
+    });
+    navigate(`/jobs/${job.id}`);
+  }
+
   async function addNote(e) {
     e.preventDefault();
     if (!note.trim()) return;
@@ -59,7 +67,9 @@ export default function DealDetail() {
     <>
       <div className="page-head">
         <div>
-          <p className="sub" style={{ margin: '0 0 4px' }}><Link to="/pipeline">Pipeline</Link> / {deal.title}</p>
+          <p className="sub" style={{ margin: '0 0 4px' }}>
+            {deal.stage === 'new' ? <Link to="/leads">Leads</Link> : <Link to="/pipeline">Opportunities</Link>} / {deal.title}
+          </p>
           <h1>{deal.title} <span className={'score-pill ' + deal.label.toLowerCase()}>{deal.label} · {deal.score}</span></h1>
           <p className="sub">
             {deal.company_name || (deal.first_name ? `${deal.first_name} ${deal.last_name}` : 'No contact linked')}
@@ -129,6 +139,26 @@ export default function DealDetail() {
                 </button>
               ))}
             </div>
+          </div>
+          <div className="card">
+            <h2>Project</h2>
+            {deal.jobs && deal.jobs.length > 0 ? (
+              <div className="stack" style={{ gap: 2 }}>
+                {deal.jobs.map((j) => (
+                  <Link key={j.id} to={`/jobs/${j.id}`} className="attention-row">
+                    <span>{j.title}</span>
+                    <span className="pill">{j.status.replace('_', ' ')}</span>
+                  </Link>
+                ))}
+              </div>
+            ) : deal.stage === 'won' ? (
+              <>
+                <p className="sub" style={{ margin: '-4px 0 10px' }}>This opportunity is won — turn it into a project to start scheduling field work, estimates, and billing.</p>
+                <button className="btn primary sm" onClick={createProject}>+ Create project</button>
+              </>
+            ) : (
+              <div className="empty">Projects start once this opportunity is won.</div>
+            )}
           </div>
           <div className="card">
             <h2>Next steps</h2>

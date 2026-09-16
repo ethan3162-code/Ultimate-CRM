@@ -36,8 +36,8 @@ export default function Jobs() {
     <>
       <div className="page-head">
         <div>
-          <h1>Jobs &amp; billing</h1>
-          <p className="sub">Field jobs, estimates, invoices, and payments — the module a sales-only CRM never had.</p>
+          <h1>Projects &amp; billing</h1>
+          <p className="sub">Every won opportunity becomes a project here — field jobs, estimates, invoices, and payments in one module.</p>
         </div>
         <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New job</button>
       </div>

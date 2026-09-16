@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { initials, mapLinks } from '../utils';
+import { LEAD_SOURCES } from '../constants';
+
+const BLANK_FORM = { first_name: '', last_name: '', email: '', phone: '', title: '', company_id: '', address: '', source: '' };
 
 export default function Contacts() {
   const [contacts, setContacts] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ first_name: '', last_name: '', email: '', phone: '', title: '', company_id: '', address: '' });
+  const [form, setForm] = useState(BLANK_FORM);
 
   function load() {
     api.contacts().then(setContacts);
@@ -18,7 +21,7 @@ export default function Contacts() {
     e.preventDefault();
     if (!form.first_name.trim() || !form.last_name.trim()) return;
     await api.createContact({ ...form, company_id: form.company_id || null });
-    setForm({ first_name: '', last_name: '', email: '', phone: '', title: '', company_id: '', address: '' });
+    setForm(BLANK_FORM);
     setShowForm(false);
     load();
   }
@@ -43,6 +46,13 @@ export default function Contacts() {
             <div className="field"><label>Title</label><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
             <div className="field"><label>Address</label><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Street, city, state" /></div>
             <div className="field">
+              <label>Lead source</label>
+              <select value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })}>
+                <option value="">— none —</option>
+                {LEAD_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div className="field">
               <label>Company</label>
               <select value={form.company_id} onChange={(e) => setForm({ ...form, company_id: e.target.value })}>
                 <option value="">— none —</option>
@@ -57,7 +67,7 @@ export default function Contacts() {
       {!contacts ? <div className="loading">Loading…</div> : (
         <div className="table-wrap">
           <table className="list">
-            <thead><tr><th></th><th>Name</th><th>Title</th><th>Company</th><th>Email</th><th>Phone</th><th>Address</th></tr></thead>
+            <thead><tr><th></th><th>Name</th><th>Title</th><th>Company</th><th>Email</th><th>Phone</th><th>Address</th><th>Source</th></tr></thead>
             <tbody>
               {contacts.map((c) => {
                 const links = c.address ? mapLinks(c.address) : null;
@@ -76,6 +86,7 @@ export default function Contacts() {
                     <td className="muted">
                       {links ? <a href={links.view} target="_blank" rel="noreferrer" className="map-link" title="View on Google Maps (satellite)">📍 {c.address}</a> : '—'}
                     </td>
+                    <td>{c.source ? <span className="pill">{c.source}</span> : <span className="muted">—</span>}</td>
                   </tr>
                 );
               })}

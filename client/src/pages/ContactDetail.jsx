@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { money, shortDate, timeAgo, initials, mapLinks } from '../utils';
+import { LEAD_SOURCES } from '../constants';
 import TaskList from '../components/TaskList';
+import AppointmentModal from '../components/AppointmentModal';
 
 const STAGE_PILL = { new: '', qualified: '', proposal: 'amber', negotiation: 'amber', won: 'green', lost: 'red' };
 
@@ -10,11 +12,12 @@ export default function ContactDetail() {
   const { id } = useParams();
   const [contact, setContact] = useState(null);
   const [editing, setEditing] = useState(false);
-  const [info, setInfo] = useState({ phone: '', address: '' });
+  const [info, setInfo] = useState({ phone: '', address: '', source: '' });
   const [saving, setSaving] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
 
   function load() {
-    api.contact(id).then((c) => { setContact(c); setInfo({ phone: c.phone || '', address: c.address || '' }); });
+    api.contact(id).then((c) => { setContact(c); setInfo({ phone: c.phone || '', address: c.address || '', source: c.source || '' }); });
   }
   useEffect(load, [id]);
 
@@ -24,6 +27,12 @@ export default function ContactDetail() {
     await api.updateContact(id, info);
     setSaving(false);
     setEditing(false);
+    load();
+  }
+
+  async function scheduleAppointment(payload) {
+    await api.createAppointment({ ...payload, contact_id: contact.id, company_id: contact.company_id || null });
+    setScheduling(false);
     load();
   }
 
@@ -46,6 +55,7 @@ export default function ContactDetail() {
             </div>
           </div>
         </div>
+        <button className="btn primary" onClick={() => setScheduling(true)}>📅 Schedule appointment</button>
       </div>
 
       <div className="grid-2">
@@ -77,9 +87,17 @@ export default function ContactDetail() {
               <form onSubmit={saveInfo} className="stack" style={{ gap: 10 }}>
                 <div className="field"><label>Phone</label><input value={info.phone} onChange={(e) => setInfo({ ...info, phone: e.target.value })} /></div>
                 <div className="field"><label>Address</label><input value={info.address} onChange={(e) => setInfo({ ...info, address: e.target.value })} placeholder="Street, city, state" /></div>
+                <div className="field">
+                  <label>Lead source</label>
+                  <select value={info.source} onChange={(e) => setInfo({ ...info, source: e.target.value })}>
+                    <option value="">— none —</option>
+                    {LEAD_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {info.source && !LEAD_SOURCES.includes(info.source) && <option value={info.source}>{info.source}</option>}
+                  </select>
+                </div>
                 <div className="row" style={{ gap: 8 }}>
                   <button className="btn primary sm" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-                  <button className="btn sm subtle" type="button" onClick={() => { setEditing(false); setInfo({ phone: contact.phone || '', address: contact.address || '' }); }}>Cancel</button>
+                  <button className="btn sm subtle" type="button" onClick={() => { setEditing(false); setInfo({ phone: contact.phone || '', address: contact.address || '', source: contact.source || '' }); }}>Cancel</button>
                 </div>
               </form>
             ) : (
@@ -89,6 +107,7 @@ export default function ContactDetail() {
                   <span className="muted">Address</span>
                   <span style={{ textAlign: 'right' }}>{contact.address || '—'}</span>
                 </div>
+                <div className="row between"><span className="muted">Lead source</span><span>{contact.source || '—'}</span></div>
                 {links && (
                   <a href={links.view} target="_blank" rel="noreferrer" className="btn sm primary map-cta" style={{ marginTop: 6 }}>
                     🛰️ View satellite location →
@@ -121,6 +140,14 @@ export default function ContactDetail() {
           </div>
         </div>
       </div>
+
+      {scheduling && (
+        <AppointmentModal
+          appointment={{ title: `Meeting with ${contact.first_name} ${contact.last_name}`, location: contact.address || '' }}
+          onClose={() => setScheduling(false)}
+          onSubmit={scheduleAppointment}
+        />
+      )}
     </>
   );
 }

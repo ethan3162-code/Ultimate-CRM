@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { money, shortDate, mapLinks } from '../utils';
 
-const STAGES = ['new', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
+// Fresh, unqualified interest lives on the Leads page now — this board picks
+// up once a lead has been qualified, so 'new' is intentionally left out here.
+const STAGES = ['qualified', 'proposal', 'negotiation', 'won', 'lost'];
 const STAGE_LABELS = { new: 'New', qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -16,17 +18,21 @@ function sameDay(a, b) {
 }
 
 export default function Pipeline() {
-  const [deals, setDeals] = useState([]);
+  const [allDeals, setAllDeals] = useState([]);
   const [dragOverStage, setDragOverStage] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: '', value: '', stage: 'new' });
+  const [form, setForm] = useState({ title: '', value: '', stage: 'qualified' });
   const [view, setView] = useState('kanban');
   const [cursor, setCursor] = useState(() => { const d = new Date(); d.setDate(1); return d; });
 
   function load() {
-    api.deals().then(setDeals);
+    api.deals().then(setAllDeals);
   }
   useEffect(load, []);
+
+  // Leads (stage 'new') live on their own page — this board is the qualified
+  // pipeline onward, so filter them out everywhere below.
+  const deals = useMemo(() => allDeals.filter((d) => d.stage !== 'new'), [allDeals]);
 
   const cells = useMemo(() => {
     const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -54,7 +60,7 @@ export default function Pipeline() {
     if (!id) return;
     const deal = deals.find((d) => d.id === Number(id));
     if (!deal || deal.stage === stage) return;
-    setDeals((prev) => prev.map((d) => (d.id === deal.id ? { ...d, stage } : d)));
+    setAllDeals((prev) => prev.map((d) => (d.id === deal.id ? { ...d, stage } : d)));
     await api.updateDeal(deal.id, { stage });
   }
 
@@ -62,7 +68,7 @@ export default function Pipeline() {
     e.preventDefault();
     if (!form.title.trim()) return;
     await api.createDeal({ title: form.title, value: Number(form.value) || 0, stage: form.stage });
-    setForm({ title: '', value: '', stage: 'new' });
+    setForm({ title: '', value: '', stage: 'qualified' });
     setShowForm(false);
     load();
   }
@@ -76,10 +82,13 @@ export default function Pipeline() {
     <>
       <div className="page-head">
         <div>
-          <h1>Pipeline</h1>
-          <p className="sub">Same deals, three views — drag a card to change its stage in Kanban, scan everything at once in Table, or see what's expected to close when in Calendar.</p>
+          <h1>Opportunities</h1>
+          <p className="sub">
+            Qualified deals only — same three views, drag a card to change its stage in Kanban, scan everything in Table, or see what's expected to close when in Calendar.
+            {' '}<Link to="/leads">New, unqualified leads live here →</Link>
+          </p>
         </div>
-        <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New deal</button>
+        <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New opportunity</button>
       </div>
 
       <div className="tabs" style={{ marginBottom: 16 }}>
@@ -92,7 +101,7 @@ export default function Pipeline() {
         <div className="card" style={{ marginBottom: 18 }}>
           <form onSubmit={submitDeal} className="form-grid">
             <div className="field">
-              <label>Deal title</label>
+              <label>Opportunity title</label>
               <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Acme Corp — Annual renewal" required />
             </div>
             <div className="field">
@@ -106,7 +115,7 @@ export default function Pipeline() {
               </select>
             </div>
             <div className="field" style={{ justifyContent: 'flex-end' }}>
-              <button className="btn primary" type="submit">Create deal</button>
+              <button className="btn primary" type="submit">Create opportunity</button>
             </div>
           </form>
         </div>

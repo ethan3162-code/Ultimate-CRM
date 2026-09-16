@@ -34,6 +34,50 @@ function getInvoiceFull(id) {
   return { ...inv, status, items, payments, ...totals, amount_paid, balance };
 }
 
+// Job costing: what a job actually made, once real expenses are logged against it.
+// Revenue basis prefers billed reality (invoice totals) over a paid-so-far figure —
+// job costing measures what the work was worth, not collections — and only falls
+// back to an approved estimate's total (clearly labeled "projected") when nothing's
+// been invoiced yet, so a job can show a costing picture before billing starts.
+function getJobCosting(id, { estimates, invoices } = {}) {
+  const ests = estimates || db.prepare(`SELECT id FROM estimates WHERE job_id = ? ORDER BY id`).all(id).map((r) => getEstimateFull(r.id));
+  const invs = invoices || db.prepare(`SELECT id FROM invoices WHERE job_id = ? ORDER BY id`).all(id).map((r) => getInvoiceFull(r.id));
+  const expenses = db.prepare(`SELECT * FROM job_expenses WHERE job_id = ? ORDER BY incurred_on DESC, id DESC`).all(id);
+
+  let revenue = 0;
+  let revenueBasis = 'none';
+  if (invs.length > 0) {
+    revenue = invs.reduce((s, i) => s + i.total, 0);
+    revenueBasis = 'invoiced';
+  } else {
+    const approved = ests.filter((e) => e.status === 'approved');
+    if (approved.length > 0) {
+      revenue = approved.reduce((s, e) => s + e.total, 0);
+      revenueBasis = 'estimated';
+    }
+  }
+
+  const byCategoryMap = {};
+  let cost = 0;
+  for (const e of expenses) {
+    const amt = e.qty * e.unit_cost;
+    cost += amt;
+    byCategoryMap[e.category] = (byCategoryMap[e.category] || 0) + amt;
+  }
+  const profit = revenue - cost;
+  const margin = revenue > 0 ? +((profit / revenue) * 100).toFixed(1) : null;
+
+  return {
+    revenue: +revenue.toFixed(2),
+    revenueBasis,
+    cost: +cost.toFixed(2),
+    profit: +profit.toFixed(2),
+    margin,
+    byCategory: Object.entries(byCategoryMap).map(([category, amount]) => ({ category, amount: +amount.toFixed(2) })),
+    expenses,
+  };
+}
+
 function getJobFull(id) {
   const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(id);
   if (!job) return null;
@@ -42,7 +86,8 @@ function getJobFull(id) {
   const estimates = estimateRows.map(r => getEstimateFull(r.id));
   const invoices = invoiceRows.map(r => getInvoiceFull(r.id));
   const photos = db.prepare(`SELECT * FROM job_photos WHERE job_id = ? ORDER BY created_at DESC`).all(id);
-  return { ...job, estimates, invoices, photos };
+  const costing = getJobCosting(id, { estimates, invoices });
+  return { ...job, estimates, invoices, photos, costing };
 }
 
 function logActivity(related_type, related_id, type, note) {
@@ -86,6 +131,6 @@ function computeEndDate(job, startDate) {
 }
 
 module.exports = {
-  computeItemsTotal, withTotals, getEstimateFull, getInvoiceFull, getJobFull, logActivity,
+  computeItemsTotal, withTotals, getEstimateFull, getInvoiceFull, getJobFull, getJobCosting, logActivity,
   STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, stageDays, totalDays, computeProgress, addDays, computeEndDate,
 };
