@@ -216,7 +216,7 @@ export default function JobDetail() {
 
             {showEstimateForm && (
               <form onSubmit={submitEstimate} style={{ marginTop: 12, marginBottom: 12, borderTop: '1px solid var(--line-soft)', paddingTop: 12 }}>
-                <LineItemEditor items={items} setItems={setItems} taxRate={taxRate} setTaxRate={setTaxRate} catalog={catalog} />
+                <LineItemEditor items={items} setItems={setItems} taxRate={taxRate} setTaxRate={setTaxRate} catalog={(catalog || []).filter((c) => !c.material_key)} />
                 <div className="field" style={{ marginTop: 10, maxWidth: 220 }}>
                   <label>Deposit required upfront (%)</label>
                   <input type="number" min="0" max="100" placeholder="e.g. 30" value={depositPercent} onChange={(e) => setDepositPercent(e.target.value)} />

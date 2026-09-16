@@ -53,6 +53,7 @@ export const api = {
   addTicketNote: (id, note) => request(`/tickets/${id}/activities`, { method: 'POST', body: JSON.stringify({ note }) }),
 
   insights: () => request('/insights'),
+  reports: () => request('/reports'),
   aiDraft: (kind, id) => request('/ai/draft', { method: 'POST', body: JSON.stringify({ kind, id }) }),
 
   appointments: () => request('/appointments'),

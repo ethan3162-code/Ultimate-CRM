@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { money, timeAgo } from '../utils';
+import { TrendChart, ColumnChart, BarList, DonutChart } from '../components/charts';
 
 const STAGE_LABELS = { new: 'New', qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
+const AGING_COLORS = ['var(--accent)', 'var(--amber)', 'var(--amber)', 'var(--red)'];
 
 function attentionCount(insights) {
   if (!insights) return 0;
@@ -13,10 +15,12 @@ function attentionCount(insights) {
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [insights, setInsights] = useState(null);
+  const [reports, setReports] = useState(null);
 
   useEffect(() => {
     api.dashboard().then(setData);
     api.insights().then(setInsights);
+    api.reports().then(setReports);
   }, []);
 
   if (!data) return <div className="loading">Loading dashboard…</div>;
@@ -145,6 +149,59 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      <div className="page-head" style={{ marginTop: 28 }}>
+        <div>
+          <h2 style={{ margin: 0 }}>Reports</h2>
+          <p className="sub" style={{ margin: '2px 0 0' }}>Trends across the last 6 months, straight from your jobs, deals, and invoices.</p>
+        </div>
+      </div>
+
+      {!reports ? (
+        <div className="loading">Loading reports…</div>
+      ) : (
+        <div className="reports-grid">
+          <div className="card span-2">
+            <div className="report-card-head">
+              <h2>Revenue collected</h2>
+              <div className="report-card-total">{money(reports.revenueByMonth.reduce((s, m) => s + m.total, 0))}</div>
+            </div>
+            <TrendChart data={reports.revenueByMonth} valueKey="total" labelKey="month" formatValue={money} />
+          </div>
+
+          <div className="card">
+            <h2>New jobs by month</h2>
+            <ColumnChart data={reports.jobsByMonth} valueKey="count" labelKey="month" formatValue={(v) => v} />
+          </div>
+
+          <div className="card">
+            <h2>Jobs by status</h2>
+            <DonutChart data={reports.jobsByStatus} valueKey="count" labelKey="label" />
+          </div>
+
+          <div className="card">
+            <h2>Pipeline value by stage</h2>
+            <BarList data={reports.pipelineByStage} valueKey="value" labelKey="label" formatValue={money} />
+          </div>
+
+          <div className="card">
+            <h2>Invoice aging</h2>
+            <BarList
+              data={reports.invoiceAging.map((b, i) => ({ ...b, color: AGING_COLORS[i] }))}
+              valueKey="amount" labelKey="bucket" formatValue={money} colorKey="color"
+            />
+          </div>
+
+          <div className="card span-2">
+            <h2>Top customers by revenue</h2>
+            {reports.topCustomers.length === 0 ? (
+              <div className="empty">No paid invoices yet.</div>
+            ) : (
+              <BarList data={reports.topCustomers} valueKey="amount" labelKey="name" formatValue={money} />
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }
