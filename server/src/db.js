@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL,
   deal_id INTEGER REFERENCES deals(id) ON DELETE SET NULL,
   title TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'scheduled',
+  status TEXT NOT NULL DEFAULT 'accepted',
   address TEXT,
   scheduled_date TEXT,
   start_date TEXT,
@@ -251,6 +251,25 @@ ensureColumn('jobs', 'demo_days', 'demo_days INTEGER NOT NULL DEFAULT 1');
 ensureColumn('jobs', 'site_prep_days', 'site_prep_days INTEGER NOT NULL DEFAULT 2');
 ensureColumn('jobs', 'installation_days', 'installation_days INTEGER NOT NULL DEFAULT 5');
 ensureColumn('jobs', 'final_walkthrough_days', 'final_walkthrough_days INTEGER NOT NULL DEFAULT 1');
+// Project-detail parity (Sept 2026) — matched to the user's real paving-project-management
+// tool's Project record layout: a fuller status lifecycle plus Project Info / Project Billing /
+// Additional Fields. Cost figures (labor cost, materials cost, billable split) are deliberately
+// NOT duplicated here — they're derived from job_expenses via getJobBilling, so there's one
+// source of truth for "what did this job actually cost."
+ensureColumn('jobs', 'labor_crew', 'labor_crew TEXT');
+ensureColumn('jobs', 'desired_start_date', 'desired_start_date TEXT');
+ensureColumn('jobs', 'unqualified_reason', 'unqualified_reason TEXT');
+ensureColumn('jobs', 'job_notes', 'job_notes TEXT');
+ensureColumn('jobs', 'insurance_requests', 'insurance_requests TEXT');
+ensureColumn('jobs', 'request_review', 'request_review TEXT');
+ensureColumn('jobs', 'contract_amount', 'contract_amount REAL');
+ensureColumn('jobs', 'change_order_amount', 'change_order_amount REAL NOT NULL DEFAULT 0');
+ensureColumn('jobs', 'sales_tax_amount', 'sales_tax_amount REAL NOT NULL DEFAULT 0');
+ensureColumn('jobs', 'capital_improvement', 'capital_improvement INTEGER NOT NULL DEFAULT 0');
+ensureColumn('jobs', 'labor_paid', 'labor_paid REAL NOT NULL DEFAULT 0');
+ensureColumn('jobs', 'updated_at', 'updated_at TEXT');
+db.prepare(`UPDATE jobs SET updated_at = created_at WHERE updated_at IS NULL`).run();
+ensureColumn('job_expenses', 'billable', 'billable INTEGER NOT NULL DEFAULT 1');
 ensureColumn('catalog_items', 'name', "name TEXT NOT NULL DEFAULT ''");
 ensureColumn('catalog_items', 'brand', 'brand TEXT');
 ensureColumn('catalog_items', 'sf_per_pallet', 'sf_per_pallet REAL');
@@ -288,5 +307,8 @@ ensureColumn('estimates', 'signature_data_url', 'signature_data_url TEXT');
 db.prepare(`UPDATE estimates SET sign_token = lower(hex(randomblob(16))) WHERE sign_token IS NULL`).run();
 // Rename of an earlier stage key ('material_order' -> 'site_prep') on any DB seeded before the rename.
 db.prepare(`UPDATE jobs SET stage = 'site_prep' WHERE stage = 'material_order'`).run();
+// Project status lifecycle expanded to 6 states ('completed' -> 'complete', plus new 'accepted'/'on_hold')
+// to match the user's real project-management tool's Project Status field.
+db.prepare(`UPDATE jobs SET status = 'complete' WHERE status = 'completed'`).run();
 
 module.exports = db;

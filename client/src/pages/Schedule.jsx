@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 
-const STATUS_LABEL = { scheduled: 'Scheduled', in_progress: 'In progress', completed: 'Completed', cancelled: 'Cancelled' };
+const STATUS_LABEL = { accepted: 'Accepted', scheduled: 'Scheduled', in_progress: 'In progress', complete: 'Complete', on_hold: 'On hold', cancelled: 'Cancelled' };
 const STAGES = [
   { key: 'demo', label: 'Demo', field: 'demo_days' },
   { key: 'site_prep', label: 'Site prep', field: 'site_prep_days' },

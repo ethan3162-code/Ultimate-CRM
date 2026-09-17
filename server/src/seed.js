@@ -35,8 +35,17 @@ function insertCatalogItem(c) {
     .run(c.name, c.description || null, c.unit, c.unit_price, c.material_key || null, c.brand || null, c.sf_per_pallet ?? null).lastInsertRowid;
 }
 function insertJob(j) {
-  return db.prepare(`INSERT INTO jobs (contact_id, company_id, deal_id, title, status, address, scheduled_date) VALUES (?,?,?,?,?,?,?)`)
-    .run(j.contact_id, j.company_id, j.deal_id || null, j.title, j.status, j.address, j.scheduled_date).lastInsertRowid;
+  return db.prepare(`
+    INSERT INTO jobs (
+      contact_id, company_id, deal_id, title, status, address, scheduled_date,
+      labor_crew, desired_start_date, contract_amount, change_order_amount, sales_tax_amount,
+      capital_improvement, labor_paid, job_notes, insurance_requests
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    j.contact_id, j.company_id, j.deal_id || null, j.title, j.status, j.address, j.scheduled_date,
+    j.labor_crew || null, j.desired_start_date || null, j.contract_amount ?? null, j.change_order_amount || 0, j.sales_tax_amount || 0,
+    j.capital_improvement ? 1 : 0, j.labor_paid || 0, j.job_notes || null, j.insurance_requests || null
+  ).lastInsertRowid;
 }
 function insertEstimate(e, items) {
   const id = db.prepare(`INSERT INTO estimates (job_id, number, status, tax_rate) VALUES (?,?,?,?)`)
@@ -158,7 +167,11 @@ const d10 = insertDeal({
 });
 
 // --- Field ops: jobs -> estimates -> invoices -> payments (Joist-style) ---
-const j1 = insertJob({ contact_id: cJohn, company_id: acme, title: 'Roof replacement — 412 Cedar St', status: 'in_progress', address: '412 Cedar St, Madison, WI', scheduled_date: '2026-09-18' });
+const j1 = insertJob({
+  contact_id: cJohn, company_id: acme, title: 'Roof replacement — 412 Cedar St', status: 'in_progress', address: '412 Cedar St, Madison, WI', scheduled_date: '2026-09-18',
+  labor_crew: 'Crew 2 — Diaz', desired_start_date: '2026-09-16', contract_amount: 9025.53, labor_paid: 2000,
+  job_notes: 'Customer wants old shingles hauled offsite same day as tear-off.',
+});
 const e1 = insertEstimate({ job_id: j1, number: 'EST-1001', status: 'approved', tax_rate: 0.055 }, [
   { description: 'Tear-off existing shingles (28 sq)', qty: 28, unit_price: 65 },
   { description: 'Architectural shingles, installed', qty: 28, unit_price: 210 },
@@ -181,7 +194,10 @@ insertExpense({ job_id: j1, category: 'Labor', description: 'Crew labor — tear
 insertExpense({ job_id: j1, category: 'Disposal', description: 'Dumpster rental & disposal fee', qty: 1, unit_cost: 340, incurred_on: '2026-09-18' });
 insertExpense({ job_id: j1, category: 'Permits & fees', description: 'Reroofing permit', qty: 1, unit_cost: 150, incurred_on: '2026-09-15' });
 
-const j2 = insertJob({ contact_id: cSara, company_id: acme, title: 'Gutter repair — rear addition', status: 'completed', address: '412 Cedar St, Madison, WI', scheduled_date: '2026-09-05' });
+const j2 = insertJob({
+  contact_id: cSara, company_id: acme, title: 'Gutter repair — rear addition', status: 'complete', address: '412 Cedar St, Madison, WI', scheduled_date: '2026-09-05',
+  labor_crew: 'Crew 1 — Whitmore', desired_start_date: '2026-09-05', contract_amount: 960.05, labor_paid: 180,
+});
 const e2 = insertEstimate({ job_id: j2, number: 'EST-1002', status: 'approved', tax_rate: 0.055 }, [
   { description: 'Gutter section replacement (40 ft)', qty: 40, unit_price: 18 },
   { description: 'Downspout, 2-piece', qty: 2, unit_price: 95 },
@@ -197,12 +213,20 @@ insertExpense({ job_id: j2, category: 'Materials', description: 'Aluminum gutter
 insertExpense({ job_id: j2, category: 'Labor', description: 'Crew labor — gutter & downspout install (1-man, half day)', qty: 4, unit_cost: 45, incurred_on: '2026-09-05' });
 insertExpense({ job_id: j2, category: 'Equipment', description: 'Ladder & tool use', qty: 1, unit_cost: 40, incurred_on: '2026-09-05' });
 
-const j3 = insertJob({ contact_id: cMarcus, company_id: graystone, title: 'Storm damage inspection — Unit 4B', status: 'scheduled', address: '245 Elm Ct, Nashville, TN', scheduled_date: '2026-09-22' });
+const j3 = insertJob({
+  contact_id: cMarcus, company_id: graystone, title: 'Storm damage inspection — Unit 4B', status: 'scheduled', address: '245 Elm Ct, Nashville, TN', scheduled_date: '2026-09-22',
+  desired_start_date: '2026-09-22', contract_amount: 150,
+  insurance_requests: 'Property manager is filing a claim — needs our photo report attached.',
+});
 insertEstimate({ job_id: j3, number: 'EST-1003', status: 'draft', tax_rate: 0.0475 }, [
   { description: 'Inspection + photo report', qty: 1, unit_price: 150 },
 ]);
 
-const j4 = insertJob({ contact_id: cDana, company_id: northwood, title: 'Parking lot resealing', status: 'completed', address: '19 Birch Ave, Portland, OR', scheduled_date: '2026-08-28' });
+const j4 = insertJob({
+  contact_id: cDana, company_id: northwood, title: 'Parking lot resealing', status: 'complete', address: '19 Birch Ave, Portland, OR', scheduled_date: '2026-08-28',
+  labor_crew: 'Crew 1 — Whitmore', desired_start_date: '2026-08-28', contract_amount: 992, labor_paid: 640,
+  capital_improvement: true,
+});
 const e4 = insertEstimate({ job_id: j4, number: 'EST-1004', status: 'approved', tax_rate: 0 }, [
   { description: 'Sealcoat application (3,200 sq ft)', qty: 3200, unit_price: 0.22 },
   { description: 'Line striping, 24 stalls', qty: 24, unit_price: 12 },
@@ -220,7 +244,10 @@ insertExpense({ job_id: j4, category: 'Materials', description: 'Sealcoat mix (3
 insertExpense({ job_id: j4, category: 'Labor', description: 'Crew labor — sealcoating & striping (2-man, 1 day)', qty: 16, unit_cost: 40, incurred_on: '2026-08-28' });
 insertExpense({ job_id: j4, category: 'Equipment', description: 'Striping machine rental', qty: 1, unit_cost: 65, incurred_on: '2026-08-28' });
 
-const j5 = insertJob({ contact_id: cElena, company_id: harbor, title: 'Warehouse dock door repair', status: 'in_progress', address: '77 Pier Rd, Seattle, WA', scheduled_date: '2026-09-19' });
+const j5 = insertJob({
+  contact_id: cElena, company_id: harbor, title: 'Warehouse dock door repair', status: 'in_progress', address: '77 Pier Rd, Seattle, WA', scheduled_date: '2026-09-19',
+  labor_crew: 'Crew 2 — Diaz', desired_start_date: '2026-09-15', contract_amount: 1693.35,
+});
 insertEstimate({ job_id: j5, number: 'EST-1005', status: 'sent', tax_rate: 0.065 }, [
   { description: 'Dock door panel replacement', qty: 1, unit_price: 1250 },
   { description: 'Motor + sensor service', qty: 1, unit_price: 340 },

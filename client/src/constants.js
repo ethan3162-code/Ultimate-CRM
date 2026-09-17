@@ -57,3 +57,17 @@ export const LEAD_TYPES = ['New business', 'Repeat customer', 'Referral', 'Other
 export const JOB_TIMEFRAMES = ['ASAP', 'Within 30 days', '1-3 months', 'Just researching', 'Other'];
 export const METHOD_OF_ENTRY = ['Call center', 'Web form', 'Phone', 'Walk-in', 'Referral', 'Email', 'Other'];
 export const HA_MATCH_TYPES = ['Exact match', 'Similar match', 'N/A'];
+
+// Project status lifecycle (Sept 2026) — matches the user's real paving-project-management
+// tool's Project Status field. Distinct from the construction-phase "stage" bar (Demo/Site
+// prep/Installation/Final walkthrough, see Schedule.jsx) — this is the project's overall
+// lifecycle, that's the day-by-day build-out progress within it.
+export const PROJECT_STATUSES = ['accepted', 'scheduled', 'in_progress', 'complete', 'on_hold', 'cancelled'];
+export const PROJECT_STATUS_LABEL = {
+  accepted: 'Project Accepted',
+  scheduled: 'Project Scheduled',
+  in_progress: 'Project In Progress',
+  complete: 'Project Complete',
+  on_hold: 'Project On Hold',
+  cancelled: 'Project Cancelled',
+};

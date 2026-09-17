@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { money, shortDate, timeAgo } from '../utils';
-import { EXPENSE_CATEGORIES } from '../constants';
+import { EXPENSE_CATEGORIES, PROJECT_STATUSES, PROJECT_STATUS_LABEL } from '../constants';
 import LineItemEditor from '../components/LineItemEditor';
 import PaymentModal from '../components/PaymentModal';
 import TaskList from '../components/TaskList';
@@ -17,8 +17,7 @@ function marginColor(margin) {
   return 'var(--accent-ink)';
 }
 
-const JOB_STATUSES = ['scheduled', 'in_progress', 'completed', 'cancelled'];
-const STATUS_PILL = { scheduled: '', in_progress: 'amber', completed: 'green', cancelled: 'red', draft: '', sent: 'amber', approved: 'green', partial: 'amber', paid: 'green', overdue: 'red' };
+const STATUS_PILL = { accepted: '', scheduled: '', in_progress: 'amber', complete: 'green', on_hold: 'amber', cancelled: 'red', draft: '', sent: 'amber', approved: 'green', partial: 'amber', paid: 'green', overdue: 'red' };
 const KIND_LABEL = { deposit: 'Deposit', standard: null };
 const STAGES = [
   { key: 'demo', label: 'Demo', field: 'demo_days' },
@@ -81,6 +80,27 @@ export default function JobDetail() {
   const [copiedLink, setCopiedLink] = useState(null);
   const [expenseForm, setExpenseForm] = useState(BLANK_EXPENSE);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [editingInfo, setEditingInfo] = useState(false);
+  const [infoForm, setInfoForm] = useState(blankInfo());
+  const [savingInfo, setSavingInfo] = useState(false);
+  const [editingBilling, setEditingBilling] = useState(false);
+  const [billingForm, setBillingForm] = useState(blankBilling());
+  const [savingBilling, setSavingBilling] = useState(false);
+
+  function blankInfo(j) {
+    return {
+      labor_crew: j?.labor_crew || '', desired_start_date: j?.desired_start_date || '',
+      unqualified_reason: j?.unqualified_reason || '', job_notes: j?.job_notes || '',
+      insurance_requests: j?.insurance_requests || '', request_review: j?.request_review || '',
+    };
+  }
+  function blankBilling(j) {
+    return {
+      contract_amount: j?.contract_amount ?? '', change_order_amount: j?.change_order_amount ?? 0,
+      sales_tax_amount: j?.sales_tax_amount ?? 0, capital_improvement: !!j?.capital_improvement,
+      labor_paid: j?.labor_paid ?? 0,
+    };
+  }
 
   function load() {
     api.job(id).then((j) => {
@@ -92,9 +112,35 @@ export default function JobDetail() {
         installation_days: j.installation_days ?? 5,
         final_walkthrough_days: j.final_walkthrough_days ?? 1,
       });
+      setInfoForm(blankInfo(j));
+      setBillingForm(blankBilling(j));
     });
   }
   useEffect(load, [id]);
+
+  async function saveInfo(e) {
+    e.preventDefault();
+    setSavingInfo(true);
+    await api.updateJob(id, infoForm);
+    setSavingInfo(false);
+    setEditingInfo(false);
+    load();
+  }
+
+  async function saveBilling(e) {
+    e.preventDefault();
+    setSavingBilling(true);
+    await api.updateJob(id, {
+      ...billingForm,
+      contract_amount: billingForm.contract_amount === '' ? 0 : Number(billingForm.contract_amount),
+      change_order_amount: Number(billingForm.change_order_amount) || 0,
+      sales_tax_amount: Number(billingForm.sales_tax_amount) || 0,
+      labor_paid: Number(billingForm.labor_paid) || 0,
+    });
+    setSavingBilling(false);
+    setEditingBilling(false);
+    load();
+  }
   useEffect(() => { api.catalogItems().then(setCatalog); }, []);
 
   // Pick up material-calculator results handed off from the Materials page, if any.
@@ -228,15 +274,95 @@ export default function JobDetail() {
           <h1>{job.title}</h1>
           <p className="sub">{job.address || 'No address'} · scheduled {shortDate(job.scheduled_date)}</p>
         </div>
-        <div className="row" style={{ gap: 6 }}>
-          {JOB_STATUSES.map((s) => (
-            <button key={s} className={'btn sm' + (job.status === s ? ' primary' : '')} onClick={() => changeStatus(s)} style={{ textTransform: 'capitalize' }}>{s.replace('_', ' ')}</button>
+        <div className="row" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {PROJECT_STATUSES.map((s) => (
+            <button key={s} className={'btn sm' + (job.status === s ? ' primary' : '')} onClick={() => changeStatus(s)}>{PROJECT_STATUS_LABEL[s]}</button>
           ))}
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 18 }}>
+        <div className="row" style={{ gap: 28, flexWrap: 'wrap' }}>
+          <div>
+            <div className="kicker">Account</div>
+            {job.account ? (
+              <Link to={job.account.type === 'company' ? `/companies/${job.account.id}` : `/contacts/${job.account.id}`} className="link-strong">{job.account.name}</Link>
+            ) : <span className="muted">—</span>}
+          </div>
+          <div>
+            <div className="kicker">Opportunity</div>
+            {job.opportunity ? <Link to={`/pipeline/${job.opportunity.id}`} className="link-strong">{job.opportunity.title}</Link> : <span className="muted">—</span>}
+          </div>
+          <div>
+            <div className="kicker">Contract amount</div>
+            <span className="mono" style={{ fontWeight: 600 }}>{money(job.billing.totalContractAmount)}</span>
+          </div>
+          <div>
+            <div className="kicker">Gross profit %</div>
+            <span className="mono" style={{ fontWeight: 600, color: marginColor(job.billing.grossProfitPercent) }}>
+              {job.billing.grossProfitPercent === null ? '—' : `${job.billing.grossProfitPercent}%`}
+            </span>
+          </div>
         </div>
       </div>
 
       <div className="grid-2">
         <div className="stack">
+          <div className="card">
+            <div className="row between" style={{ marginBottom: editingInfo ? 10 : 0 }}>
+              <h2 style={{ margin: 0 }}>Project info</h2>
+              {!editingInfo && <button className="btn sm subtle" onClick={() => setEditingInfo(true)}>Edit</button>}
+            </div>
+            {editingInfo ? (
+              <form onSubmit={saveInfo} className="stack" style={{ gap: 10 }}>
+                <div className="field">
+                  <label>Labor crew</label>
+                  <input value={infoForm.labor_crew} onChange={(e) => setInfoForm({ ...infoForm, labor_crew: e.target.value })} placeholder="Who's assigned to this project?" />
+                </div>
+                <div className="field">
+                  <label>Desired start date</label>
+                  <input type="date" value={infoForm.desired_start_date || ''} onChange={(e) => setInfoForm({ ...infoForm, desired_start_date: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label>Unqualified reason</label>
+                  <input value={infoForm.unqualified_reason} onChange={(e) => setInfoForm({ ...infoForm, unqualified_reason: e.target.value })} placeholder="Only if this project fell through" />
+                </div>
+                <div className="field">
+                  <label>Job notes</label>
+                  <textarea rows={2} value={infoForm.job_notes} onChange={(e) => setInfoForm({ ...infoForm, job_notes: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label>Insurance requests</label>
+                  <textarea rows={2} value={infoForm.insurance_requests} onChange={(e) => setInfoForm({ ...infoForm, insurance_requests: e.target.value })} placeholder="Any insurance claim/paperwork tied to this job" />
+                </div>
+                <div className="field">
+                  <label>Request review</label>
+                  <textarea rows={2} value={infoForm.request_review} onChange={(e) => setInfoForm({ ...infoForm, request_review: e.target.value })} placeholder="Ask someone to review something on this project" />
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  <button className="btn primary sm" type="submit" disabled={savingInfo}>{savingInfo ? 'Saving…' : 'Save'}</button>
+                  <button className="btn sm subtle" type="button" onClick={() => { setEditingInfo(false); setInfoForm(blankInfo(job)); }}>Cancel</button>
+                </div>
+              </form>
+            ) : (
+              <div className="stack" style={{ gap: 6, marginTop: 10 }}>
+                <div className="row between"><span className="muted">Labor crew</span><span>{job.labor_crew || '—'}</span></div>
+                <div className="row between"><span className="muted">Desired start date</span><span>{job.desired_start_date ? shortDate(job.desired_start_date) : '—'}</span></div>
+                <div className="row between"><span className="muted">Start date</span><span>{job.start_date ? shortDate(job.start_date) : '—'}</span></div>
+                <div className="row between"><span className="muted">End date</span><span>{job.end_date ? shortDate(job.end_date) : '—'}</span></div>
+                <div className="row between"><span className="muted">Lead source</span><span>{job.lead_source || '—'}</span></div>
+                <div className="row between"><span className="muted">Service type</span><span>{job.opportunity?.work_type || '—'}</span></div>
+                <div className="row between"><span className="muted">Sub-service type</span><span>{job.opportunity?.sub_service_type || '—'}</span></div>
+                <div className="row between"><span className="muted">Project status</span><span className={'pill ' + (STATUS_PILL[job.status] || '')}>{PROJECT_STATUS_LABEL[job.status] || job.status}</span></div>
+                <div className="row between"><span className="muted">Unqualified reason</span><span>{job.unqualified_reason || '—'}</span></div>
+                <div className="row between" style={{ alignItems: 'flex-start' }}><span className="muted">Job notes</span><span style={{ textAlign: 'right', maxWidth: '65%' }}>{job.job_notes || '—'}</span></div>
+                <div className="row between" style={{ alignItems: 'flex-start' }}><span className="muted">Insurance requests</span><span style={{ textAlign: 'right', maxWidth: '65%' }}>{job.insurance_requests || '—'}</span></div>
+                <div className="row between" style={{ alignItems: 'flex-start' }}><span className="muted">Request review</span><span style={{ textAlign: 'right', maxWidth: '65%' }}>{job.request_review || '—'}</span></div>
+              </div>
+            )}
+            <p className="sub" style={{ margin: '10px 0 0' }}>Start date, end date, and day-by-day progress are set below, in Schedule &amp; progress.</p>
+          </div>
+
           <div className="card">
             <h2>Schedule &amp; progress</h2>
             <form onSubmit={saveSchedule} className="form-grid">
@@ -368,6 +494,71 @@ export default function JobDetail() {
         </div>
 
         <div className="stack">
+          <div className="card">
+            <div className="row between" style={{ marginBottom: editingBilling ? 10 : 0 }}>
+              <h2 style={{ margin: 0 }}>Project billing</h2>
+              {!editingBilling && <button className="btn sm subtle" onClick={() => setEditingBilling(true)}>Edit</button>}
+            </div>
+            {editingBilling ? (
+              <form onSubmit={saveBilling} className="stack" style={{ gap: 10 }}>
+                <div className="field">
+                  <label>Contract amount ($)</label>
+                  <input type="number" min="0" step="0.01" value={billingForm.contract_amount} onChange={(e) => setBillingForm({ ...billingForm, contract_amount: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label>Change order amount ($)</label>
+                  <input type="number" step="0.01" value={billingForm.change_order_amount} onChange={(e) => setBillingForm({ ...billingForm, change_order_amount: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label>Sales tax amount ($)</label>
+                  <input type="number" min="0" step="0.01" value={billingForm.sales_tax_amount} onChange={(e) => setBillingForm({ ...billingForm, sales_tax_amount: e.target.value })} />
+                </div>
+                <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                  <input type="checkbox" id="capital_improvement" checked={billingForm.capital_improvement} onChange={(e) => setBillingForm({ ...billingForm, capital_improvement: e.target.checked })} style={{ width: 'auto' }} />
+                  <label htmlFor="capital_improvement" style={{ margin: 0 }}>Capital improvement</label>
+                </div>
+                <div className="field">
+                  <label>Labor paid so far ($)</label>
+                  <input type="number" min="0" step="0.01" value={billingForm.labor_paid} onChange={(e) => setBillingForm({ ...billingForm, labor_paid: e.target.value })} />
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  <button className="btn primary sm" type="submit" disabled={savingBilling}>{savingBilling ? 'Saving…' : 'Save'}</button>
+                  <button className="btn sm subtle" type="button" onClick={() => { setEditingBilling(false); setBillingForm(blankBilling(job)); }}>Cancel</button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <div className="stack" style={{ gap: 6, marginTop: 10 }}>
+                  <div className="row between"><span className="muted">Contract amount</span><span className="mono">{money(job.billing.contractAmount)}</span></div>
+                  <div className="row between"><span className="muted">Change order amount</span><span className="mono">{money(job.billing.changeOrderAmount)}</span></div>
+                  <div className="row between"><span className="muted">Total contract amount</span><span className="mono" style={{ fontWeight: 600 }}>{money(job.billing.totalContractAmount)}</span></div>
+                  <div className="row between"><span className="muted">Sales tax amount</span><span className="mono">{money(job.billing.salesTaxAmount)}</span></div>
+                  <div className="row between"><span className="muted">Capital improvement</span><span>{job.billing.capitalImprovement ? 'Yes' : 'No'}</span></div>
+                  <div className="row between" style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 6 }}><span className="muted" style={{ fontWeight: 600 }}>Total charges</span><span className="mono" style={{ fontWeight: 700 }}>{money(job.billing.totalCharges)}</span></div>
+                  <div className="row between">
+                    <span className="muted">Gross profit</span>
+                    <span className="mono" style={{ fontWeight: 600, color: marginColor(job.billing.grossProfitPercent) }}>
+                      {money(job.billing.grossProfitAmount)}{job.billing.grossProfitPercent === null ? '' : ` (${job.billing.grossProfitPercent}%)`}
+                    </span>
+                  </div>
+                  <div className="row between"><span className="muted">Labor cost</span><span className="mono">{money(job.billing.laborCost)}</span></div>
+                  <div className="row between"><span className="muted">Customer balance</span><span className="mono" style={{ color: job.billing.customerBalance > 0 ? 'var(--red)' : 'var(--accent-ink)' }}>{money(job.billing.customerBalance)}</span></div>
+                </div>
+                <div className="kicker" style={{ marginTop: 14 }}>Additional fields</div>
+                <div className="stack" style={{ gap: 6, marginTop: 6 }}>
+                  <div className="row between"><span className="muted">All customer payments</span><span className="mono">{money(job.billing.allCustomerPayments)}</span></div>
+                  <div className="row between"><span className="muted">Billable</span><span className="mono">{money(job.billing.billable)}</span></div>
+                  <div className="row between"><span className="muted">Not billable</span><span className="mono">{money(job.billing.notBillable)}</span></div>
+                  <div className="row between"><span className="muted">Total materials cost</span><span className="mono">{money(job.billing.materialsCost)}</span></div>
+                  <div className="row between"><span className="muted">Labor paid</span><span className="mono">{money(job.billing.laborPaid)}</span></div>
+                  <div className="row between"><span className="muted">Labor balance</span><span className="mono">{money(job.billing.laborBalance)}</span></div>
+                  <div className="row between"><span className="muted">Labor cost %</span><span className="mono">{job.billing.laborCostPercent === null ? '—' : `${job.billing.laborCostPercent}%`}</span></div>
+                  <div className="row between"><span className="muted">Last updated</span><span>{job.updated_at ? timeAgo(job.updated_at) : '—'}</span></div>
+                </div>
+              </>
+            )}
+          </div>
+
           <div className="card">
             <div className="row between" style={{ alignItems: 'flex-start' }}>
               <h2 style={{ marginBottom: 0 }}>Job costing</h2>

@@ -7,8 +7,8 @@ import { BarList } from '../components/charts';
 const LEAD_STATUS_ORDER = ['New', 'Follow Up', 'Unresponsive', 'Restart', 'Converted', 'Lost'];
 const OPP_STAGE_LABEL = { qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation' };
 const OPP_STAGE_ORDER = ['qualified', 'proposal', 'negotiation'];
-const JOB_STATUS_LABEL = { scheduled: 'Scheduled', in_progress: 'In progress' };
-const JOB_STATUS_ORDER = ['scheduled', 'in_progress'];
+const JOB_STATUS_LABEL = { accepted: 'Accepted', scheduled: 'Scheduled', in_progress: 'In progress', on_hold: 'On hold' };
+const JOB_STATUS_ORDER = ['accepted', 'scheduled', 'in_progress', 'on_hold'];
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 

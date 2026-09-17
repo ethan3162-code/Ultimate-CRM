@@ -71,7 +71,7 @@ export default function DealDetail() {
   async function createProject() {
     const job = await api.createJob({
       contact_id: deal.contact_id || null, company_id: deal.company_id || null, deal_id: deal.id,
-      title: deal.title, status: 'scheduled', address: deal.customer_address || null,
+      title: deal.title, status: 'accepted', address: deal.customer_address || null,
     });
     navigate(`/jobs/${job.id}`);
   }

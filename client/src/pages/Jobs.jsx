@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { shortDate } from '../utils';
 
-const STATUS_PILL = { scheduled: '', in_progress: 'amber', completed: 'green', cancelled: 'red' };
+const STATUS_PILL = { accepted: '', scheduled: '', in_progress: 'amber', complete: 'green', on_hold: 'amber', cancelled: 'red' };
 
 export default function Jobs() {
   const [jobs, setJobs] = useState(null);

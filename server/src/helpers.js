@@ -59,13 +59,17 @@ function getJobCosting(id, { estimates, invoices } = {}) {
 
   const byCategoryMap = {};
   let cost = 0;
+  let billable = 0;
+  let notBillable = 0;
   for (const e of expenses) {
     const amt = e.qty * e.unit_cost;
     cost += amt;
     byCategoryMap[e.category] = (byCategoryMap[e.category] || 0) + amt;
+    if (e.billable === 0) notBillable += amt; else billable += amt;
   }
   const profit = revenue - cost;
   const margin = revenue > 0 ? +((profit / revenue) * 100).toFixed(1) : null;
+  const categoryAmount = (name) => +(byCategoryMap[name] || 0).toFixed(2);
 
   return {
     revenue: +revenue.toFixed(2),
@@ -73,8 +77,53 @@ function getJobCosting(id, { estimates, invoices } = {}) {
     cost: +cost.toFixed(2),
     profit: +profit.toFixed(2),
     margin,
+    billable: +billable.toFixed(2),
+    notBillable: +notBillable.toFixed(2),
+    laborCost: categoryAmount('Labor'),
+    materialsCost: categoryAmount('Materials'),
     byCategory: Object.entries(byCategoryMap).map(([category, amount]) => ({ category, amount: +amount.toFixed(2) })),
     expenses,
+  };
+}
+
+// Project billing (Sept 2026): the "what did we contract for, and what's the gross profit"
+// numbers from the paving-industry project-management tool we're matching, layered on top of
+// the job-costing engine above rather than duplicating it — contract_amount/change_order_amount/
+// sales_tax_amount are the job's own editable fields, while cost/labor figures are pulled straight
+// from the same real expense log job costing already uses, so there's one source of truth for cost.
+function getJobBilling(job, costing, invoices) {
+  const contractAmount = Number(job.contract_amount) || 0;
+  const changeOrderAmount = Number(job.change_order_amount) || 0;
+  const salesTaxAmount = Number(job.sales_tax_amount) || 0;
+  const totalContractAmount = contractAmount + changeOrderAmount;
+  const totalCharges = totalContractAmount + salesTaxAmount;
+  const grossProfitAmount = totalCharges - costing.cost;
+  const grossProfitPercent = totalCharges > 0 ? +((grossProfitAmount / totalCharges) * 100).toFixed(1) : null;
+  const laborCost = costing.laborCost;
+  const laborPaid = Number(job.labor_paid) || 0;
+  const laborBalance = +(laborCost - laborPaid).toFixed(2);
+  const laborCostPercent = totalCharges > 0 ? +((laborCost / totalCharges) * 100).toFixed(1) : null;
+  const allCustomerPayments = +(invoices.reduce((s, i) => s + (i.amount_paid || 0), 0)).toFixed(2);
+  const customerBalance = +(totalCharges - allCustomerPayments).toFixed(2);
+
+  return {
+    contractAmount: +contractAmount.toFixed(2),
+    changeOrderAmount: +changeOrderAmount.toFixed(2),
+    totalContractAmount: +totalContractAmount.toFixed(2),
+    salesTaxAmount: +salesTaxAmount.toFixed(2),
+    totalCharges: +totalCharges.toFixed(2),
+    capitalImprovement: !!job.capital_improvement,
+    grossProfitAmount: +grossProfitAmount.toFixed(2),
+    grossProfitPercent,
+    laborCost,
+    laborPaid: +laborPaid.toFixed(2),
+    laborBalance,
+    laborCostPercent,
+    allCustomerPayments,
+    customerBalance,
+    billable: costing.billable,
+    notBillable: costing.notBillable,
+    materialsCost: costing.materialsCost,
   };
 }
 
@@ -87,7 +136,18 @@ function getJobFull(id) {
   const invoices = invoiceRows.map(r => getInvoiceFull(r.id));
   const photos = db.prepare(`SELECT * FROM job_photos WHERE job_id = ? ORDER BY created_at DESC`).all(id);
   const costing = getJobCosting(id, { estimates, invoices });
-  return { ...job, estimates, invoices, photos, costing };
+  const billing = getJobBilling(job, costing, invoices);
+
+  // Account/Opportunity context, pulled from the linked contact/company/deal rather than
+  // duplicated onto the job — a project inherits its lead source and service type from the
+  // opportunity that became it, the same "single source of truth" pattern used elsewhere.
+  const company = job.company_id ? db.prepare(`SELECT id, name FROM companies WHERE id = ?`).get(job.company_id) : null;
+  const contact = job.contact_id ? db.prepare(`SELECT id, first_name, last_name, source FROM contacts WHERE id = ?`).get(job.contact_id) : null;
+  const deal = job.deal_id ? db.prepare(`SELECT id, title, source, work_type, sub_service_type, value FROM deals WHERE id = ?`).get(job.deal_id) : null;
+  const account = company ? { id: company.id, type: 'company', name: company.name } : contact ? { id: contact.id, type: 'contact', name: `${contact.first_name} ${contact.last_name}` } : null;
+  const leadSource = (deal && deal.source) || (contact && contact.source) || null;
+
+  return { ...job, estimates, invoices, photos, costing, billing, account, opportunity: deal, lead_source: leadSource };
 }
 
 function logActivity(related_type, related_id, type, note) {
@@ -131,6 +191,6 @@ function computeEndDate(job, startDate) {
 }
 
 module.exports = {
-  computeItemsTotal, withTotals, getEstimateFull, getInvoiceFull, getJobFull, getJobCosting, logActivity,
+  computeItemsTotal, withTotals, getEstimateFull, getInvoiceFull, getJobFull, getJobCosting, getJobBilling, logActivity,
   STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, stageDays, totalDays, computeProgress, addDays, computeEndDate,
 };

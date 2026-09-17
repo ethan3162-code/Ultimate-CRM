@@ -6,8 +6,8 @@ const router = express.Router();
 
 const DEAL_STAGES = ['new', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
 const STAGE_LABEL = { new: 'New', qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
-const JOB_STATUSES = ['scheduled', 'in_progress', 'completed', 'cancelled'];
-const JOB_STATUS_LABEL = { scheduled: 'Scheduled', in_progress: 'In progress', completed: 'Completed', cancelled: 'Cancelled' };
+const JOB_STATUSES = ['accepted', 'scheduled', 'in_progress', 'complete', 'on_hold', 'cancelled'];
+const JOB_STATUS_LABEL = { accepted: 'Accepted', scheduled: 'Scheduled', in_progress: 'In progress', complete: 'Complete', on_hold: 'On hold', cancelled: 'Cancelled' };
 
 function monthKey(d) { return d.toISOString().slice(0, 7); }
 function monthLabel(d) { return d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }); }

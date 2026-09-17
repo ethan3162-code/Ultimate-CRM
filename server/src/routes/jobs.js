@@ -11,6 +11,21 @@ const router = express.Router();
 
 const DEFAULT_STAGE_DAYS = { demo: 1, site_prep: 2, installation: 5, final_walkthrough: 1 };
 
+// Project-detail fields (Sept 2026 parity pass) — text/notes fields default to null, numeric
+// fields to 0, so a job created without any of this still inserts cleanly.
+const JOB_TEXT_FIELDS = ['labor_crew', 'unqualified_reason', 'job_notes', 'insurance_requests', 'request_review'];
+const JOB_NUMERIC_FIELDS = ['change_order_amount', 'sales_tax_amount', 'labor_paid'];
+
+function readJobDetail(body) {
+  const detail = {};
+  for (const f of JOB_TEXT_FIELDS) detail[f] = body[f] ?? null;
+  for (const f of JOB_NUMERIC_FIELDS) detail[f] = body[f] === undefined || body[f] === '' ? 0 : Number(body[f]) || 0;
+  detail.desired_start_date = body.desired_start_date || null;
+  detail.contract_amount = body.contract_amount === undefined || body.contract_amount === '' ? null : Number(body.contract_amount) || 0;
+  detail.capital_improvement = body.capital_improvement ? 1 : 0;
+  return detail;
+}
+
 /** Pulls the four *_days fields out of a body/job object, falling back to existing/default values. */
 function readStageDays(body, existing) {
   const out = {};
@@ -40,16 +55,28 @@ router.post('/', (req, res) => {
   const days = readStageDays(req.body, null);
   const progress_percent = computeProgress(days, stage);
   const end_date = computeEndDate(days, start_date);
+  const detail = readJobDetail(req.body);
+  // A project spun up from a won opportunity inherits its contract amount from that
+  // opportunity's value, unless the caller explicitly passed its own.
+  if (detail.contract_amount === null && deal_id) {
+    const deal = db.prepare(`SELECT value FROM deals WHERE id = ?`).get(deal_id);
+    detail.contract_amount = deal ? deal.value : 0;
+  }
+  detail.contract_amount = detail.contract_amount || 0;
   const result = db.prepare(`
     INSERT INTO jobs (
       contact_id, company_id, deal_id, title, status, address, scheduled_date, start_date, end_date,
-      progress_percent, stage, demo_days, site_prep_days, installation_days, final_walkthrough_days
+      progress_percent, stage, demo_days, site_prep_days, installation_days, final_walkthrough_days,
+      labor_crew, desired_start_date, unqualified_reason, job_notes, insurance_requests, request_review,
+      contract_amount, change_order_amount, sales_tax_amount, capital_improvement, labor_paid
     )
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
-    contact_id || null, company_id || null, deal_id || null, title, status || 'scheduled', address || null,
+    contact_id || null, company_id || null, deal_id || null, title, status || 'accepted', address || null,
     scheduled_date || null, start_date || null, end_date, progress_percent, stage || null,
-    days.demo_days, days.site_prep_days, days.installation_days, days.final_walkthrough_days
+    days.demo_days, days.site_prep_days, days.installation_days, days.final_walkthrough_days,
+    detail.labor_crew, detail.desired_start_date, detail.unqualified_reason, detail.job_notes, detail.insurance_requests, detail.request_review,
+    detail.contract_amount, detail.change_order_amount, detail.sales_tax_amount, detail.capital_improvement, detail.labor_paid
   );
   logActivity('job', result.lastInsertRowid, 'note', `Job "${title}" created.`);
   res.status(201).json(getJobFull(result.lastInsertRowid));
@@ -72,14 +99,26 @@ router.patch('/:id', (req, res) => {
   updates.stage = stage;
   updates.progress_percent = computeProgress(days, stage);
   updates.end_date = computeEndDate(days, updates.start_date);
+
+  for (const f of JOB_TEXT_FIELDS) updates[f] = req.body[f] !== undefined ? req.body[f] : existing[f];
+  for (const f of JOB_NUMERIC_FIELDS) updates[f] = req.body[f] !== undefined ? (Number(req.body[f]) || 0) : existing[f];
+  updates.desired_start_date = req.body.desired_start_date !== undefined ? (req.body.desired_start_date || null) : existing.desired_start_date;
+  updates.contract_amount = req.body.contract_amount !== undefined ? (Number(req.body.contract_amount) || 0) : existing.contract_amount;
+  updates.capital_improvement = req.body.capital_improvement !== undefined ? (req.body.capital_improvement ? 1 : 0) : existing.capital_improvement;
+
   db.prepare(`
     UPDATE jobs SET
       title=?, status=?, address=?, scheduled_date=?, start_date=?, end_date=?, progress_percent=?, stage=?,
-      demo_days=?, site_prep_days=?, installation_days=?, final_walkthrough_days=?
+      demo_days=?, site_prep_days=?, installation_days=?, final_walkthrough_days=?,
+      labor_crew=?, desired_start_date=?, unqualified_reason=?, job_notes=?, insurance_requests=?, request_review=?,
+      contract_amount=?, change_order_amount=?, sales_tax_amount=?, capital_improvement=?, labor_paid=?,
+      updated_at=datetime('now')
     WHERE id=?
   `).run(
     updates.title, updates.status, updates.address, updates.scheduled_date, updates.start_date, updates.end_date,
     updates.progress_percent, updates.stage, days.demo_days, days.site_prep_days, days.installation_days, days.final_walkthrough_days,
+    updates.labor_crew, updates.desired_start_date, updates.unqualified_reason, updates.job_notes, updates.insurance_requests, updates.request_review,
+    updates.contract_amount, updates.change_order_amount, updates.sales_tax_amount, updates.capital_improvement, updates.labor_paid,
     req.params.id
   );
   if (req.body.stage !== undefined && req.body.stage !== existing.stage) {
@@ -88,7 +127,7 @@ router.patch('/:id', (req, res) => {
   }
   if (req.body.status && req.body.status !== existing.status) {
     logActivity('job', existing.id, 'status_change', `Job status changed from "${existing.status}" to "${req.body.status}".`);
-    if (req.body.status === 'completed') {
+    if (req.body.status === 'complete') {
       const contact = existing.contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(existing.contact_id) : null;
       const company = existing.company_id ? db.prepare(`SELECT name FROM companies WHERE id = ?`).get(existing.company_id) : null;
       fireTrigger('job_completed', {
@@ -249,12 +288,12 @@ router.delete('/photos/:photoId', (req, res) => {
 router.post('/:id/expenses', (req, res) => {
   const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(req.params.id);
   if (!job) return res.status(404).json({ error: 'job not found' });
-  const { category, description, qty, unit_cost, incurred_on } = req.body;
+  const { category, description, qty, unit_cost, incurred_on, billable } = req.body;
   if (!description) return res.status(400).json({ error: 'description is required' });
   const result = db.prepare(`
-    INSERT INTO job_expenses (job_id, category, description, qty, unit_cost, incurred_on)
-    VALUES (?,?,?,?,?,?)
-  `).run(job.id, category || 'Materials', description, Number(qty) || 1, Number(unit_cost) || 0, incurred_on || new Date().toISOString().slice(0, 10));
+    INSERT INTO job_expenses (job_id, category, description, qty, unit_cost, incurred_on, billable)
+    VALUES (?,?,?,?,?,?,?)
+  `).run(job.id, category || 'Materials', description, Number(qty) || 1, Number(unit_cost) || 0, incurred_on || new Date().toISOString().slice(0, 10), billable === false ? 0 : 1);
   const amount = (Number(qty) || 1) * (Number(unit_cost) || 0);
   logActivity('job', job.id, 'expense', `Expense logged: ${description} — $${amount.toFixed(2)} (${category || 'Materials'}).`);
   res.status(201).json(getJobFull(job.id));
