@@ -1,0 +1,137 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { api } from '../api';
+
+const STATUS_LABEL = { accepted: 'Accepted', scheduled: 'Scheduled', in_progress: 'In progress', complete: 'Complete', on_hold: 'On hold', cancelled: 'Cancelled' };
+const STAGES = [
+  { key: 'demo', label: 'Demo', field: 'demo_days' },
+  { key: 'site_prep', label: 'Site prep', field: 'site_prep_days' },
+  { key: 'installation', label: 'Installation', field: 'installation_days' },
+  { key: 'final_walkthrough', label: 'Final walkthrough', field: 'final_walkthrough_days' },
+];
+const STAGE_LABEL = STAGES.reduce((acc, s) => { acc[s.key] = s.label; return acc; }, {});
+const DAY_MS = 86400000;
+
+/** Each stage's share of the job's own bar, sized by its day-length, with the reached stages marked filled. */
+function stageSegments(job) {
+  const currentIdx = job.stage ? STAGES.findIndex((s) => s.key === job.stage) : -1;
+  const total = STAGES.reduce((sum, s) => sum + (Number(job[s.field]) || 0), 0) || 1;
+  let cursor = 0;
+  return STAGES.map((s, i) => {
+    const days = Number(job[s.field]) || 0;
+    const leftPct = (cursor / total) * 100;
+    cursor += days;
+    return { ...s, days, leftPct, widthPct: (days / total) * 100, filled: currentIdx >= i, current: currentIdx === i };
+  });
+}
+
+function toDate(d) {
+  return new Date(d + 'T00:00:00');
+}
+function fmt(d) {
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+export default function Schedule() {
+  const [jobs, setJobs] = useState(null);
+
+  useEffect(() => {
+    api.jobs().then(setJobs);
+  }, []);
+
+  const scheduled = useMemo(() => {
+    if (!jobs) return [];
+    return jobs
+      .filter((j) => j.start_date && j.end_date)
+      .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+  }, [jobs]);
+
+  const { rangeStart, totalDays, ticks } = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (scheduled.length === 0) {
+      const start = new Date(today.getTime() - 3 * DAY_MS);
+      return buildRange(start, new Date(today.getTime() + 30 * DAY_MS));
+    }
+    const starts = scheduled.map((j) => toDate(j.start_date).getTime());
+    const ends = scheduled.map((j) => toDate(j.end_date).getTime());
+    const start = new Date(Math.min(...starts, today.getTime()) - 2 * DAY_MS);
+    const end = new Date(Math.max(...ends, today.getTime()) + 2 * DAY_MS);
+    return buildRange(start, end);
+  }, [scheduled]);
+
+  function buildRange(start, end) {
+    const days = Math.max(1, Math.round((end - start) / DAY_MS));
+    const step = days > 60 ? 7 : days > 21 ? 3 : 1;
+    const marks = [];
+    for (let i = 0; i <= days; i += step) marks.push(new Date(start.getTime() + i * DAY_MS));
+    return { rangeStart: start, totalDays: days, ticks: marks };
+  }
+
+  function barStyle(job) {
+    const s = toDate(job.start_date).getTime();
+    const e = toDate(job.end_date).getTime();
+    const left = Math.max(0, (s - rangeStart.getTime()) / DAY_MS / totalDays) * 100;
+    const width = Math.max(1.5, (e - s) / DAY_MS / totalDays * 100);
+    return { left: `${left}%`, width: `${width}%` };
+  }
+
+  const todayLeft = Math.min(100, Math.max(0, (Date.now() - rangeStart.getTime()) / DAY_MS / totalDays * 100));
+
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <h1>Project schedule</h1>
+          <p className="sub">Every job with a start and end date, laid out as a timeline — progress bars come straight from each job's own record.</p>
+        </div>
+      </div>
+
+      {!jobs ? <div className="loading">Loading…</div> : scheduled.length === 0 ? (
+        <div className="card"><div className="empty">No jobs have a start and end date yet. Open a job and set its schedule to see it here.</div></div>
+      ) : (
+        <div className="table-wrap gantt-wrap">
+          <div className="gantt" style={{ minWidth: 640 }}>
+            <div className="gantt-header">
+              <div className="gantt-label-col">Job</div>
+              <div className="gantt-track">
+                <div className="gantt-scale">
+                  {ticks.map((t, i) => (
+                    <div key={i} className="tick" style={{ left: `${((t - rangeStart) / DAY_MS / totalDays) * 100}%` }}>{fmt(t)}</div>
+                  ))}
+                  <div className="gantt-today" style={{ left: `${todayLeft}%` }} />
+                </div>
+              </div>
+            </div>
+            {scheduled.map((job) => (
+              <div className="gantt-row" key={job.id}>
+                <div className="gantt-label-col">
+                  <div className="name"><Link to={`/jobs/${job.id}`} className="link-strong">{job.title}</Link></div>
+                  <div className="meta">{job.company_name || (job.first_name ? `${job.first_name} ${job.last_name}` : '—')} · {STATUS_LABEL[job.status] || job.status}</div>
+                </div>
+                <div className="gantt-track">
+                  <div className="gantt-today" style={{ left: `${todayLeft}%` }} />
+                  <Link
+                    to={`/jobs/${job.id}`}
+                    className={`gantt-bar status-${job.status}`}
+                    style={barStyle(job)}
+                    title={`${STAGES.map((s) => `${s.label}: ${Number(job[s.field]) || 0}d`).join(' · ')} — ${job.stage ? `currently ${STAGE_LABEL[job.stage]}` : 'not started'} (${job.progress_percent || 0}%)`}
+                  >
+                    {stageSegments(job).map((seg) => (
+                      <div
+                        key={seg.key}
+                        className={'seg' + (seg.filled ? ' filled' : '') + (seg.current ? ' current' : '')}
+                        style={{ left: `${seg.leftPct}%`, width: `${seg.widthPct}%` }}
+                      />
+                    ))}
+                    <span className="lbl">{job.stage ? STAGE_LABEL[job.stage] : `${job.progress_percent || 0}%`}</span>
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
