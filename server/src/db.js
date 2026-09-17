@@ -292,6 +292,34 @@ CREATE TABLE IF NOT EXISTS user_section_permissions (
   level TEXT NOT NULL DEFAULT 'edit',
   PRIMARY KEY (user_id, section)
 );
+
+-- Internal team chat (Sept 2026) — a lightweight built-in messaging feature so logins can talk
+-- to each other without leaving the CRM: named group channels (is_dm = 0) anyone can create and
+-- add teammates to, and direct messages (is_dm = 1) between a fixed set of members. Every active
+-- login can use this regardless of their individual page permissions (see routes/chat.js, mounted
+-- with just requireAuth like directory.js) — it's a utility, not a business data page.
+CREATE TABLE IF NOT EXISTS chat_channels (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT,
+  is_dm INTEGER NOT NULL DEFAULT 0,
+  created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+-- last_read_at lets the client show an unread count per channel per member without a separate
+-- read-receipts table — set to now() whenever that member fetches the channel's messages.
+CREATE TABLE IF NOT EXISTS chat_channel_members (
+  channel_id INTEGER NOT NULL REFERENCES chat_channels(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  last_read_at TEXT,
+  PRIMARY KEY (channel_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  channel_id INTEGER NOT NULL REFERENCES chat_channels(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `);
 
 // --- Lightweight migrations ---
@@ -429,6 +457,14 @@ ensureColumn('estimates', 'rejection_reason', 'rejection_reason TEXT');
 // getPermissions() forces every admin-only page from a fixed list, not from this table — so
 // clean them out rather than leave stale, unused rows behind.
 db.prepare(`DELETE FROM user_permissions WHERE page = 'dashboard'`).run();
+// Per-record assignment for notifications (Sept 2026) — the user asked that appointments and
+// project schedule milestones/task due dates email the person they're assigned to, with a
+// calendar-invite attachment (see notify.js/ics.js). These are deliberately separate from the
+// existing deals/contacts `owner_user_id` columns (different tables, same naming convention) —
+// null/unassigned by default so nothing changes until someone is actually picked.
+ensureColumn('jobs', 'owner_user_id', 'owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+ensureColumn('appointments', 'assigned_user_id', 'assigned_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+ensureColumn('tasks', 'assigned_user_id', 'assigned_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 // Rename of an earlier stage key ('material_order' -> 'site_prep') on any DB seeded before the rename.
 db.prepare(`UPDATE jobs SET stage = 'site_prep' WHERE stage = 'material_order'`).run();
 // Project status lifecycle expanded to 6 states ('completed' -> 'complete', plus new 'accepted'/'on_hold')

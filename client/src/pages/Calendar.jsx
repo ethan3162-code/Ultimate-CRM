@@ -166,7 +166,7 @@ export default function Calendar() {
             <div className="agenda-item" key={a.id} onClick={() => setModal({ appointment: a })} style={{ cursor: 'pointer' }}>
               <div>
                 <div className="title">{a.title}{a.source === 'google' && <span className="pill amber" style={{ marginLeft: 8 }}>Google</span>}</div>
-                <div className="meta">{a.location || 'No location'}{a.contact_name ? ` · ${a.contact_name}` : ''}{a.company_name ? ` · ${a.company_name}` : ''}{a.job_title ? ` · ${a.job_title}` : ''}</div>
+                <div className="meta">{a.location || 'No location'}{a.contact_name ? ` · ${a.contact_name}` : ''}{a.company_name ? ` · ${a.company_name}` : ''}{a.job_title ? ` · ${a.job_title}` : ''}{a.assigned_username ? ` · assigned to ${a.assigned_username}` : ''}</div>
               </div>
               <div className="when">
                 {new Date(a.start_time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}<br />

@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db');
 const { logActivity } = require('../helpers');
 const google = require('../google');
+const notify = require('../notify');
 
 const router = express.Router();
 
@@ -10,11 +11,13 @@ function withNames(row) {
   const contact = row.contact_id ? db.prepare(`SELECT first_name, last_name FROM contacts WHERE id = ?`).get(row.contact_id) : null;
   const company = row.company_id ? db.prepare(`SELECT name FROM companies WHERE id = ?`).get(row.company_id) : null;
   const job = row.job_id ? db.prepare(`SELECT title FROM jobs WHERE id = ?`).get(row.job_id) : null;
+  const assignee = row.assigned_user_id ? db.prepare(`SELECT username FROM users WHERE id = ?`).get(row.assigned_user_id) : null;
   return {
     ...row,
     contact_name: contact ? `${contact.first_name} ${contact.last_name}` : null,
     company_name: company ? company.name : null,
     job_title: job ? job.title : null,
+    assigned_username: assignee ? assignee.username : null,
   };
 }
 
@@ -54,13 +57,13 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { contact_id, company_id, job_id, deal_id, title, description, location, start_time, end_time } = req.body;
+  const { contact_id, company_id, job_id, deal_id, title, description, location, start_time, end_time, assigned_user_id } = req.body;
   if (!title || !start_time || !end_time) return res.status(400).json({ error: 'title, start_time, and end_time are required' });
 
   const result = db.prepare(`
-    INSERT INTO appointments (contact_id, company_id, job_id, deal_id, title, description, location, start_time, end_time)
-    VALUES (?,?,?,?,?,?,?,?,?)
-  `).run(contact_id || null, company_id || null, job_id || null, deal_id || null, title, description || null, location || null, start_time, end_time);
+    INSERT INTO appointments (contact_id, company_id, job_id, deal_id, title, description, location, start_time, end_time, assigned_user_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
+  `).run(contact_id || null, company_id || null, job_id || null, deal_id || null, title, description || null, location || null, start_time, end_time, assigned_user_id || null);
   let appt = db.prepare(`SELECT * FROM appointments WHERE id = ?`).get(result.lastInsertRowid);
 
   if (google.getStoredTokens()) {
@@ -74,6 +77,8 @@ router.post('/', async (req, res) => {
   }
 
   logActivity(contact_id ? 'contact' : job_id ? 'job' : 'deal', contact_id || job_id || deal_id || appt.id, 'appointment', `Appointment scheduled: "${appt.title}".`);
+  // Best-effort email + calendar invite to whoever it's assigned to — never blocks the response.
+  notify.notifyAppointment(appt, { isNew: true }).catch(() => {});
   res.status(201).json(withNames(appt));
 });
 
@@ -83,8 +88,8 @@ router.patch('/:id', async (req, res) => {
   const updated = { ...existing, ...req.body };
 
   db.prepare(`
-    UPDATE appointments SET title=?, description=?, location=?, start_time=?, end_time=?, status=?, updated_at=datetime('now') WHERE id=?
-  `).run(updated.title, updated.description, updated.location, updated.start_time, updated.end_time, updated.status, req.params.id);
+    UPDATE appointments SET title=?, description=?, location=?, start_time=?, end_time=?, status=?, assigned_user_id=?, updated_at=datetime('now') WHERE id=?
+  `).run(updated.title, updated.description, updated.location, updated.start_time, updated.end_time, updated.status, updated.assigned_user_id || null, req.params.id);
 
   if (existing.google_event_id) {
     try {
@@ -93,7 +98,13 @@ router.patch('/:id', async (req, res) => {
       console.error('Google Calendar update failed:', err.message);
     }
   }
-  res.json(withNames(db.prepare(`SELECT * FROM appointments WHERE id = ?`).get(req.params.id)));
+  const fresh = db.prepare(`SELECT * FROM appointments WHERE id = ?`).get(req.params.id);
+  // Re-notify the assignee if anything they'd care about changed — new assignment, retimed, or
+  // moved. A plain status change (e.g. marking it done) doesn't warrant a fresh invite email.
+  const worthNotifying = ['title', 'location', 'start_time', 'end_time', 'assigned_user_id']
+    .some((k) => String(existing[k] || '') !== String(fresh[k] || ''));
+  if (worthNotifying) notify.notifyAppointment(fresh, { isNew: false }).catch(() => {});
+  res.json(withNames(fresh));
 });
 
 router.delete('/:id', async (req, res) => {

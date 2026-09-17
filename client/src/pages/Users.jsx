@@ -195,7 +195,7 @@ export default function Users() {
           <form onSubmit={submit} className="form-grid">
             <div className="field"><label>Username</label><input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoCapitalize="none" required /></div>
             <div className="field"><label>Temporary password</label><input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="At least 6 characters" required /></div>
-            <div className="field"><label>Notification email (optional)</label><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Only used for approval emails" /></div>
+            <div className="field"><label>Notification email (optional)</label><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Appointments, schedules, tasks, approvals" /></div>
             <div className="field" style={{ justifyContent: 'center' }}>
               <label style={{ visibility: 'hidden' }}>Admin</label>
               <span className="row" style={{ gap: 8, alignItems: 'center' }}>

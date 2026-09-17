@@ -224,8 +224,9 @@ function getJobFull(id) {
   const deal = job.deal_id ? db.prepare(`SELECT id, title, source, work_type, sub_service_type, value FROM deals WHERE id = ?`).get(job.deal_id) : null;
   const account = company ? { id: company.id, type: 'company', name: company.name } : contact ? { id: contact.id, type: 'contact', name: `${contact.first_name} ${contact.last_name}` } : null;
   const leadSource = (deal && deal.source) || (contact && contact.source) || null;
+  const owner = job.owner_user_id ? db.prepare(`SELECT username FROM users WHERE id = ?`).get(job.owner_user_id) : null;
 
-  return { ...job, estimates, invoices, photos, costing, billing, account, opportunity: deal, lead_source: leadSource };
+  return { ...job, estimates, invoices, photos, costing, billing, account, opportunity: deal, lead_source: leadSource, owner_username: owner ? owner.username : null };
 }
 
 function logActivity(related_type, related_id, type, note) {
@@ -268,8 +269,30 @@ function computeEndDate(job, startDate) {
   return addDays(startDate, totalDays(job));
 }
 
+/** Every stage's own start/end date, derived from job.start_date plus each stage's day-length —
+    used by notify.js to email whoever's assigned to the project a calendar invite per milestone
+    (Sept 2026). Returns [] if the job has no start_date yet (nothing to schedule against). Each
+    stage's start is the day after the previous stage's end, except the first, which starts on
+    the project's own start_date; a stage's end is its start plus its own day-length (a stage
+    with 0 days still gets a same-day marker rather than being skipped, so nothing silently
+    disappears from the schedule if someone zeroes it out temporarily). */
+function getJobMilestones(job) {
+  if (!job || !job.start_date) return [];
+  const days = stageDays(job);
+  let cursor = job.start_date;
+  const out = [];
+  for (const key of STAGE_KEYS) {
+    const start = cursor;
+    const len = Math.max(0, days[key]);
+    const end = len > 0 ? addDays(start, len) : start;
+    out.push({ key, label: STAGE_LABEL[key], start, end });
+    cursor = end;
+  }
+  return out;
+}
+
 module.exports = {
   computeItemsTotal, withTotals, getEstimateFull, getInvoiceFull, getJobFull, getJobCosting, getJobBilling, logActivity,
-  STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, stageDays, totalDays, computeProgress, addDays, computeEndDate,
+  STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, stageDays, totalDays, computeProgress, addDays, computeEndDate, getJobMilestones,
   redactEstimateMoney, redactInvoiceMoney, redactJobMoney, getPendingEstimateApprovals,
 };

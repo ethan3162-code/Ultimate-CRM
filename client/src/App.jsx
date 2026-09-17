@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
+import Messages from './pages/Messages';
 import Leads from './pages/Leads';
 import Pipeline from './pages/Pipeline';
 import DealDetail from './pages/DealDetail';
@@ -48,6 +49,7 @@ function AuthedApp() {
       ) : (
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
+          <Route path="/messages" element={<Messages />} />
           <Route path="/dashboard" element={<Protected page="dashboard"><Dashboard /></Protected>} />
           <Route path="/leads" element={<Protected page="leads"><Leads /></Protected>} />
           <Route path="/pipeline" element={<Protected page="pipeline"><Pipeline /></Protected>} />

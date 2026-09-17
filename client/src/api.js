@@ -41,6 +41,14 @@ export const api = {
   usersDirectory: () => request('/directory/users'),
   pendingEstimateApprovals: () => request('/directory/pending-approvals'),
 
+  // Internal team chat.
+  chatChannels: () => request('/chat/channels'),
+  createChatChannel: (data) => request('/chat/channels', { method: 'POST', body: JSON.stringify(data) }),
+  chatMessages: (channelId) => request(`/chat/channels/${channelId}/messages`),
+  sendChatMessage: (channelId, body) => request(`/chat/channels/${channelId}/messages`, { method: 'POST', body: JSON.stringify({ body }) }),
+  updateChatChannel: (channelId, data) => request(`/chat/channels/${channelId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  leaveChatChannel: (channelId) => request(`/chat/channels/${channelId}/leave`, { method: 'POST' }),
+
   // Reusable, stackable permission-template "Roles" — admin only.
   roles: () => request('/roles'),
   createRole: (data) => request('/roles', { method: 'POST', body: JSON.stringify(data) }),

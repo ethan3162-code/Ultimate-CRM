@@ -84,7 +84,8 @@ export default function JobDetail() {
   const [rejectingFor, setRejectingFor] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [payingInvoice, setPayingInvoice] = useState(null);
-  const [schedule, setSchedule] = useState({ start_date: '', demo_days: 1, site_prep_days: 2, installation_days: 5, final_walkthrough_days: 1 });
+  const [schedule, setSchedule] = useState({ start_date: '', demo_days: 1, site_prep_days: 2, installation_days: 5, final_walkthrough_days: 1, owner_user_id: '' });
+  const [directory, setDirectory] = useState([]);
   const [savingStage, setSavingStage] = useState(false);
   const [photoLabel, setPhotoLabel] = useState('progress');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -122,12 +123,14 @@ export default function JobDetail() {
         site_prep_days: j.site_prep_days ?? 2,
         installation_days: j.installation_days ?? 5,
         final_walkthrough_days: j.final_walkthrough_days ?? 1,
+        owner_user_id: j.owner_user_id || '',
       });
       setInfoForm(blankInfo(j));
       setBillingForm(blankBilling(j));
     });
   }
   useEffect(load, [id]);
+  useEffect(() => { api.usersDirectory().then(setDirectory).catch(() => setDirectory([])); }, []);
 
   async function saveInfo(e) {
     e.preventDefault();
@@ -184,6 +187,7 @@ export default function JobDetail() {
       site_prep_days: Number(schedule.site_prep_days) || 0,
       installation_days: Number(schedule.installation_days) || 0,
       final_walkthrough_days: Number(schedule.final_walkthrough_days) || 0,
+      owner_user_id: schedule.owner_user_id ? Number(schedule.owner_user_id) : null,
     });
     load();
   }
@@ -419,6 +423,17 @@ export default function JobDetail() {
               <div className="field">
                 <label>Projected end date</label>
                 <input type="text" value={projectedEnd ? projectedEnd.toLocaleDateString() : '— set a start date —'} disabled />
+              </div>
+              <div className="field">
+                <label>Assigned to <span className="muted" style={{ fontWeight: 400 }}>— emails a schedule invite</span></label>
+                <select
+                  value={schedule.owner_user_id || ''}
+                  onChange={(e) => setSchedule({ ...schedule, owner_user_id: e.target.value })}
+                  disabled={!canEditSchedule}
+                >
+                  <option value="">— unassigned —</option>
+                  {directory.map((u) => <option key={u.id} value={u.id}>{u.username}</option>)}
+                </select>
               </div>
               {STAGES.map((s) => (
                 <div className="field" key={s.field}>

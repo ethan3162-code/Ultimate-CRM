@@ -26,8 +26,10 @@ function getTransporter() {
   return transporter;
 }
 
-/** Send a plain-text email. Resolves to { sent: true } or { sent: false, reason }. Never throws. */
-async function sendEmail({ to, subject, text }) {
+/** Send a plain-text email, optionally with attachments (nodemailer's `attachments` array —
+    e.g. [{ filename, content, contentType }]). Resolves to { sent: true } or { sent: false,
+    reason }. Never throws. */
+async function sendEmail({ to, subject, text, attachments }) {
   if (!to) return { sent: false, reason: 'no email address on file for this contact' };
   const t = getTransporter();
   if (!t) return { sent: false, reason: 'not configured' };
@@ -37,6 +39,7 @@ async function sendEmail({ to, subject, text }) {
       to,
       subject: subject || '(no subject)',
       text: text || '',
+      ...(attachments && attachments.length ? { attachments } : {}),
     });
     return { sent: true };
   } catch (err) {
@@ -44,4 +47,20 @@ async function sendEmail({ to, subject, text }) {
   }
 }
 
-module.exports = { isConfigured, sendEmail };
+/** Convenience wrapper for sendEmail that attaches a calendar invite (an .ics string built by
+    ics.js) with the content-type calendar apps look for so they offer to add it, not just open
+    it as a generic file. */
+async function sendCalendarInvite({ to, subject, text, ics, icsFilename }) {
+  return sendEmail({
+    to,
+    subject,
+    text,
+    attachments: [{
+      filename: icsFilename || 'invite.ics',
+      content: ics,
+      contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+    }],
+  });
+}
+
+module.exports = { isConfigured, sendEmail, sendCalendarInvite };

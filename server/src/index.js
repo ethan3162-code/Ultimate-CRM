@@ -51,6 +51,9 @@ app.use('/api/integrations', requireAuth, requirePage('integrations'), require('
 // Lightweight tasks attach to any record type; not worth gating per related record, so just
 // requires being signed in.
 app.use('/api/tasks', requireAuth, require('./routes/tasks'));
+// Internal team chat (Sept 2026) — every active login can use it regardless of their individual
+// page permissions, same reasoning as tasks/directory above.
+app.use('/api/chat', requireAuth, require('./routes/chat'));
 // Customer-facing signed-estimate flow — no login, a customer reaches this from an emailed link.
 app.use('/api/public', require('./routes/public'));
 

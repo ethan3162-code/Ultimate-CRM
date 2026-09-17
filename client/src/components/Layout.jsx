@@ -3,7 +3,16 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth';
 
 const NAV = [
-  { group: 'Overview', items: [{ to: '/', label: 'Home', end: true, page: 'home' }, { to: '/dashboard', label: 'Dashboard', page: 'dashboard' }] },
+  {
+    group: 'Overview',
+    items: [
+      { to: '/', label: 'Home', end: true, page: 'home' },
+      { to: '/dashboard', label: 'Dashboard', page: 'dashboard' },
+      // Internal team chat (Sept 2026) — a utility every active login can use, not one of the
+      // individually-configurable business pages, so it's always shown regardless of `perms`.
+      { to: '/messages', label: 'Messages', always: true },
+    ],
+  },
   {
     group: 'Sales',
     items: [
@@ -58,7 +67,7 @@ export default function Layout() {
   // is hidden (e.g. all of "System" for a non-admin) disappears entirely rather than showing an
   // empty header.
   const visibleNav = NAV
-    .map((group) => ({ ...group, items: group.items.filter((item) => (perms[item.page] || 'none') !== 'none') }))
+    .map((group) => ({ ...group, items: group.items.filter((item) => item.always || (perms[item.page] || 'none') !== 'none') }))
     .filter((group) => group.items.length > 0);
 
   return (

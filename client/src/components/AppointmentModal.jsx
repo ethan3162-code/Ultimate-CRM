@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { api } from '../api';
 
 function toLocalInput(iso) {
   if (!iso) return '';
@@ -16,7 +17,11 @@ export default function AppointmentModal({ appointment, defaultDate, onClose, on
   const [start, setStart] = useState(toLocalInput(appointment?.start_time) || (defaultDate ? `${defaultDate}T09:00` : ''));
   const [end, setEnd] = useState(toLocalInput(appointment?.end_time) || (defaultDate ? `${defaultDate}T10:00` : ''));
   const [status, setStatus] = useState(appointment?.status || 'scheduled');
+  const [assignedTo, setAssignedTo] = useState(appointment?.assigned_user_id || '');
+  const [directory, setDirectory] = useState([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => { api.usersDirectory().then(setDirectory).catch(() => setDirectory([])); }, []);
 
   async function submit(e) {
     e.preventDefault();
@@ -29,6 +34,7 @@ export default function AppointmentModal({ appointment, defaultDate, onClose, on
       start_time: new Date(start).toISOString(),
       end_time: new Date(end).toISOString(),
       status,
+      assigned_user_id: assignedTo ? Number(assignedTo) : null,
     });
     setSaving(false);
   }
@@ -74,6 +80,13 @@ export default function AppointmentModal({ appointment, defaultDate, onClose, on
             <div className="field">
               <label>Notes</label>
               <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+            </div>
+            <div className="field">
+              <label>Assign to <span className="muted" style={{ fontWeight: 400 }}>— emails them a calendar invite</span></label>
+              <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>
+                <option value="">— unassigned —</option>
+                {directory.map((u) => <option key={u.id} value={u.id}>{u.username}</option>)}
+              </select>
             </div>
             {isEdit && (
               <div className="field">

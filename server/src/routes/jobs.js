@@ -3,12 +3,13 @@ const express = require('express');
 const db = require('../db');
 const {
   getJobFull, getEstimateFull, getInvoiceFull, logActivity,
-  STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, computeProgress, computeEndDate,
+  STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, computeProgress, computeEndDate, getJobMilestones,
   redactJobMoney, redactEstimateMoney, redactInvoiceMoney,
 } = require('../helpers');
 const { fireTrigger } = require('../automationEngine');
 const { canSeePrices, checkSectionEdit, getPermissions, canApproveEstimates } = require('../auth');
 const mailer = require('../mailer');
+const notify = require('../notify');
 
 function sendJob(req, res, job, status) {
   res.status(status || 200).json(canSeePrices(req.user) ? job : redactJobMoney(job));
@@ -66,7 +67,7 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { contact_id, company_id, deal_id, title, status, address, scheduled_date, start_date, stage } = req.body;
+  const { contact_id, company_id, deal_id, title, status, address, scheduled_date, start_date, stage, owner_user_id } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
   const days = readStageDays(req.body, null);
   const progress_percent = computeProgress(days, stage);
@@ -84,17 +85,20 @@ router.post('/', (req, res) => {
       contact_id, company_id, deal_id, title, status, address, scheduled_date, start_date, end_date,
       progress_percent, stage, demo_days, site_prep_days, installation_days, final_walkthrough_days,
       labor_crew, desired_start_date, unqualified_reason, job_notes, insurance_requests, request_review,
-      contract_amount, change_order_amount, sales_tax_amount, capital_improvement, labor_paid
+      contract_amount, change_order_amount, sales_tax_amount, capital_improvement, labor_paid, owner_user_id
     )
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
     contact_id || null, company_id || null, deal_id || null, title, status || 'accepted', address || null,
     scheduled_date || null, start_date || null, end_date, progress_percent, stage || null,
     days.demo_days, days.site_prep_days, days.installation_days, days.final_walkthrough_days,
     detail.labor_crew, detail.desired_start_date, detail.unqualified_reason, detail.job_notes, detail.insurance_requests, detail.request_review,
-    detail.contract_amount, detail.change_order_amount, detail.sales_tax_amount, detail.capital_improvement, detail.labor_paid
+    detail.contract_amount, detail.change_order_amount, detail.sales_tax_amount, detail.capital_improvement, detail.labor_paid,
+    owner_user_id || null
   );
   logActivity('job', result.lastInsertRowid, 'note', `Job "${title}" created.`);
+  const fresh = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(result.lastInsertRowid);
+  notify.notifyJobMilestones(fresh, getJobMilestones(fresh)).catch(() => {});
   sendJob(req, res, getJobFull(result.lastInsertRowid), 201);
 });
 
@@ -124,22 +128,31 @@ router.patch('/:id', (req, res) => {
   updates.desired_start_date = req.body.desired_start_date !== undefined ? (req.body.desired_start_date || null) : existing.desired_start_date;
   updates.contract_amount = req.body.contract_amount !== undefined ? (Number(req.body.contract_amount) || 0) : existing.contract_amount;
   updates.capital_improvement = req.body.capital_improvement !== undefined ? (req.body.capital_improvement ? 1 : 0) : existing.capital_improvement;
+  updates.owner_user_id = req.body.owner_user_id !== undefined ? (req.body.owner_user_id || null) : existing.owner_user_id;
 
   db.prepare(`
     UPDATE jobs SET
       title=?, status=?, address=?, scheduled_date=?, start_date=?, end_date=?, progress_percent=?, stage=?,
       demo_days=?, site_prep_days=?, installation_days=?, final_walkthrough_days=?,
       labor_crew=?, desired_start_date=?, unqualified_reason=?, job_notes=?, insurance_requests=?, request_review=?,
-      contract_amount=?, change_order_amount=?, sales_tax_amount=?, capital_improvement=?, labor_paid=?,
+      contract_amount=?, change_order_amount=?, sales_tax_amount=?, capital_improvement=?, labor_paid=?, owner_user_id=?,
       updated_at=datetime('now')
     WHERE id=?
   `).run(
     updates.title, updates.status, updates.address, updates.scheduled_date, updates.start_date, updates.end_date,
     updates.progress_percent, updates.stage, days.demo_days, days.site_prep_days, days.installation_days, days.final_walkthrough_days,
     updates.labor_crew, updates.desired_start_date, updates.unqualified_reason, updates.job_notes, updates.insurance_requests, updates.request_review,
-    updates.contract_amount, updates.change_order_amount, updates.sales_tax_amount, updates.capital_improvement, updates.labor_paid,
+    updates.contract_amount, updates.change_order_amount, updates.sales_tax_amount, updates.capital_improvement, updates.labor_paid, updates.owner_user_id,
     req.params.id
   );
+  // Re-notify the project's owner if the schedule itself (or who owns it) changed — a billing
+  // or notes-only edit doesn't warrant a fresh invite email.
+  const scheduleWorthNotifying = ['start_date', 'demo_days', 'site_prep_days', 'installation_days', 'final_walkthrough_days', 'owner_user_id']
+    .some((k) => String(existing[k] ?? '') !== String(updates[k] ?? ''));
+  if (scheduleWorthNotifying) {
+    const freshJob = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(req.params.id);
+    notify.notifyJobMilestones(freshJob, getJobMilestones(freshJob)).catch(() => {});
+  }
   if (req.body.stage !== undefined && req.body.stage !== existing.stage) {
     const label = req.body.stage ? (STAGE_LABEL[req.body.stage] || req.body.stage) : 'Not started';
     logActivity('job', existing.id, 'note', `Job stage set to "${label}".`);
