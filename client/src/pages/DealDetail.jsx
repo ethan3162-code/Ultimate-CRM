@@ -4,7 +4,7 @@ import { api } from '../api';
 import { money, shortDate, timeAgo, mapLinks } from '../utils';
 import {
   WORK_TYPES, CUSTOMER_TYPES, LEAD_STATUSES, LEAD_TYPES, JOB_TIMEFRAMES,
-  METHOD_OF_ENTRY, HA_MATCH_TYPES,
+  METHOD_OF_ENTRY, HA_MATCH_TYPES, LEAD_SOURCES,
 } from '../constants';
 import AiDraftModal from '../components/AiDraftModal';
 import TaskList from '../components/TaskList';
@@ -28,6 +28,12 @@ export default function DealDetail() {
   const [savingNotes, setSavingNotes] = useState(false);
   const [directory, setDirectory] = useState([]);
   const [savingOwner, setSavingOwner] = useState(false);
+  const [editingAbout, setEditingAbout] = useState(false);
+  const [about, setAbout] = useState(blankAbout());
+  const [savingAbout, setSavingAbout] = useState(false);
+  const [editingContact, setEditingContact] = useState(false);
+  const [contactInfo, setContactInfo] = useState({ phone: '', address: '' });
+  const [savingContact, setSavingContact] = useState(false);
 
   function blankDetails(d) {
     return {
@@ -37,6 +43,14 @@ export default function DealDetail() {
       work_type: d?.work_type || '', sub_service_type: d?.sub_service_type || '', customer_type: d?.customer_type || 'Residential',
       phone_estimate: !!d?.phone_estimate, repeat_referral: !!d?.repeat_referral,
       ha_lead_fee: d?.ha_lead_fee ?? '', ha_match_type: d?.ha_match_type || '',
+      preferred_callback_time: d?.preferred_callback_time || '', preferred_consult_time: d?.preferred_consult_time || '',
+    };
+  }
+
+  function blankAbout(d) {
+    return {
+      title: d?.title || '', value: d?.value ?? '', probability: d?.probability ?? 20,
+      expected_close: d?.expected_close || '', source: d?.source || '',
     };
   }
 
@@ -44,6 +58,8 @@ export default function DealDetail() {
     api.deal(id).then((d) => {
       setDeal(d);
       setDetails(blankDetails(d));
+      setAbout(blankAbout(d));
+      setContactInfo({ phone: d.contact_phone || '', address: d.contact_address || '' });
       setNotes({ project_description: d.project_description || '', inquiry_notes: d.inquiry_notes || '', lead_notes: d.lead_notes || '' });
     });
   }
@@ -55,6 +71,26 @@ export default function DealDetail() {
     setSavingOwner(true);
     await api.updateDeal(id, { owner_user_id }).catch((err) => window.alert(err.message));
     setSavingOwner(false);
+    load();
+  }
+
+  async function saveAbout(e) {
+    e.preventDefault();
+    setSavingAbout(true);
+    await api.updateDeal(id, {
+      ...about, value: about.value === '' ? 0 : Number(about.value), probability: about.probability === '' ? 0 : Number(about.probability),
+    }).catch((err) => window.alert(err.message));
+    setSavingAbout(false);
+    setEditingAbout(false);
+    load();
+  }
+
+  async function saveContactInfo(e) {
+    e.preventDefault();
+    setSavingContact(true);
+    await api.updateContact(deal.contact_id, contactInfo).catch((err) => window.alert(err.message));
+    setSavingContact(false);
+    setEditingContact(false);
     load();
   }
 
@@ -141,76 +177,86 @@ export default function DealDetail() {
       </div>
 
       <div className="grid-2">
-        <div className="card">
-          <h2>Activity</h2>
-          {canEdit && (
-          <form onSubmit={addNote} className="row" style={{ marginBottom: 14, gap: 8 }}>
-            <input style={{ flex: 1, border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', background: 'var(--paper)' }} placeholder="Log a note or call…" value={note} onChange={(e) => setNote(e.target.value)} />
-            <button className="btn" type="submit">Add</button>
-          </form>
-          )}
-          {deal.activities.length === 0 ? <div className="empty">No activity yet.</div> : (
-            <div className="timeline">
-              {deal.activities.map((a) => (
-                <div className="timeline-item" key={a.id}>
-                  <div className="when">{timeAgo(a.created_at)}</div>
-                  <div className="body"><span className="type-tag">{a.type.replace('_', ' ')}</span>{a.note}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
         <div className="stack">
-          {(deal.customer_phone || deal.customer_address) && (
+          {(deal.contact_id || deal.customer_phone || deal.customer_address) && (
             <div className="card section-card accent-blue">
-              <h2 className="section-label">Get in touch</h2>
-              <div className="stack" style={{ gap: 6, marginBottom: links ? 12 : 0 }}>
-                {deal.customer_phone && (
-                  <div className="row between"><span className="muted">Phone</span><a href={`tel:${deal.customer_phone}`}>{deal.customer_phone}</a></div>
-                )}
-                {deal.customer_address && (
-                  <div className="row between" style={{ alignItems: 'flex-start' }}>
-                    <span className="muted">Address</span>
-                    <span style={{ textAlign: 'right' }}>{deal.customer_address}</span>
-                  </div>
-                )}
+              <div className="row between" style={{ marginBottom: editingContact ? 10 : 6 }}>
+                <h2 className="section-label" style={{ margin: 0 }}>Get in touch</h2>
+                {!editingContact && canEdit && deal.contact_id && <button className="btn sm subtle" onClick={() => setEditingContact(true)}>Edit</button>}
               </div>
-              {links && (
-                <a href={links.view} target="_blank" rel="noreferrer" className="btn sm primary map-cta">
-                  🛰️ View satellite location →
-                </a>
+              {editingContact ? (
+                <form onSubmit={saveContactInfo} className="stack" style={{ gap: 10 }}>
+                  <div className="field"><label>Phone</label><input value={contactInfo.phone} onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })} /></div>
+                  <div className="field"><label>Address</label><input value={contactInfo.address} onChange={(e) => setContactInfo({ ...contactInfo, address: e.target.value })} placeholder="Street, city, state" /></div>
+                  <div className="row" style={{ gap: 8 }}>
+                    <button className="btn primary sm" type="submit" disabled={savingContact}>{savingContact ? 'Saving…' : 'Save'}</button>
+                    <button className="btn sm subtle" type="button" onClick={() => { setEditingContact(false); setContactInfo({ phone: deal.contact_phone || '', address: deal.contact_address || '' }); }}>Cancel</button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <div className="stack" style={{ gap: 6, marginBottom: links ? 12 : 0 }}>
+                    <div className="row between"><span className="muted">Phone</span>{deal.customer_phone ? <a href={`tel:${deal.customer_phone}`}>{deal.customer_phone}</a> : <span className="muted">—</span>}</div>
+                    <div className="row between" style={{ alignItems: 'flex-start' }}>
+                      <span className="muted">Address</span>
+                      <span style={{ textAlign: 'right' }}>{deal.customer_address || '—'}</span>
+                    </div>
+                    {!deal.contact_id && deal.company_id && (
+                      <p className="sub" style={{ margin: 0 }}>Pulled from <Link to={`/companies/${deal.company_id}`}>{deal.company_name}</Link> — edit it there, or link a contact to this opportunity to edit it here.</p>
+                    )}
+                  </div>
+                  {links && (
+                    <a href={links.view} target="_blank" rel="noreferrer" className="btn sm primary map-cta">
+                      🛰️ View satellite location →
+                    </a>
+                  )}
+                </>
               )}
             </div>
           )}
           <div className="card section-card accent-purple">
-            <h2 className="section-label">About</h2>
-            <div className="stack" style={{ gap: 6 }}>
-              <div className="row between" style={{ alignItems: 'center' }}>
-                <span className="muted">Owner</span>
-                {canEdit ? (
-                  <select value={deal.owner_user_id || ''} onChange={saveOwner} disabled={savingOwner} style={{ maxWidth: 180 }}>
-                    <option value="">— unassigned —</option>
-                    {directory.map((u) => <option key={u.id} value={u.id}>{u.username}</option>)}
-                  </select>
-                ) : (
-                  <span>{deal.owner_username ? <span className="owner-chip"><span className="avatar">{deal.owner_username.slice(0, 2).toUpperCase()}</span>{deal.owner_username}</span> : '—'}</span>
-                )}
-              </div>
+            <div className="row between" style={{ marginBottom: editingAbout ? 10 : 6 }}>
+              <h2 className="section-label" style={{ margin: 0 }}>About</h2>
+              {!editingAbout && canEdit && <button className="btn sm subtle" onClick={() => setEditingAbout(true)}>Edit</button>}
             </div>
-          </div>
-
-          <div className="card section-card" style={{ borderLeftColor: 'var(--line)' }}>
-            <h2 className="section-label" style={{ color: 'var(--muted)' }}>History</h2>
-            <div className="stack" style={{ gap: 6 }}>
-              <div className="row between">
-                <span className="muted">Created by</span>
-                <span>{deal.created_by_username || 'system'} · {shortDate(deal.created_at)}</span>
+            {editingAbout ? (
+              <form onSubmit={saveAbout} className="stack" style={{ gap: 10 }}>
+                <div className="field"><label>Title</label><input value={about.title} onChange={(e) => setAbout({ ...about, title: e.target.value })} required /></div>
+                <div className="field"><label>Value ($)</label><input type="number" min="0" step="0.01" value={about.value} onChange={(e) => setAbout({ ...about, value: e.target.value })} /></div>
+                <div className="field"><label>Probability (%)</label><input type="number" min="0" max="100" value={about.probability} onChange={(e) => setAbout({ ...about, probability: e.target.value })} /></div>
+                <div className="field"><label>Expected close</label><input type="date" value={about.expected_close || ''} onChange={(e) => setAbout({ ...about, expected_close: e.target.value })} /></div>
+                <div className="field">
+                  <label>Lead source</label>
+                  <select value={about.source} onChange={(e) => setAbout({ ...about, source: e.target.value })}>
+                    <option value="">— none —</option>
+                    {LEAD_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {about.source && !LEAD_SOURCES.includes(about.source) && <option value={about.source}>{about.source}</option>}
+                  </select>
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  <button className="btn primary sm" type="submit" disabled={savingAbout}>{savingAbout ? 'Saving…' : 'Save'}</button>
+                  <button className="btn sm subtle" type="button" onClick={() => { setEditingAbout(false); setAbout(blankAbout(deal)); }}>Cancel</button>
+                </div>
+              </form>
+            ) : (
+              <div className="stack" style={{ gap: 6 }}>
+                <div className="row between"><span className="muted">Title</span><span>{deal.title}</span></div>
+                <div className="row between"><span className="muted">Value</span><span>{money(deal.value)}</span></div>
+                <div className="row between"><span className="muted">Probability</span><span>{deal.probability}%</span></div>
+                <div className="row between"><span className="muted">Expected close</span><span>{deal.expected_close ? shortDate(deal.expected_close) : '—'}</span></div>
+                <div className="row between"><span className="muted">Lead source</span><span>{deal.source || '—'}</span></div>
               </div>
-              <div className="row between">
-                <span className="muted">Last modified</span>
-                <span>{deal.updated_by_username || deal.created_by_username || 'system'} · {timeAgo(deal.updated_at || deal.created_at)}</span>
-              </div>
+            )}
+            <div className="row between" style={{ alignItems: 'center', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--line-soft)' }}>
+              <span className="muted">Owner</span>
+              {canEdit ? (
+                <select value={deal.owner_user_id || ''} onChange={saveOwner} disabled={savingOwner} style={{ maxWidth: 180 }}>
+                  <option value="">— unassigned —</option>
+                  {directory.map((u) => <option key={u.id} value={u.id}>{u.username}</option>)}
+                </select>
+              ) : (
+                <span>{deal.owner_username ? <span className="owner-chip"><span className="avatar">{deal.owner_username.slice(0, 2).toUpperCase()}</span>{deal.owner_username}</span> : '—'}</span>
+              )}
             </div>
           </div>
 
@@ -296,6 +342,14 @@ export default function DealDetail() {
                     {HA_MATCH_TYPES.map((m) => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </div>
+                <div className="field">
+                  <label>Preferred callback time</label>
+                  <input value={details.preferred_callback_time} onChange={(e) => setDetails({ ...details, preferred_callback_time: e.target.value })} placeholder="e.g. Weekday mornings" />
+                </div>
+                <div className="field">
+                  <label>Preferred consult time</label>
+                  <input value={details.preferred_consult_time} onChange={(e) => setDetails({ ...details, preferred_consult_time: e.target.value })} placeholder="e.g. Saturday afternoon" />
+                </div>
                 <div className="row" style={{ gap: 8 }}>
                   <button className="btn primary sm" type="submit" disabled={savingDetails}>{savingDetails ? 'Saving…' : 'Save'}</button>
                   <button className="btn sm subtle" type="button" onClick={() => { setEditingDetails(false); setDetails(blankDetails(deal)); }}>Cancel</button>
@@ -317,6 +371,8 @@ export default function DealDetail() {
                 <div className="row between"><span className="muted">Repeat / referral</span><span>{deal.repeat_referral ? 'Yes' : 'No'}</span></div>
                 <div className="row between"><span className="muted">Lead fee</span><span>{deal.ha_lead_fee ? money(deal.ha_lead_fee) : '—'}</span></div>
                 <div className="row between"><span className="muted">Lead match type</span><span>{deal.ha_match_type || '—'}</span></div>
+                <div className="row between"><span className="muted">Preferred callback time</span><span>{deal.preferred_callback_time || '—'}</span></div>
+                <div className="row between"><span className="muted">Preferred consult time</span><span>{deal.preferred_consult_time || '—'}</span></div>
               </div>
             )}
           </div>
@@ -397,9 +453,46 @@ export default function DealDetail() {
               <div className="empty">Projects start once this opportunity is won.</div>
             )}
           </div>
+        </div>
+
+        <div className="stack">
+          <div className="card section-card" style={{ borderLeftColor: 'var(--line)' }}>
+            <h2 className="section-label" style={{ color: 'var(--muted)' }}>History</h2>
+            <div className="stack" style={{ gap: 6 }}>
+              <div className="row between">
+                <span className="muted">Created by</span>
+                <span>{deal.created_by_username || 'system'} · {shortDate(deal.created_at)}</span>
+              </div>
+              <div className="row between">
+                <span className="muted">Last modified</span>
+                <span>{deal.updated_by_username || deal.created_by_username || 'system'} · {timeAgo(deal.updated_at || deal.created_at)}</span>
+              </div>
+            </div>
+          </div>
+
           <div className="card">
             <h2>Next steps</h2>
             <TaskList relatedType="deal" relatedId={deal.id} />
+          </div>
+
+          <div className="card">
+            <h2>Activity</h2>
+            {canEdit && (
+            <form onSubmit={addNote} className="row" style={{ marginBottom: 14, gap: 8 }}>
+              <input style={{ flex: 1, border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', background: 'var(--paper)' }} placeholder="Log a note or call…" value={note} onChange={(e) => setNote(e.target.value)} />
+              <button className="btn" type="submit">Add</button>
+            </form>
+            )}
+            {deal.activities.length === 0 ? <div className="empty">No activity yet.</div> : (
+              <div className="timeline">
+                {deal.activities.map((a) => (
+                  <div className="timeline-item" key={a.id}>
+                    <div className="when">{timeAgo(a.created_at)}</div>
+                    <div className="body"><span className="type-tag">{a.type.replace('_', ' ')}</span>{a.note}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
