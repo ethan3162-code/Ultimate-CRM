@@ -3,10 +3,21 @@ const BASE = '/api';
 async function request(path, options = {}) {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
     ...options,
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
+    // A session that's expired or been logged out elsewhere — tell the app to show the login
+    // screen again, rather than leaving every call on the page silently failing.
+    if (res.status === 401 && path !== '/session/login' && path !== '/session/me') {
+      window.dispatchEvent(new CustomEvent('auth:expired'));
+    }
+    // A permission the signed-in role just doesn't have — not every caller has its own error
+    // handling, so surface it here as a safety net rather than an action silently doing nothing.
+    if (res.status === 403) {
+      window.alert(body.error || "Your role doesn't have permission to do that.");
+    }
     throw new Error(body.error || `Request failed: ${res.status}`);
   }
   if (res.status === 204) return null;
@@ -14,6 +25,16 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  login: (username, password) => request('/session/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  logout: () => request('/session/logout', { method: 'POST' }),
+  me: () => request('/session/me'),
+
+  users: () => request('/users'),
+  createUser: (data) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateUser: (id, data) => request(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteUser: (id) => request(`/users/${id}`, { method: 'DELETE' }),
+  updateUserPermissions: (id, permissions) => request(`/users/${id}/permissions`, { method: 'PATCH', body: JSON.stringify({ permissions }) }),
+
   dashboard: () => request('/dashboard'),
 
   companies: () => request('/companies'),

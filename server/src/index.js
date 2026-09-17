@@ -1,31 +1,51 @@
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 
 const db = require('./db'); // ensures schema is created
 const { getInvoiceFull } = require('./helpers');
 const { fireTrigger } = require('./automationEngine');
+const { readSession, requireAuth, requirePage, requireAnyPage, requireAdmin } = require('./auth');
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
+app.use(readSession); // populates req.user from the session cookie when present; never blocks
 
-app.use('/api/companies', require('./routes/companies'));
-app.use('/api/contacts', require('./routes/contacts'));
-app.use('/api/deals', require('./routes/deals'));
-app.use('/api/jobs', require('./routes/jobs'));
-app.use('/api/dashboard', require('./routes/dashboard'));
-app.use('/api/automations', require('./routes/automations'));
-app.use('/api/tickets', require('./routes/tickets'));
-app.use('/api/insights', require('./routes/insights'));
-app.use('/api/ai', require('./routes/ai'));
-app.use('/api/appointments', require('./routes/appointments'));
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/catalog-items', require('./routes/catalogItems'));
-app.use('/api/reports', require('./routes/reports'));
+// Logins — /api/session (login/logout/me) is intentionally public; login is how you get a
+// session in the first place, and logout/me each check req.user internally.
+app.use('/api/session', require('./routes/session'));
+// User accounts & role permission modes — admin only.
+app.use('/api/users', requireAuth, requireAdmin, require('./routes/users'));
+
+app.use('/api/companies', requireAuth, requirePage('companies'), require('./routes/companies'));
+app.use('/api/contacts', requireAuth, requirePage('contacts'), require('./routes/contacts'));
+// Deals covers both the Leads and Opportunities pages (one table, no separate Lead object —
+// see the Leads/Opportunities/Projects design note), so access follows whichever of the two a
+// role can reach.
+app.use('/api/deals', requireAuth, requireAnyPage(['leads', 'pipeline']), require('./routes/deals'));
+app.use('/api/jobs', requireAuth, requirePage('jobs'), require('./routes/jobs'));
+app.use('/api/dashboard', requireAuth, requirePage('dashboard'), require('./routes/dashboard'));
+app.use('/api/automations', requireAuth, requirePage('automations'), require('./routes/automations'));
+app.use('/api/tickets', requireAuth, requirePage('tickets'), require('./routes/tickets'));
+app.use('/api/insights', requireAuth, requirePage('dashboard'), require('./routes/insights'));
+// AI draft assistant — used from both Tickets and Deals; it only generates text, so any signed-in
+// user can use it rather than tying it to one page's permission level.
+app.use('/api/ai', requireAuth, require('./routes/ai'));
+app.use('/api/appointments', requireAuth, requirePage('calendar'), require('./routes/appointments'));
+// Google Calendar OAuth connect/disconnect lives on the admin-only Integrations page.
+app.use('/api/auth', requireAuth, requirePage('integrations'), require('./routes/auth'));
+app.use('/api/catalog-items', requireAuth, requirePage('items'), require('./routes/catalogItems'));
+app.use('/api/reports', requireAuth, requirePage('dashboard'), require('./routes/reports'));
+// External lead-capture webhook — no session, it authenticates with its own `key` secret.
 app.use('/api/leads', require('./routes/leadIntake'));
-app.use('/api/integrations', require('./routes/integrations'));
-app.use('/api/tasks', require('./routes/tasks'));
+app.use('/api/integrations', requireAuth, requirePage('integrations'), require('./routes/integrations'));
+// Lightweight tasks attach to any record type; not worth gating per related record, so just
+// requires being signed in.
+app.use('/api/tasks', requireAuth, require('./routes/tasks'));
+// Customer-facing signed-estimate flow — no login, a customer reaches this from an emailed link.
 app.use('/api/public', require('./routes/public'));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));

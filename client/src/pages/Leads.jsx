@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { money, timeAgo, mapLinks } from '../utils';
+import { usePermission } from '../auth';
 import {
   LEAD_SOURCES, LEAD_STATUSES, LEAD_TYPES, JOB_TIMEFRAMES, METHOD_OF_ENTRY,
   HA_MATCH_TYPES, WORK_TYPES, CUSTOMER_TYPES,
@@ -19,6 +20,7 @@ const BLANK_FORM = {
 const LEAD_STATUS_PILL = { New: '', 'Follow Up': 'amber', Unresponsive: 'red', Restart: 'amber', Lost: 'red', Converted: 'green' };
 
 export default function Leads() {
+  const { canEdit } = usePermission('leads');
   const [deals, setDeals] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -85,10 +87,10 @@ export default function Leads() {
           <h1>Leads</h1>
           <p className="sub">Fresh, unqualified interest — walk-ins, webhook signups, referrals. Qualify a lead to move it into Opportunities, or disqualify it if it's not a fit.</p>
         </div>
-        <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New lead</button>
+        {canEdit && <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New lead</button>}
       </div>
 
-      {showForm && (
+      {showForm && canEdit && (
         <div className="card" style={{ marginBottom: 18 }}>
           <form onSubmit={submit} className="form-grid">
             <div className="field"><label>First name</label><input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required /></div>
@@ -206,7 +208,7 @@ export default function Leads() {
                     <td>
                       <select
                         value={deal.lead_status || 'New'}
-                        disabled={busyId === deal.id}
+                        disabled={busyId === deal.id || !canEdit}
                         onChange={(e) => setLeadStatus(deal, e.target.value)}
                         className={'pill-select ' + (LEAD_STATUS_PILL[deal.lead_status] || '')}
                       >
@@ -217,10 +219,12 @@ export default function Leads() {
                     <td className="mono">{money(deal.value)}</td>
                     <td className="muted">{timeAgo(deal.created_at)}</td>
                     <td>
-                      <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
-                        <button className="btn sm primary" disabled={busyId === deal.id} onClick={() => qualify(deal)}>Qualify →</button>
-                        <button className="btn sm subtle" disabled={busyId === deal.id} onClick={() => disqualify(deal)}>Disqualify</button>
-                      </div>
+                      {canEdit && (
+                        <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
+                          <button className="btn sm primary" disabled={busyId === deal.id} onClick={() => qualify(deal)}>Qualify →</button>
+                          <button className="btn sm subtle" disabled={busyId === deal.id} onClick={() => disqualify(deal)}>Disqualify</button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );

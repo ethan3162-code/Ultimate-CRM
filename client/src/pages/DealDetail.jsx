@@ -8,12 +8,14 @@ import {
 } from '../constants';
 import AiDraftModal from '../components/AiDraftModal';
 import TaskList from '../components/TaskList';
+import { usePermission } from '../auth';
 
 const STAGES = ['new', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
 
 export default function DealDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { canEdit } = usePermission('pipeline');
   const [deal, setDeal] = useState(null);
   const [note, setNote] = useState('');
   const [draft, setDraft] = useState(null);
@@ -121,8 +123,8 @@ export default function DealDetail() {
           </p>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          <button className="btn" onClick={() => openDraft('deal_follow_up', 'Draft follow-up')}>Draft follow-up</button>
-          <button className="btn" onClick={() => openDraft('deal_recap', 'Draft recap')}>Draft recap</button>
+          {canEdit && <button className="btn" onClick={() => openDraft('deal_follow_up', 'Draft follow-up')}>Draft follow-up</button>}
+          {canEdit && <button className="btn" onClick={() => openDraft('deal_recap', 'Draft recap')}>Draft recap</button>}
           <button className="btn subtle" onClick={() => navigate(-1)}>← Back</button>
         </div>
       </div>
@@ -130,10 +132,12 @@ export default function DealDetail() {
       <div className="grid-2">
         <div className="card">
           <h2>Activity</h2>
+          {canEdit && (
           <form onSubmit={addNote} className="row" style={{ marginBottom: 14, gap: 8 }}>
             <input style={{ flex: 1, border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', background: 'var(--paper)' }} placeholder="Log a note or call…" value={note} onChange={(e) => setNote(e.target.value)} />
             <button className="btn" type="submit">Add</button>
           </form>
+          )}
           {deal.activities.length === 0 ? <div className="empty">No activity yet.</div> : (
             <div className="timeline">
               {deal.activities.map((a) => (
@@ -171,7 +175,7 @@ export default function DealDetail() {
           <div className="card">
             <div className="row between" style={{ marginBottom: editingDetails ? 10 : 0 }}>
               <h2 style={{ margin: 0 }}>Lead &amp; opportunity details</h2>
-              {!editingDetails && <button className="btn sm subtle" onClick={() => setEditingDetails(true)}>Edit</button>}
+              {!editingDetails && canEdit && <button className="btn sm subtle" onClick={() => setEditingDetails(true)}>Edit</button>}
             </div>
             {editingDetails ? (
               <form onSubmit={saveDetails} className="stack" style={{ gap: 10 }}>
@@ -277,7 +281,7 @@ export default function DealDetail() {
           <div className="card">
             <div className="row between" style={{ marginBottom: editingNotes ? 10 : 0 }}>
               <h2 style={{ margin: 0 }}>Notes &amp; inquiry</h2>
-              {!editingNotes && <button className="btn sm subtle" onClick={() => setEditingNotes(true)}>Edit</button>}
+              {!editingNotes && canEdit && <button className="btn sm subtle" onClick={() => setEditingNotes(true)}>Edit</button>}
             </div>
             {editingNotes ? (
               <form onSubmit={saveNotes} className="stack" style={{ gap: 10 }}>
@@ -324,6 +328,7 @@ export default function DealDetail() {
                   className={'btn sm' + (deal.stage === s ? ' primary' : '')}
                   style={{ justifyContent: 'flex-start', textTransform: 'capitalize' }}
                   onClick={() => changeStage(s)}
+                  disabled={!canEdit}
                 >
                   {s}
                 </button>
@@ -341,7 +346,7 @@ export default function DealDetail() {
                   </Link>
                 ))}
               </div>
-            ) : deal.stage === 'won' ? (
+            ) : deal.stage === 'won' && canEdit ? (
               <>
                 <p className="sub" style={{ margin: '-4px 0 10px' }}>This opportunity is won — turn it into a project to start scheduling field work, estimates, and billing.</p>
                 <button className="btn primary sm" onClick={createProject}>+ Create project</button>

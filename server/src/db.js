@@ -229,6 +229,30 @@ CREATE TABLE IF NOT EXISTS job_expenses (
   incurred_on TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+-- Logins & permissions (Sept 2026) — one account per person, a role each account is assigned
+-- (mostly a label plus what a new login's permissions default to), and that login's own
+-- page-by-page permission set in user_permissions below (edit/view/none per business page,
+-- individually — see auth.js and permissionsConfig.js).
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Per-user, per-page permission level ('edit' | 'view' | 'none'). Admin logins don't need rows
+-- here — they always have full edit access to everything, computed in auth.js. Replaces an
+-- earlier per-role Standard/Strict mode (role_settings, since dropped) with individual control.
+CREATE TABLE IF NOT EXISTS user_permissions (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  page TEXT NOT NULL,
+  level TEXT NOT NULL DEFAULT 'view',
+  PRIMARY KEY (user_id, page)
+);
 `);
 
 // --- Lightweight migrations ---
@@ -310,5 +334,49 @@ db.prepare(`UPDATE jobs SET stage = 'site_prep' WHERE stage = 'material_order'`)
 // Project status lifecycle expanded to 6 states ('completed' -> 'complete', plus new 'accepted'/'on_hold')
 // to match the user's real project-management tool's Project Status field.
 db.prepare(`UPDATE jobs SET status = 'complete' WHERE status = 'completed'`).run();
+
+// --- Logins & permissions (Sept 2026) ---
+// One starter login per role, so the app is usable the moment it's deployed, plus that login's
+// individual per-page permissions seeded from DEFAULT_PRIMARY_PAGES as a starting point (an
+// admin can then set any page to edit/view/none for that specific person from the Users &
+// permissions page — nothing here is enforced on an ongoing basis). Idempotent — never touched
+// by re-seeding business data, and never overwrites a password or permission an admin has since
+// changed.
+const { PAGES, DEFAULT_PRIMARY_PAGES } = require('./permissionsConfig');
+
+function seedPagePermissions(userId, role) {
+  const primary = new Set(DEFAULT_PRIMARY_PAGES[role] || []);
+  const insertPerm = db.prepare(`INSERT OR IGNORE INTO user_permissions (user_id, page, level) VALUES (?, ?, ?)`);
+  for (const key of Object.keys(PAGES)) {
+    insertPerm.run(userId, key, primary.has(key) ? 'edit' : 'view');
+  }
+}
+
+const userCount = db.prepare(`SELECT COUNT(*) c FROM users`).get().c;
+if (userCount === 0) {
+  const bcrypt = require('bcryptjs');
+  const DEFAULT_ACCOUNTS = [
+    ['admin', 'Admin#2026', 'admin'],
+    ['pm', 'PM#2026', 'pm'],
+    ['salesman', 'Salesman#2026', 'salesman'],
+    ['scheduler', 'Scheduler#2026', 'scheduler'],
+    ['accounting', 'Accounting#2026', 'accounting'],
+  ];
+  const insert = db.prepare(`INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)`);
+  for (const [username, password, role] of DEFAULT_ACCOUNTS) {
+    const result = insert.run(username, bcrypt.hashSync(password, 10), role);
+    if (role !== 'admin') seedPagePermissions(result.lastInsertRowid, role);
+  }
+}
+
+// Migration: any non-admin login that predates the per-user permissions system (e.g. this
+// repo's committed data.sqlite, created before user_permissions existed) has zero rows here —
+// back-fill the same role-based defaults once, so a pre-existing login is never silently
+// locked out of everything instead of just missing the new fine-grained control.
+const usersNeedingDefaults = db.prepare(`
+  SELECT u.id, u.role FROM users u
+  WHERE u.role != 'admin' AND NOT EXISTS (SELECT 1 FROM user_permissions p WHERE p.user_id = u.id)
+`).all();
+for (const { id, role } of usersNeedingDefaults) seedPagePermissions(id, role);
 
 module.exports = db;

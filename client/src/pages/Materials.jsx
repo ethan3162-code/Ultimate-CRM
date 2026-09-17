@@ -7,6 +7,7 @@ import {
   calcConcrete, CONCRETE_DEFAULTS,
   calcPavers, PAVER_DEFAULTS,
 } from '../lib/materialCalc';
+import { usePermission } from '../auth';
 
 const TYPES = [
   { key: 'asphalt', label: 'Asphalt' },
@@ -15,6 +16,7 @@ const TYPES = [
 ];
 
 export default function Materials() {
+  const { canEdit } = usePermission('materials');
   const navigate = useNavigate();
   const [type, setType] = useState('asphalt');
   const [sf, setSf] = useState('');
@@ -246,6 +248,7 @@ export default function Materials() {
             <div className="totals-row"><span className="lbl">Total material cost</span><span className="amt">{money(totalCost)}</span></div>
           </div>
 
+          {canEdit && (
           <div className="card" style={{ marginTop: 18 }}>
             <h2>Send to a job's estimate</h2>
             <p className="sub" style={{ marginBottom: 12 }}>Adds these quantities and prices as line items on the job, ready to review before sending it to the customer.</p>
@@ -267,6 +270,7 @@ export default function Materials() {
             </button>
             {sent && <span className="muted" style={{ marginLeft: 10 }}>Sent — opening job…</span>}
           </div>
+          )}
         </>
       )}
     </>

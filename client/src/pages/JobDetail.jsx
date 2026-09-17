@@ -6,6 +6,7 @@ import { EXPENSE_CATEGORIES, PROJECT_STATUSES, PROJECT_STATUS_LABEL } from '../c
 import LineItemEditor from '../components/LineItemEditor';
 import PaymentModal from '../components/PaymentModal';
 import TaskList from '../components/TaskList';
+import { usePermission } from '../auth';
 
 const REVENUE_BASIS_LABEL = { invoiced: 'Invoiced', estimated: 'Approved estimate (projected — not yet invoiced)', none: 'No invoice or approved estimate yet' };
 const BLANK_EXPENSE = { category: 'Materials', description: '', qty: '1', unit_cost: '', incurred_on: '' };
@@ -65,6 +66,7 @@ function resizeImageFile(file) {
 
 export default function JobDetail() {
   const { id } = useParams();
+  const { canEdit } = usePermission('jobs');
   const [job, setJob] = useState(null);
   const [catalog, setCatalog] = useState(null);
   const [showEstimateForm, setShowEstimateForm] = useState(false);
@@ -276,7 +278,7 @@ export default function JobDetail() {
         </div>
         <div className="row" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {PROJECT_STATUSES.map((s) => (
-            <button key={s} className={'btn sm' + (job.status === s ? ' primary' : '')} onClick={() => changeStatus(s)}>{PROJECT_STATUS_LABEL[s]}</button>
+            <button key={s} className={'btn sm' + (job.status === s ? ' primary' : '')} onClick={() => changeStatus(s)} disabled={!canEdit}>{PROJECT_STATUS_LABEL[s]}</button>
           ))}
         </div>
       </div>
@@ -311,7 +313,7 @@ export default function JobDetail() {
           <div className="card">
             <div className="row between" style={{ marginBottom: editingInfo ? 10 : 0 }}>
               <h2 style={{ margin: 0 }}>Project info</h2>
-              {!editingInfo && <button className="btn sm subtle" onClick={() => setEditingInfo(true)}>Edit</button>}
+              {!editingInfo && canEdit && <button className="btn sm subtle" onClick={() => setEditingInfo(true)}>Edit</button>}
             </div>
             {editingInfo ? (
               <form onSubmit={saveInfo} className="stack" style={{ gap: 10 }}>
@@ -389,7 +391,7 @@ export default function JobDetail() {
                   Total project length: <strong>{totalDays} day{totalDays === 1 ? '' : 's'}</strong>
                   {projectedEnd ? ` — ends ${projectedEnd.toLocaleDateString()}` : ''}
                 </span>
-                <button className="btn primary sm" type="submit">Save schedule</button>
+                {canEdit && <button className="btn primary sm" type="submit">Save schedule</button>}
               </div>
             </form>
 
@@ -401,7 +403,7 @@ export default function JobDetail() {
                     key={s.key}
                     type="button"
                     className={'btn sm' + (job.stage === s.key ? ' primary' : '')}
-                    disabled={savingStage}
+                    disabled={savingStage || !canEdit}
                     onClick={() => setStage(s.key)}
                   >
                     {s.label}
@@ -431,10 +433,10 @@ export default function JobDetail() {
           <div className="card">
             <div className="row between">
               <h2 style={{ marginBottom: 0 }}>Estimates</h2>
-              <button className="btn sm" onClick={() => setShowEstimateForm((v) => !v)}>+ New estimate</button>
+              {canEdit && <button className="btn sm" onClick={() => setShowEstimateForm((v) => !v)}>+ New estimate</button>}
             </div>
 
-            {showEstimateForm && (
+            {showEstimateForm && canEdit && (
               <form onSubmit={submitEstimate} style={{ marginTop: 12, marginBottom: 12, borderTop: '1px solid var(--line-soft)', paddingTop: 12 }}>
                 <LineItemEditor items={items} setItems={setItems} taxRate={taxRate} setTaxRate={setTaxRate} catalog={(catalog || []).filter((c) => !c.material_key)} />
                 <div className="field" style={{ marginTop: 10, maxWidth: 220 }}>
@@ -469,6 +471,7 @@ export default function JobDetail() {
                     ) : (
                       <div className="sub" style={{ margin: '6px 0 0' }}>Not signed by the customer yet.</div>
                     )}
+                    {canEdit && (
                     <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: 'wrap' }}>
                       <button className="btn sm" onClick={() => convert(est.id)}>Convert to invoice →</button>
                       <button className="btn sm" onClick={() => copyApprovalLink(est)}>{copiedLink === est.id ? 'Copied!' : 'Copy approval link'}</button>
@@ -486,6 +489,7 @@ export default function JobDetail() {
                         <button className="btn sm" onClick={() => setRequestingDepositFor(est.id)}>Request deposit…</button>
                       )}
                     </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -497,7 +501,7 @@ export default function JobDetail() {
           <div className="card">
             <div className="row between" style={{ marginBottom: editingBilling ? 10 : 0 }}>
               <h2 style={{ margin: 0 }}>Project billing</h2>
-              {!editingBilling && <button className="btn sm subtle" onClick={() => setEditingBilling(true)}>Edit</button>}
+              {!editingBilling && canEdit && <button className="btn sm subtle" onClick={() => setEditingBilling(true)}>Edit</button>}
             </div>
             {editingBilling ? (
               <form onSubmit={saveBilling} className="stack" style={{ gap: 10 }}>
@@ -562,13 +566,13 @@ export default function JobDetail() {
           <div className="card">
             <div className="row between" style={{ alignItems: 'flex-start' }}>
               <h2 style={{ marginBottom: 0 }}>Job costing</h2>
-              <button className="btn sm" onClick={() => setShowExpenseForm((v) => !v)}>+ Log expense</button>
+              {canEdit && <button className="btn sm" onClick={() => setShowExpenseForm((v) => !v)}>+ Log expense</button>}
             </div>
             <p className="sub" style={{ margin: '4px 0 12px' }}>
               Revenue basis: {REVENUE_BASIS_LABEL[job.costing.revenueBasis]}
             </p>
 
-            {showExpenseForm && (
+            {showExpenseForm && canEdit && (
               <form onSubmit={addExpense} className="form-grid" style={{ marginBottom: 14, borderBottom: '1px solid var(--line-soft)', paddingBottom: 14 }}>
                 <div className="field">
                   <label>Category</label>
@@ -639,7 +643,7 @@ export default function JobDetail() {
                     </span>
                     <span className="row" style={{ gap: 8 }}>
                       <span className="mono">{money(exp.qty * exp.unit_cost)}</span>
-                      <button type="button" className="btn subtle sm" onClick={() => removeExpense(exp.id)}>✕</button>
+                      {canEdit && <button type="button" className="btn subtle sm" onClick={() => removeExpense(exp.id)}>✕</button>}
                     </span>
                   </div>
                 ))}
@@ -681,7 +685,7 @@ export default function JobDetail() {
                       </div>
                     )}
 
-                    {inv.balance > 0 && (
+                    {inv.balance > 0 && canEdit && (
                       <button className="btn primary sm" style={{ marginTop: 8 }} onClick={() => setPayingInvoice(inv)}>Charge / record payment</button>
                     )}
                   </div>
@@ -693,6 +697,7 @@ export default function JobDetail() {
           <div className="card">
             <h2>Photos</h2>
             <p className="sub" style={{ margin: '-4px 0 10px' }}>Before/progress/after shots for this job — kept with the record, not a separate app.</p>
+            {canEdit && (
             <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
               <select value={photoLabel} onChange={(e) => setPhotoLabel(e.target.value)}>
                 {PHOTO_LABELS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
@@ -702,13 +707,14 @@ export default function JobDetail() {
                 <input type="file" accept="image/*" onChange={uploadPhoto} disabled={uploadingPhoto} style={{ display: 'none' }} />
               </label>
             </div>
+            )}
             {job.photos.length === 0 ? <div className="empty" style={{ marginTop: 10 }}>No photos yet.</div> : (
               <div className="photo-grid">
                 {job.photos.map((p) => (
                   <div className="photo-tile" key={p.id}>
                     <a href={p.data_url} target="_blank" rel="noreferrer"><img src={p.data_url} alt={p.label} /></a>
                     <span className="label">{p.label}</span>
-                    <button type="button" className="remove" onClick={() => removePhoto(p.id)}>✕</button>
+                    {canEdit && <button type="button" className="remove" onClick={() => removePhoto(p.id)}>✕</button>}
                   </div>
                 ))}
               </div>

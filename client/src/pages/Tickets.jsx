@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { shortDate } from '../utils';
+import { usePermission } from '../auth';
 
 const PRIORITY_PILL = { low: '', medium: '', high: 'amber', urgent: 'red' };
 const STATUS_PILL = { open: 'amber', pending: '', resolved: 'green', closed: 'green' };
@@ -16,6 +17,7 @@ function slaLabel(ticket) {
 }
 
 export default function Tickets() {
+  const { canEdit } = usePermission('tickets');
   const [tickets, setTickets] = useState(null);
   const [contacts, setContacts] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -43,10 +45,10 @@ export default function Tickets() {
           <h1>Service &amp; tickets</h1>
           <p className="sub">Support issues on the same record as the deal or job that created the customer — with SLA timers by priority.</p>
         </div>
-        <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New ticket</button>
+        {canEdit && <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New ticket</button>}
       </div>
 
-      {showForm && (
+      {showForm && canEdit && (
         <div className="card" style={{ marginBottom: 18 }}>
           <form onSubmit={submit} className="form-grid">
             <div className="field" style={{ gridColumn: '1 / -1' }}><label>Subject</label><input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} required /></div>

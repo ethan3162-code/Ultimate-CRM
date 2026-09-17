@@ -3,10 +3,12 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { initials, mapLinks } from '../utils';
 import { LEAD_SOURCES } from '../constants';
+import { usePermission } from '../auth';
 
 const BLANK_FORM = { first_name: '', last_name: '', email: '', phone: '', title: '', company_id: '', address: '', source: '' };
 
 export default function Contacts() {
+  const { canEdit } = usePermission('contacts');
   const [contacts, setContacts] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -33,10 +35,10 @@ export default function Contacts() {
           <h1>Contacts</h1>
           <p className="sub">Every person, with their deals, jobs, and activity on one timeline.</p>
         </div>
-        <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New contact</button>
+        {canEdit && <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New contact</button>}
       </div>
 
-      {showForm && (
+      {showForm && canEdit && (
         <div className="card" style={{ marginBottom: 18 }}>
           <form onSubmit={submit} className="form-grid">
             <div className="field"><label>First name</label><input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required /></div>

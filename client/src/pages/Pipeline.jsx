@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { money, shortDate, mapLinks } from '../utils';
 import { WORK_TYPES, CUSTOMER_TYPES } from '../constants';
+import { usePermission } from '../auth';
 
 // Fresh, unqualified interest lives on the Leads page now — this board picks
 // up once a lead has been qualified, so 'new' is intentionally left out here.
@@ -19,6 +20,7 @@ function sameDay(a, b) {
 }
 
 export default function Pipeline() {
+  const { canEdit } = usePermission('pipeline');
   const [allDeals, setAllDeals] = useState([]);
   const [dragOverStage, setDragOverStage] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -57,6 +59,7 @@ export default function Pipeline() {
 
   async function handleDrop(stage) {
     setDragOverStage(null);
+    if (!canEdit) return;
     const id = window.__draggedDealId;
     if (!id) return;
     const deal = deals.find((d) => d.id === Number(id));
@@ -92,7 +95,7 @@ export default function Pipeline() {
             {' '}<Link to="/leads">New, unqualified leads live here →</Link>
           </p>
         </div>
-        <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New opportunity</button>
+        {canEdit && <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New opportunity</button>}
       </div>
 
       <div className="tabs" style={{ marginBottom: 16 }}>
@@ -101,7 +104,7 @@ export default function Pipeline() {
         <button type="button" className={'tab' + (view === 'calendar' ? ' active' : '')} onClick={() => setView('calendar')}>Calendar</button>
       </div>
 
-      {showForm && (
+      {showForm && canEdit && (
         <div className="card" style={{ marginBottom: 18 }}>
           <form onSubmit={submitDeal} className="form-grid">
             <div className="field">
@@ -163,7 +166,7 @@ export default function Pipeline() {
                 <div
                   key={deal.id}
                   className="deal-card"
-                  draggable
+                  draggable={canEdit}
                   onDragStart={() => { window.__draggedDealId = deal.id; }}
                 >
                   <div className="row between" style={{ alignItems: 'flex-start' }}>

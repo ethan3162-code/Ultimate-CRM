@@ -5,11 +5,13 @@ import { money, shortDate, timeAgo, initials, mapLinks } from '../utils';
 import { LEAD_SOURCES } from '../constants';
 import TaskList from '../components/TaskList';
 import AppointmentModal from '../components/AppointmentModal';
+import { usePermission } from '../auth';
 
 const STAGE_PILL = { new: '', qualified: '', proposal: 'amber', negotiation: 'amber', won: 'green', lost: 'red' };
 
 export default function ContactDetail() {
   const { id } = useParams();
+  const { canEdit } = usePermission('contacts');
   const [contact, setContact] = useState(null);
   const [editing, setEditing] = useState(false);
   const [info, setInfo] = useState({ phone: '', mobile_phone: '', address: '', source: '' });
@@ -55,7 +57,7 @@ export default function ContactDetail() {
             </div>
           </div>
         </div>
-        <button className="btn primary" onClick={() => setScheduling(true)}>📅 Schedule appointment</button>
+        {canEdit && <button className="btn primary" onClick={() => setScheduling(true)}>📅 Schedule appointment</button>}
       </div>
 
       <div className="grid-2">
@@ -81,7 +83,7 @@ export default function ContactDetail() {
           <div className="card">
             <div className="row between" style={{ marginBottom: editing ? 10 : 0 }}>
               <h2 style={{ margin: 0 }}>Contact info</h2>
-              {!editing && <button className="btn sm subtle" onClick={() => setEditing(true)}>Edit</button>}
+              {!editing && canEdit && <button className="btn sm subtle" onClick={() => setEditing(true)}>Edit</button>}
             </div>
             {editing ? (
               <form onSubmit={saveInfo} className="stack" style={{ gap: 10 }}>

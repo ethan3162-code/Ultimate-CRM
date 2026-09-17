@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { shortDate } from '../utils';
+import { usePermission } from '../auth';
 
 const STATUS_PILL = { accepted: '', scheduled: '', in_progress: 'amber', complete: 'green', on_hold: 'amber', cancelled: 'red' };
 
 export default function Jobs() {
+  const { canEdit } = usePermission('jobs');
   const [jobs, setJobs] = useState(null);
   const [contacts, setContacts] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -39,10 +41,10 @@ export default function Jobs() {
           <h1>Projects &amp; billing</h1>
           <p className="sub">Every won opportunity becomes a project here — field jobs, estimates, invoices, and payments in one module.</p>
         </div>
-        <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New job</button>
+        {canEdit && <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New job</button>}
       </div>
 
-      {showForm && (
+      {showForm && canEdit && (
         <div className="card" style={{ marginBottom: 18 }}>
           <form onSubmit={submit} className="form-grid">
             <div className="field"><label>Job title</label><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></div>

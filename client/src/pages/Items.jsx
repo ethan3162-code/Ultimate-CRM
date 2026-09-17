@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { money } from '../utils';
+import { usePermission } from '../auth';
 
 const CALC_MATERIAL_KEYS = [
   { value: 'asphalt', label: 'Asphalt' },
@@ -22,6 +23,7 @@ const TABS = [
 ];
 
 export default function Items() {
+  const { canEdit } = usePermission('items');
   const [items, setItems] = useState(null);
   const [tab, setTab] = useState('sales');
   const [showForm, setShowForm] = useState(false);
@@ -108,7 +110,7 @@ export default function Items() {
           <h1>Items &amp; price book</h1>
           <p className="sub">Sales items are what you drop into a job estimate. Calculator materials feed the Material Calculator — kept separate so your estimate picker only shows things you actually sell by the line.</p>
         </div>
-        <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New item</button>
+        {canEdit && <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New item</button>}
       </div>
 
       <div className="tabs" style={{ marginBottom: 14 }}>
@@ -125,7 +127,7 @@ export default function Items() {
       </div>
       <p className="sub" style={{ margin: '-6px 0 16px' }}>{TABS.find((t) => t.key === tab).hint}</p>
 
-      {showForm && (
+      {showForm && canEdit && (
         <div className="card" style={{ marginBottom: 18 }}>
           <form onSubmit={submit} className="form-grid">
             <div className="field">
@@ -215,8 +217,8 @@ export default function Items() {
                           <td className="mono">{item.sf_per_pallet ?? '—'}</td>
                           <td className="muted">{MATERIAL_LABEL[item.material_key] || item.material_key}</td>
                           <td style={{ whiteSpace: 'nowrap' }}>
-                            <button type="button" className="btn subtle sm" onClick={() => startEdit(item)}>Edit</button>{' '}
-                            <button type="button" className="btn subtle sm" onClick={() => remove(item.id)}>✕</button>
+                            {canEdit && <><button type="button" className="btn subtle sm" onClick={() => startEdit(item)}>Edit</button>{' '}
+                            <button type="button" className="btn subtle sm" onClick={() => remove(item.id)}>✕</button></>}
                           </td>
                         </>
                       )}
@@ -243,8 +245,8 @@ export default function Items() {
                         <td className="mono">{money(item.unit_price)}</td>
                         <td className="muted">{item.unit || '—'}</td>
                         <td style={{ whiteSpace: 'nowrap' }}>
-                          <button type="button" className="btn subtle sm" onClick={() => startEdit(item)}>Edit</button>{' '}
-                          <button type="button" className="btn subtle sm" onClick={() => remove(item.id)}>✕</button>
+                          {canEdit && <><button type="button" className="btn subtle sm" onClick={() => startEdit(item)}>Edit</button>{' '}
+                          <button type="button" className="btn subtle sm" onClick={() => remove(item.id)}>✕</button></>}
                         </td>
                       </>
                     )}

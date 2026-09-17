@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { money } from '../utils';
+import { usePermission } from '../auth';
 
 export default function Companies() {
+  const { canEdit } = usePermission('companies');
   const [companies, setCompanies] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', industry: '', phone: '', email: '', address: '' });
@@ -29,10 +31,10 @@ export default function Companies() {
           <h1>Companies</h1>
           <p className="sub">Accounts across sales, field jobs, and support all roll up here.</p>
         </div>
-        <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New company</button>
+        {canEdit && <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New company</button>}
       </div>
 
-      {showForm && (
+      {showForm && canEdit && (
         <div className="card" style={{ marginBottom: 18 }}>
           <form onSubmit={submit} className="form-grid">
             <div className="field"><label>Name</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>

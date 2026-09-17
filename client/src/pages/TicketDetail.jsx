@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { shortDate, timeAgo } from '../utils';
 import AiDraftModal from '../components/AiDraftModal';
+import { usePermission } from '../auth';
 
 const STATUSES = ['open', 'pending', 'resolved', 'closed'];
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
@@ -10,6 +11,7 @@ const PRIORITY_PILL = { low: '', medium: '', high: 'amber', urgent: 'red' };
 
 export default function TicketDetail() {
   const { id } = useParams();
+  const { canEdit } = usePermission('tickets');
   const [ticket, setTicket] = useState(null);
   const [note, setNote] = useState('');
   const [draft, setDraft] = useState(null);
@@ -69,7 +71,7 @@ export default function TicketDetail() {
             )}
           </p>
         </div>
-        <button className="btn primary" onClick={openDraft}>Draft reply</button>
+        {canEdit && <button className="btn primary" onClick={openDraft}>Draft reply</button>}
       </div>
 
       <div className="grid-2">
@@ -79,10 +81,12 @@ export default function TicketDetail() {
 
           <div style={{ borderTop: '1px solid var(--line-soft)', marginTop: 14, paddingTop: 14 }}>
             <h2>Activity</h2>
+            {canEdit && (
             <form onSubmit={addNote} className="row" style={{ marginBottom: 14, gap: 8 }}>
               <input style={{ flex: 1, border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', background: 'var(--paper)' }} placeholder="Log a note or call…" value={note} onChange={(e) => setNote(e.target.value)} />
               <button className="btn" type="submit">Add</button>
             </form>
+            )}
             {ticket.activities.length === 0 ? <div className="empty">No activity yet.</div> : (
               <div className="timeline">
                 {ticket.activities.map((a) => (
@@ -101,7 +105,7 @@ export default function TicketDetail() {
             <h2>Status</h2>
             <div className="stack" style={{ gap: 6 }}>
               {STATUSES.map((s) => (
-                <button key={s} className={'btn sm' + (ticket.status === s ? ' primary' : '')} style={{ justifyContent: 'flex-start', textTransform: 'capitalize' }} onClick={() => changeStatus(s)}>{s}</button>
+                <button key={s} className={'btn sm' + (ticket.status === s ? ' primary' : '')} style={{ justifyContent: 'flex-start', textTransform: 'capitalize' }} onClick={() => changeStatus(s)} disabled={!canEdit}>{s}</button>
               ))}
             </div>
           </div>
@@ -110,7 +114,7 @@ export default function TicketDetail() {
             <h2>Priority</h2>
             <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
               {PRIORITIES.map((p) => (
-                <button key={p} className={'btn sm' + (ticket.priority === p ? ' primary' : '')} style={{ textTransform: 'capitalize' }} onClick={() => changePriority(p)}>{p}</button>
+                <button key={p} className={'btn sm' + (ticket.priority === p ? ' primary' : '')} style={{ textTransform: 'capitalize' }} onClick={() => changePriority(p)} disabled={!canEdit}>{p}</button>
               ))}
             </div>
           </div>
@@ -120,12 +124,14 @@ export default function TicketDetail() {
               <h2>Customer satisfaction</h2>
               {ticket.satisfaction_score ? (
                 <p style={{ fontSize: 14 }}>Rated <strong>{ticket.satisfaction_score} / 5</strong></p>
-              ) : (
+              ) : canEdit ? (
                 <div className="row" style={{ gap: 6 }}>
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button key={n} className="btn sm" onClick={() => rate(n)}>{n}</button>
                   ))}
                 </div>
+              ) : (
+                <div className="empty">Not yet rated.</div>
               )}
             </div>
           )}

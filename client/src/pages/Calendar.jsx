@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import AppointmentModal from '../components/AppointmentModal';
+import { usePermission } from '../auth';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -14,6 +15,7 @@ function sameDay(a, b) {
 }
 
 export default function Calendar() {
+  const { canEdit } = usePermission('calendar');
   const [params, setParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [status, setStatus] = useState(null);
@@ -97,15 +99,15 @@ export default function Calendar() {
           <p className="sub">Every meeting, walkthrough, and site visit — synced both ways with Google Calendar when connected.</p>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          {status?.connected ? (
+          {canEdit && (status?.connected ? (
             <>
               <span className="pill green">Connected · {status.connectedEmail || 'Google'}</span>
               <button className="btn sm" onClick={disconnectGoogle}>Disconnect</button>
             </>
           ) : (
             <button className="btn primary sm" onClick={connectGoogle}>Connect Google Calendar</button>
-          )}
-          <button className="btn primary sm" onClick={() => setModal({ defaultDate: ymd(new Date()) })}>+ New appointment</button>
+          ))}
+          {canEdit && <button className="btn primary sm" onClick={() => setModal({ defaultDate: ymd(new Date()) })}>+ New appointment</button>}
         </div>
       </div>
 
@@ -146,7 +148,7 @@ export default function Calendar() {
             const outside = day.getMonth() !== cursor.getMonth();
             const isToday = sameDay(day, today);
             return (
-              <div key={i} className={'cal-cell' + (outside ? ' outside' : '') + (isToday ? ' today' : '')} onDoubleClick={() => setModal({ defaultDate: key })}>
+              <div key={i} className={'cal-cell' + (outside ? ' outside' : '') + (isToday ? ' today' : '')} onDoubleClick={() => canEdit && setModal({ defaultDate: key })}>
                 <div className="daynum">{day.getDate()}</div>
                 {items.slice(0, 3).map((a) => (
                   <div key={a.id} className={'cal-event' + (a.source === 'google' ? ' google' : '')} onClick={() => setModal({ appointment: a })} title={a.title}>
