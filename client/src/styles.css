@@ -16,6 +16,12 @@
   --amber-soft: #F1E7D3;
   --red: #A23B2E;
   --red-soft: #F3E2DD;
+  --blue: #2E5C8A;
+  --blue-soft: #DEE8F2;
+  --blue-soft-line: #B9CEE3;
+  --purple: #6B4C9A;
+  --purple-soft: #EAE2F3;
+  --purple-soft-line: #D3BFE9;
   --shadow: 0 1px 2px rgba(28,32,41,0.04), 0 6px 20px -8px rgba(28,32,41,0.14);
   color-scheme: light;
 }
@@ -37,6 +43,12 @@
     --amber-soft: #2E271A;
     --red: #E08579;
     --red-soft: #2E1E1B;
+    --blue: #7CAEE0;
+    --blue-soft: #1B2733;
+    --blue-soft-line: #2D4356;
+    --purple: #C2A4EA;
+    --purple-soft: #271F30;
+    --purple-soft-line: #3E3050;
     --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 24px -8px rgba(0,0,0,0.55);
   }
 }
@@ -57,6 +69,12 @@
   --amber-soft: #2E271A;
   --red: #E08579;
   --red-soft: #2E1E1B;
+  --blue: #7CAEE0;
+  --blue-soft: #1B2733;
+  --blue-soft-line: #2D4356;
+  --purple: #C2A4EA;
+  --purple-soft: #271F30;
+  --purple-soft-line: #3E3050;
   --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 24px -8px rgba(0,0,0,0.55);
 }
 
@@ -211,6 +229,29 @@ main.content { min-width: 0; padding: 28px clamp(18px, 3vw, 40px) 60px; }
 .card + .card { margin-top: 14px; }
 .card h2, .card h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 12px; }
 
+/* --- Salesforce-style grouped detail sections (Contact/Deal parity, Sept 2026) — a colored
+   left accent per section so a dense detail page reads as distinct groups at a glance rather
+   than one long undifferentiated stack of rows. */
+.section-card { border-left: 3px solid var(--accent); padding-left: 16px; }
+.section-card.accent-blue { border-left-color: var(--blue); }
+.section-card.accent-purple { border-left-color: var(--purple); }
+.section-card.accent-amber { border-left-color: var(--amber); }
+.section-label {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em;
+  margin: 0 0 10px; font-weight: 600;
+}
+.section-card.accent-blue .section-label { color: var(--blue); }
+.section-card.accent-purple .section-label { color: var(--purple); }
+.section-card.accent-amber .section-label { color: var(--amber); }
+
+.owner-chip { display: inline-flex; align-items: center; gap: 6px; }
+.owner-chip .avatar {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  background: var(--blue-soft); color: var(--blue);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9.5px; font-weight: 700; font-family: 'IBM Plex Mono', monospace;
+}
+
 table.list { width: 100%; border-collapse: collapse; font-size: 14px; }
 table.list th, table.list td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line-soft); }
 table.list thead th { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
@@ -228,6 +269,8 @@ table.list tbody tr:last-child td { border-bottom: none; }
 .pill.green { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent-soft-line); }
 .pill.amber { background: var(--amber-soft); color: var(--amber); border-color: var(--amber); }
 .pill.red { background: var(--red-soft); color: var(--red); border-color: var(--red); }
+.pill.blue { background: var(--blue-soft); color: var(--blue); border-color: var(--blue-soft-line); }
+.pill.purple { background: var(--purple-soft); color: var(--purple); border-color: var(--purple-soft-line); }
 
 /* A <select> styled like a .pill — quick inline status changes (e.g. lead status) without
    leaving the table row. */

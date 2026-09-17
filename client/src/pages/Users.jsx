@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { api } from '../api';
 
-const BLANK_FORM = { username: '', password: '', role: 'pm' };
+const BLANK_FORM = { username: '', password: '', role: 'user' };
 const LEVELS = [
   { key: 'edit', label: 'Edit' },
   { key: 'view', label: 'View' },
@@ -44,9 +44,13 @@ export default function Users() {
     load();
   }
 
-  async function changeRole(user, role) {
-    if (!window.confirm(`Change ${user.username}'s role to this? Their individual page permissions will reset to the defaults for the new role — you can re-customize them afterward.`)) return;
-    await api.updateUser(user.id, { role }).catch((err) => window.alert(err.message));
+  async function toggleAdmin(user) {
+    const makingAdmin = user.role !== 'admin';
+    const msg = makingAdmin
+      ? `Make ${user.username} an admin? Admins have full access to everything, so their individual page permissions no longer apply.`
+      : `Remove admin from ${user.username}? They'll go back to a regular login with nothing but Home/Dashboard — you'll need to turn pages back on for them from "Permissions" below.`;
+    if (!window.confirm(msg)) return;
+    await api.updateUser(user.id, { role: makingAdmin ? 'admin' : 'user' }).catch((err) => window.alert(err.message));
     load();
   }
 
@@ -100,18 +104,22 @@ export default function Users() {
           <form onSubmit={submit} className="form-grid">
             <div className="field"><label>Username</label><input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoCapitalize="none" required /></div>
             <div className="field"><label>Temporary password</label><input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="At least 6 characters" required /></div>
-            <div className="field">
-              <label>Role</label>
-              <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                {roles.map((r) => <option key={r.role} value={r.role}>{r.label}</option>)}
-                <option value="admin">Admin</option>
-              </select>
+            <div className="field" style={{ justifyContent: 'center' }}>
+              <label style={{ visibility: 'hidden' }}>Admin</label>
+              <span className="row" style={{ gap: 8, alignItems: 'center' }}>
+                <input
+                  type="checkbox" id="new_user_admin" style={{ width: 'auto' }}
+                  checked={form.role === 'admin'}
+                  onChange={(e) => setForm({ ...form, role: e.target.checked ? 'admin' : 'user' })}
+                />
+                <label htmlFor="new_user_admin" style={{ margin: 0, fontWeight: 500 }}>Admin (full access to everything)</label>
+              </span>
             </div>
             <div className="field" style={{ justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Create login</button></div>
           </form>
           {error && <div className="sub" style={{ color: 'var(--red)' }}>{error}</div>}
           <p className="sub" style={{ margin: '10px 0 0' }}>
-            Role just picks a sensible starting set of page permissions — you can customize every page individually for this person afterward from "Permissions" below.
+            Everyone's a regular login by default, starting with nothing but Home/Dashboard — name them, then turn on exactly the pages this person needs from "Permissions" below. Give two people the same set of pages if they should share access.
           </p>
         </div>
       )}
@@ -127,11 +135,10 @@ export default function Users() {
                   <tr>
                     <td className="link-strong">{u.username}</td>
                     <td>
-                      {u.role === 'admin' ? <span className="pill green">Admin</span> : (
-                        <select value={u.role} onChange={(e) => changeRole(u, e.target.value)}>
-                          {roles.map((r) => <option key={r.role} value={r.role}>{r.label}</option>)}
-                        </select>
-                      )}
+                      <span className="row" style={{ gap: 8, alignItems: 'center' }}>
+                        <span className={'pill ' + (u.role === 'admin' ? 'green' : 'blue')}>{u.role === 'admin' ? 'Admin' : 'User'}</span>
+                        <button className="btn sm subtle" onClick={() => toggleAdmin(u)}>{u.role === 'admin' ? 'Remove admin' : 'Make admin'}</button>
+                      </span>
                     </td>
                     <td><span className={'pill ' + (u.active ? 'green' : 'red')}>{u.active ? 'Active' : 'Disabled'}</span></td>
                     <td className="muted">{u.created_at ? u.created_at.slice(0, 10) : '—'}</td>

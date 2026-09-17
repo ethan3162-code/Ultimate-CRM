@@ -46,10 +46,15 @@ function withCustomerInfo(deal) {
 
 const DEAL_SELECT = `
   SELECT d.*, c.first_name, c.last_name, c.phone AS contact_phone, c.address AS contact_address,
-         co.name AS company_name, co.phone AS company_phone, co.address AS company_address
+         co.name AS company_name, co.phone AS company_phone, co.address AS company_address,
+         ou.username AS owner_username, ou.role AS owner_role,
+         cu.username AS created_by_username, uu.username AS updated_by_username
   FROM deals d
   LEFT JOIN contacts c ON c.id = d.contact_id
   LEFT JOIN companies co ON co.id = d.company_id
+  LEFT JOIN users ou ON ou.id = d.owner_user_id
+  LEFT JOIN users cu ON cu.id = d.created_by_user_id
+  LEFT JOIN users uu ON uu.id = d.updated_by_user_id
 `;
 
 router.get('/', (req, res) => {
@@ -66,7 +71,7 @@ const LEAD_DETAIL_FIELDS = [
 router.post('/', (req, res) => {
   const {
     contact_id, company_id, title, value, stage, probability, expected_close, source, rep, work_type, customer_type,
-    phone_estimate, repeat_referral, ha_lead_fee,
+    phone_estimate, repeat_referral, ha_lead_fee, owner_user_id,
   } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
   const detail = LEAD_DETAIL_FIELDS.reduce((acc, f) => ({ ...acc, [f]: req.body[f] ?? (f === 'lead_status' ? 'New' : null) }), {});
@@ -76,16 +81,17 @@ router.post('/', (req, res) => {
       phone_estimate, repeat_referral, ha_lead_fee,
       lead_status, lead_type, job_timeframe, followup_date, lead_notes, inquiry_notes,
       project_description, preferred_callback_time, preferred_consult_time, sub_service_type,
-      lead_owner, method_of_entry, ha_match_type
+      lead_owner, method_of_entry, ha_match_type, owner_user_id, created_by_user_id, updated_by_user_id
     )
-    VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?, ?,?,?,?,?,?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?, ?,?,?,?,?,?,?,?,?,?,?,?,?, ?,?,?)
   `).run(
     contact_id || null, company_id || null, title, value || 0, stage || 'new', probability ?? 20, expected_close || null, source || null,
     rep || null, work_type || null, customer_type || 'Residential',
     phone_estimate ? 1 : 0, repeat_referral ? 1 : 0, ha_lead_fee || null,
     detail.lead_status, detail.lead_type, detail.job_timeframe, detail.followup_date, detail.lead_notes, detail.inquiry_notes,
     detail.project_description, detail.preferred_callback_time, detail.preferred_consult_time, detail.sub_service_type,
-    detail.lead_owner, detail.method_of_entry, detail.ha_match_type
+    detail.lead_owner, detail.method_of_entry, detail.ha_match_type,
+    owner_user_id || null, req.user.id, req.user.id
   );
   const deal = db.prepare(`SELECT * FROM deals WHERE id = ?`).get(result.lastInsertRowid);
   logActivity('deal', deal.id, 'note', `Deal "${deal.title}" created.`);
@@ -128,7 +134,7 @@ router.patch('/:id', (req, res) => {
       phone_estimate=?, repeat_referral=?, ha_lead_fee=?,
       lead_status=?, lead_type=?, job_timeframe=?, followup_date=?, lead_notes=?, inquiry_notes=?,
       project_description=?, preferred_callback_time=?, preferred_consult_time=?, sub_service_type=?,
-      lead_owner=?, method_of_entry=?, ha_match_type=?,
+      lead_owner=?, method_of_entry=?, ha_match_type=?, owner_user_id=?, updated_by_user_id=?,
       updated_at=datetime('now')
     WHERE id=?
   `).run(
@@ -137,7 +143,7 @@ router.patch('/:id', (req, res) => {
     updates.phone_estimate ? 1 : 0, updates.repeat_referral ? 1 : 0, updates.ha_lead_fee || null,
     updates.lead_status, updates.lead_type, updates.job_timeframe, updates.followup_date, updates.lead_notes, updates.inquiry_notes,
     updates.project_description, updates.preferred_callback_time, updates.preferred_consult_time, updates.sub_service_type,
-    updates.lead_owner, updates.method_of_entry, updates.ha_match_type,
+    updates.lead_owner, updates.method_of_entry, updates.ha_match_type, updates.owner_user_id || null, req.user.id,
     req.params.id
   );
 

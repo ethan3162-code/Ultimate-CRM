@@ -9,12 +9,13 @@ const JWT_SECRET = process.env.JWT_SECRET || 'ultimate-crm-dev-secret-change-me'
 const COOKIE_NAME = 'ucrm_session';
 const TOKEN_TTL = '30d';
 
-/** Seeds (or resets) one login's individual page permissions to the sensible starting point for
-    its role: edit on that role's traditional pages, view everywhere else. Used when a login is
-    first created, and when its role is changed (its old custom permissions were set for the old
-    role, so they're reset rather than carried over — the admin can re-customize from there).
-    After this runs, every page is independently editable per person — nothing keeps it synced
-    to role going forward. */
+/** Seeds (or resets) one login's individual page permissions to a blank slate: nothing but the
+    always-view pages (Home/Dashboard). Used when a login is first created, and when it's
+    demoted from admin back to a regular login (its old permissions, if any, are reset rather
+    than carried over — the admin re-grants whatever pages this person actually needs from the
+    Users & permissions page). After this runs, every page is independently editable per person —
+    nothing keeps it synced to any role going forward, and there's no "home turf" to infer one
+    from any more (see permissionsConfig.js). */
 function seedPagePermissions(userId, role) {
   const primary = new Set(DEFAULT_PRIMARY_PAGES[role] || []);
   const upsert = db.prepare(`
@@ -22,7 +23,7 @@ function seedPagePermissions(userId, role) {
     ON CONFLICT(user_id, page) DO UPDATE SET level = excluded.level
   `);
   for (const key of Object.keys(PAGES)) {
-    upsert.run(userId, key, primary.has(key) ? 'edit' : 'view');
+    upsert.run(userId, key, primary.has(key) ? 'edit' : (ALWAYS_VIEW_PAGES.includes(key) ? 'view' : 'none'));
   }
 }
 

@@ -4,17 +4,19 @@
 //
 // Permissions are per-user, page-by-page (Sept 2026) — originally this was a per-role
 // Standard/Strict mode, but the user asked for individual control over every page for every
-// login instead of a role-wide toggle, so DEFAULT_PRIMARY_PAGES below is only a starting point
-// applied when a login is created (or its role is changed) — after that, every page is
-// independently editable per person from the Users & permissions page.
+// login instead of a role-wide toggle. Then (still Sept 2026) the user went further: there's no
+// meaningful job-title role concept at all — "everyone should be regular user, I will name them
+// and give them access to what's needed [and] some users will share the same permissions." So
+// there are now only two account types: `admin` (always full access to everything, not
+// individually configurable) and `user` (a blank-slate regular login — every business page
+// starts at 'none' except Home/Dashboard, and the admin turns on view/edit per page per person
+// from the Users & permissions page). Two logins can simply be given the same set of page
+// permissions; nothing needs a shared "role" for that.
 
-const ROLES = ['admin', 'pm', 'salesman', 'scheduler', 'accounting'];
+const ROLES = ['admin', 'user'];
 const ROLE_LABEL = {
   admin: 'Admin',
-  pm: 'Project Manager',
-  salesman: 'Salesman',
-  scheduler: 'Scheduler',
-  accounting: 'Accounting',
+  user: 'User',
 };
 
 // Every business page permissions apply to. `admin`-only pages (Users, Automations,
@@ -47,16 +49,13 @@ const ALWAYS_VIEW_PAGES = ['home', 'dashboard'];
 // never opened up to a non-admin login — not individually configurable like the business pages.
 const ADMIN_ONLY_PAGES = ['users', 'automations', 'integrations'];
 
-// Starting point applied when a new non-admin login is created, or when its role is changed:
-// edit access to this role's traditional "home turf", view on everything else. Purely a
-// convenience default from here on — an admin can then set any page to edit/view/none for that
-// individual person from the Users & permissions page, and nothing keeps it in sync with role
-// after that initial seed.
+// Starting point applied when a new regular ('user') login is created: nothing but the always-
+// view pages. There's no role to infer a "home turf" from any more — the admin names the person
+// and turns on whichever pages they actually need, one at a time, from the Users & permissions
+// page. Kept as a map (rather than inlining an empty set in auth.js) in case a future account
+// type ever wants a different starting point.
 const DEFAULT_PRIMARY_PAGES = {
-  pm: ['jobs', 'materials', 'items', 'schedule'],
-  salesman: ['leads', 'pipeline', 'companies', 'contacts'],
-  scheduler: ['calendar', 'schedule'],
-  accounting: ['jobs'],
+  user: [],
 };
 
 const VALID_LEVELS = ['edit', 'view', 'none'];

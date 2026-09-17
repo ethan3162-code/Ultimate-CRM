@@ -34,6 +34,9 @@ export const api = {
   updateUser: (id, data) => request(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteUser: (id) => request(`/users/${id}`, { method: 'DELETE' }),
   updateUserPermissions: (id, permissions) => request(`/users/${id}/permissions`, { method: 'PATCH', body: JSON.stringify({ permissions }) }),
+  // Lightweight, non-admin directory of active logins — used to populate "Owner" dropdowns on
+  // Contacts/Leads/Opportunities (unlike api.users(), any signed-in role can call this).
+  usersDirectory: () => request('/directory/users'),
 
   dashboard: () => request('/dashboard'),
 

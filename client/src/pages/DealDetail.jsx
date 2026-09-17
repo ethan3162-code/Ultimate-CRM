@@ -26,6 +26,8 @@ export default function DealDetail() {
   const [editingNotes, setEditingNotes] = useState(false);
   const [notes, setNotes] = useState({ project_description: '', inquiry_notes: '', lead_notes: '' });
   const [savingNotes, setSavingNotes] = useState(false);
+  const [directory, setDirectory] = useState([]);
+  const [savingOwner, setSavingOwner] = useState(false);
 
   function blankDetails(d) {
     return {
@@ -46,6 +48,15 @@ export default function DealDetail() {
     });
   }
   useEffect(load, [id]);
+  useEffect(() => { api.usersDirectory().then(setDirectory).catch(() => setDirectory([])); }, []);
+
+  async function saveOwner(e) {
+    const owner_user_id = e.target.value ? Number(e.target.value) : null;
+    setSavingOwner(true);
+    await api.updateDeal(id, { owner_user_id }).catch((err) => window.alert(err.message));
+    setSavingOwner(false);
+    load();
+  }
 
   async function saveDetails(e) {
     e.preventDefault();
@@ -152,8 +163,8 @@ export default function DealDetail() {
 
         <div className="stack">
           {(deal.customer_phone || deal.customer_address) && (
-            <div className="card">
-              <h2>Customer info</h2>
+            <div className="card section-card accent-blue">
+              <h2 className="section-label">Get in touch</h2>
               <div className="stack" style={{ gap: 6, marginBottom: links ? 12 : 0 }}>
                 {deal.customer_phone && (
                   <div className="row between"><span className="muted">Phone</span><a href={`tel:${deal.customer_phone}`}>{deal.customer_phone}</a></div>
@@ -172,9 +183,40 @@ export default function DealDetail() {
               )}
             </div>
           )}
-          <div className="card">
+          <div className="card section-card accent-purple">
+            <h2 className="section-label">About</h2>
+            <div className="stack" style={{ gap: 6 }}>
+              <div className="row between" style={{ alignItems: 'center' }}>
+                <span className="muted">Owner</span>
+                {canEdit ? (
+                  <select value={deal.owner_user_id || ''} onChange={saveOwner} disabled={savingOwner} style={{ maxWidth: 180 }}>
+                    <option value="">— unassigned —</option>
+                    {directory.map((u) => <option key={u.id} value={u.id}>{u.username}</option>)}
+                  </select>
+                ) : (
+                  <span>{deal.owner_username ? <span className="owner-chip"><span className="avatar">{deal.owner_username.slice(0, 2).toUpperCase()}</span>{deal.owner_username}</span> : '—'}</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="card section-card" style={{ borderLeftColor: 'var(--line)' }}>
+            <h2 className="section-label" style={{ color: 'var(--muted)' }}>History</h2>
+            <div className="stack" style={{ gap: 6 }}>
+              <div className="row between">
+                <span className="muted">Created by</span>
+                <span>{deal.created_by_username || 'system'} · {shortDate(deal.created_at)}</span>
+              </div>
+              <div className="row between">
+                <span className="muted">Last modified</span>
+                <span>{deal.updated_by_username || deal.created_by_username || 'system'} · {timeAgo(deal.updated_at || deal.created_at)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="card section-card accent-amber">
             <div className="row between" style={{ marginBottom: editingDetails ? 10 : 0 }}>
-              <h2 style={{ margin: 0 }}>Lead &amp; opportunity details</h2>
+              <h2 className="section-label" style={{ margin: 0 }}>Lead &amp; opportunity details</h2>
               {!editingDetails && canEdit && <button className="btn sm subtle" onClick={() => setEditingDetails(true)}>Edit</button>}
             </div>
             {editingDetails ? (

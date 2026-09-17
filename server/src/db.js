@@ -323,6 +323,20 @@ ensureColumn('deals', 'lead_owner', 'lead_owner TEXT');
 ensureColumn('deals', 'method_of_entry', 'method_of_entry TEXT');
 ensureColumn('deals', 'ha_lead_fee', 'ha_lead_fee REAL');
 ensureColumn('deals', 'ha_match_type', 'ha_match_type TEXT');
+// Owner + audit trail (Sept 2026, Salesforce Contact/Lead/Opportunity parity) — a real login
+// assigned as the record's owner, plus who created/last-touched it. Deliberately additive: the
+// existing free-text `rep`/`lead_owner` fields on deals stay put (reports.js groups sales by the
+// `rep` string, and seed data has plain-text names that aren't real usernames), and this is a
+// second, separate concept — an actual account you can build permissions and directory lookups
+// around, not a rename of the old field.
+ensureColumn('contacts', 'owner_user_id', 'owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+ensureColumn('contacts', 'created_by_user_id', 'created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+ensureColumn('contacts', 'updated_by_user_id', 'updated_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+ensureColumn('contacts', 'updated_at', 'updated_at TEXT');
+db.prepare(`UPDATE contacts SET updated_at = created_at WHERE updated_at IS NULL`).run();
+ensureColumn('deals', 'owner_user_id', 'owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+ensureColumn('deals', 'created_by_user_id', 'created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+ensureColumn('deals', 'updated_by_user_id', 'updated_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 ensureColumn('estimates', 'sign_token', 'sign_token TEXT');
 ensureColumn('estimates', 'signed_name', 'signed_name TEXT');
 ensureColumn('estimates', 'signed_at', 'signed_at TEXT');
@@ -336,19 +350,20 @@ db.prepare(`UPDATE jobs SET stage = 'site_prep' WHERE stage = 'material_order'`)
 db.prepare(`UPDATE jobs SET status = 'complete' WHERE status = 'completed'`).run();
 
 // --- Logins & permissions (Sept 2026) ---
-// One starter login per role, so the app is usable the moment it's deployed, plus that login's
-// individual per-page permissions seeded from DEFAULT_PRIMARY_PAGES as a starting point (an
-// admin can then set any page to edit/view/none for that specific person from the Users &
-// permissions page — nothing here is enforced on an ongoing basis). Idempotent — never touched
-// by re-seeding business data, and never overwrites a password or permission an admin has since
-// changed.
-const { PAGES, DEFAULT_PRIMARY_PAGES } = require('./permissionsConfig');
+// Two account types only: `admin` (always full access) and `user` (a blank-slate regular login —
+// the admin names each person and turns on exactly the pages they need, one at a time, from the
+// Users & permissions page; two logins can simply be handed the same set of pages — there's no
+// role in between to keep in sync). A starter login is seeded per historical "home turf" so the
+// app is usable the moment it's deployed; new logins created from here on start with nothing but
+// Home/Dashboard until an admin grants more. Idempotent — never touched by re-seeding business
+// data, and never overwrites a password or permission an admin has since changed.
+const { PAGES, DEFAULT_PRIMARY_PAGES, ALWAYS_VIEW_PAGES } = require('./permissionsConfig');
 
 function seedPagePermissions(userId, role) {
   const primary = new Set(DEFAULT_PRIMARY_PAGES[role] || []);
   const insertPerm = db.prepare(`INSERT OR IGNORE INTO user_permissions (user_id, page, level) VALUES (?, ?, ?)`);
   for (const key of Object.keys(PAGES)) {
-    insertPerm.run(userId, key, primary.has(key) ? 'edit' : 'view');
+    insertPerm.run(userId, key, primary.has(key) ? 'edit' : (ALWAYS_VIEW_PAGES.includes(key) ? 'view' : 'none'));
   }
 }
 
@@ -357,10 +372,10 @@ if (userCount === 0) {
   const bcrypt = require('bcryptjs');
   const DEFAULT_ACCOUNTS = [
     ['admin', 'Admin#2026', 'admin'],
-    ['pm', 'PM#2026', 'pm'],
-    ['salesman', 'Salesman#2026', 'salesman'],
-    ['scheduler', 'Scheduler#2026', 'scheduler'],
-    ['accounting', 'Accounting#2026', 'accounting'],
+    ['pm', 'PM#2026', 'user'],
+    ['salesman', 'Salesman#2026', 'user'],
+    ['scheduler', 'Scheduler#2026', 'user'],
+    ['accounting', 'Accounting#2026', 'user'],
   ];
   const insert = db.prepare(`INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)`);
   for (const [username, password, role] of DEFAULT_ACCOUNTS) {
@@ -369,10 +384,15 @@ if (userCount === 0) {
   }
 }
 
+// Migration: any login stored under an old job-title role (pm/salesman/scheduler/accounting,
+// from before the role model was collapsed to just admin/user) becomes a plain `user` — its
+// existing individual page permissions are untouched, only the role label changes.
+db.prepare(`UPDATE users SET role = 'user' WHERE role NOT IN ('admin', 'user')`).run();
+
 // Migration: any non-admin login that predates the per-user permissions system (e.g. this
 // repo's committed data.sqlite, created before user_permissions existed) has zero rows here —
-// back-fill the same role-based defaults once, so a pre-existing login is never silently
-// locked out of everything instead of just missing the new fine-grained control.
+// back-fill a blank-slate default once, so a pre-existing login is never silently locked out of
+// everything instead of just missing the new fine-grained control.
 const usersNeedingDefaults = db.prepare(`
   SELECT u.id, u.role FROM users u
   WHERE u.role != 'admin' AND NOT EXISTS (SELECT 1 FROM user_permissions p WHERE p.user_id = u.id)

@@ -19,6 +19,10 @@ app.use(readSession); // populates req.user from the session cookie when present
 app.use('/api/session', require('./routes/session'));
 // User accounts & role permission modes — admin only.
 app.use('/api/users', requireAuth, requireAdmin, require('./routes/users'));
+// A read-only, non-admin directory of active logins (id/username/role label only) — any signed-in
+// user can look this up, so e.g. a salesperson can assign a real login as a Contact/Lead/
+// Opportunity "Owner" without needing admin access to the full Users & permissions page.
+app.use('/api/directory', requireAuth, require('./routes/directory'));
 
 app.use('/api/companies', requireAuth, requirePage('companies'), require('./routes/companies'));
 app.use('/api/contacts', requireAuth, requirePage('contacts'), require('./routes/contacts'));
