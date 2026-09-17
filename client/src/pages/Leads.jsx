@@ -2,12 +2,21 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { money, timeAgo, mapLinks } from '../utils';
-import { LEAD_SOURCES } from '../constants';
+import {
+  LEAD_SOURCES, LEAD_STATUSES, LEAD_TYPES, JOB_TIMEFRAMES, METHOD_OF_ENTRY,
+  HA_MATCH_TYPES, WORK_TYPES, CUSTOMER_TYPES,
+} from '../constants';
 
 const BLANK_FORM = {
-  first_name: '', last_name: '', phone: '', email: '', address: '', source: '',
+  first_name: '', last_name: '', phone: '', mobile_phone: '', email: '', address: '', source: '',
   company_id: '', value: '',
+  method_of_entry: '', lead_type: '', job_timeframe: '', followup_date: '',
+  work_type: '', sub_service_type: '', customer_type: 'Residential',
+  project_description: '', phone_estimate: false, repeat_referral: false,
+  lead_owner: '', rep: '', ha_lead_fee: '', ha_match_type: '',
 };
+
+const LEAD_STATUS_PILL = { New: '', 'Follow Up': 'amber', Unresponsive: 'red', Restart: 'amber', Lost: 'red', Converted: 'green' };
 
 export default function Leads() {
   const [deals, setDeals] = useState(null);
@@ -28,13 +37,22 @@ export default function Leads() {
     if (!form.first_name.trim() || !form.last_name.trim()) return;
     const contact = await api.createContact({
       first_name: form.first_name, last_name: form.last_name, phone: form.phone || null,
-      email: form.email || null, address: form.address || null, source: form.source || null,
-      company_id: form.company_id || null,
+      mobile_phone: form.mobile_phone || null, email: form.email || null, address: form.address || null,
+      source: form.source || null, company_id: form.company_id || null,
     });
     const title = `${form.first_name} ${form.last_name}${form.source ? ` — ${form.source}` : ' — New inquiry'}`;
     await api.createDeal({
       contact_id: contact.id, company_id: form.company_id || null, title,
       value: Number(form.value) || 0, stage: 'new', source: form.source || null,
+      method_of_entry: form.method_of_entry || null, lead_type: form.lead_type || null,
+      job_timeframe: form.job_timeframe || null, followup_date: form.followup_date || null,
+      work_type: form.work_type || null, sub_service_type: form.sub_service_type || null,
+      customer_type: form.customer_type,
+      project_description: form.project_description || null,
+      phone_estimate: form.phone_estimate, repeat_referral: form.repeat_referral,
+      lead_owner: form.lead_owner || null, rep: form.rep || null,
+      ha_lead_fee: form.ha_lead_fee === '' ? null : Number(form.ha_lead_fee),
+      ha_match_type: form.ha_match_type || null,
     });
     setForm(BLANK_FORM);
     setShowForm(false);
@@ -50,6 +68,12 @@ export default function Leads() {
   async function disqualify(deal) {
     setBusyId(deal.id);
     await api.updateDeal(deal.id, { stage: 'lost' });
+    setBusyId(null);
+    load();
+  }
+  async function setLeadStatus(deal, lead_status) {
+    setBusyId(deal.id);
+    await api.updateDeal(deal.id, { lead_status });
     setBusyId(null);
     load();
   }
@@ -70,6 +94,7 @@ export default function Leads() {
             <div className="field"><label>First name</label><input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required /></div>
             <div className="field"><label>Last name</label><input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required /></div>
             <div className="field"><label>Phone</label><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+            <div className="field"><label>Mobile</label><input value={form.mobile_phone} onChange={(e) => setForm({ ...form, mobile_phone: e.target.value })} /></div>
             <div className="field"><label>Email</label><input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
             <div className="field"><label>Address</label><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Street, city, state" /></div>
             <div className="field">
@@ -80,6 +105,13 @@ export default function Leads() {
               </select>
             </div>
             <div className="field">
+              <label>Method of entry</label>
+              <select value={form.method_of_entry} onChange={(e) => setForm({ ...form, method_of_entry: e.target.value })}>
+                <option value="">— none —</option>
+                {METHOD_OF_ENTRY.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+            <div className="field">
               <label>Company</label>
               <select value={form.company_id} onChange={(e) => setForm({ ...form, company_id: e.target.value })}>
                 <option value="">— none —</option>
@@ -87,6 +119,65 @@ export default function Leads() {
               </select>
             </div>
             <div className="field"><label>Estimated value ($)</label><input type="number" min="0" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} /></div>
+
+            <div className="field" style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+              <div className="kicker">Inquiry</div>
+            </div>
+            <div className="field">
+              <label>Lead type</label>
+              <select value={form.lead_type} onChange={(e) => setForm({ ...form, lead_type: e.target.value })}>
+                <option value="">— none —</option>
+                {LEAD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Job timeframe</label>
+              <select value={form.job_timeframe} onChange={(e) => setForm({ ...form, job_timeframe: e.target.value })}>
+                <option value="">— none —</option>
+                {JOB_TIMEFRAMES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="field"><label>Follow-up date</label><input type="date" value={form.followup_date} onChange={(e) => setForm({ ...form, followup_date: e.target.value })} /></div>
+            <div className="field">
+              <label>Property type</label>
+              <select value={form.customer_type} onChange={(e) => setForm({ ...form, customer_type: e.target.value })}>
+                {CUSTOMER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Service type</label>
+              <select value={form.work_type} onChange={(e) => setForm({ ...form, work_type: e.target.value })}>
+                <option value="">— none —</option>
+                {WORK_TYPES.map((w) => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </div>
+            <div className="field"><label>Sub-service type</label><input value={form.sub_service_type} onChange={(e) => setForm({ ...form, sub_service_type: e.target.value })} placeholder="e.g. Driveway repair" /></div>
+            <div className="field" style={{ gridColumn: '1 / -1' }}>
+              <label>Project description</label>
+              <textarea rows={2} value={form.project_description} onChange={(e) => setForm({ ...form, project_description: e.target.value })} placeholder="What does the customer want done?" />
+            </div>
+            <div className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" id="phone_estimate" checked={form.phone_estimate} onChange={(e) => setForm({ ...form, phone_estimate: e.target.checked })} style={{ width: 'auto' }} />
+              <label htmlFor="phone_estimate" style={{ margin: 0 }}>Can be estimated by phone</label>
+            </div>
+            <div className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" id="repeat_referral" checked={form.repeat_referral} onChange={(e) => setForm({ ...form, repeat_referral: e.target.checked })} style={{ width: 'auto' }} />
+              <label htmlFor="repeat_referral" style={{ margin: 0 }}>Repeat customer / referral</label>
+            </div>
+
+            <div className="field" style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+              <div className="kicker">Assignment &amp; lead cost</div>
+            </div>
+            <div className="field"><label>Lead owner</label><input value={form.lead_owner} onChange={(e) => setForm({ ...form, lead_owner: e.target.value })} placeholder="Who owns this lead?" /></div>
+            <div className="field"><label>Estimator</label><input value={form.rep} onChange={(e) => setForm({ ...form, rep: e.target.value })} placeholder="Who'll run the estimate?" /></div>
+            <div className="field"><label>Lead fee ($)</label><input type="number" min="0" step="0.01" value={form.ha_lead_fee} onChange={(e) => setForm({ ...form, ha_lead_fee: e.target.value })} placeholder="e.g. HomeAdvisor/Angi fee" /></div>
+            <div className="field">
+              <label>Lead match type</label>
+              <select value={form.ha_match_type} onChange={(e) => setForm({ ...form, ha_match_type: e.target.value })}>
+                <option value="">— none —</option>
+                {HA_MATCH_TYPES.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
             <div className="field" style={{ justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Add lead</button></div>
           </form>
         </div>
@@ -98,7 +189,7 @@ export default function Leads() {
         <div className="table-wrap">
           <table className="list deal-table">
             <thead>
-              <tr><th>Lead</th><th>Contact / company</th><th>Phone</th><th>Address</th><th>Source</th><th>Score</th><th>Value</th><th>Received</th><th></th></tr>
+              <tr><th>Lead</th><th>Contact / company</th><th>Phone</th><th>Address</th><th>Source</th><th>Status</th><th>Score</th><th>Value</th><th>Received</th><th></th></tr>
             </thead>
             <tbody>
               {leads.map((deal) => {
@@ -112,6 +203,16 @@ export default function Leads() {
                       {links ? <a href={links.view} target="_blank" rel="noreferrer" className="map-link" title="View on Google Maps (satellite)">📍 {deal.customer_address}</a> : '—'}
                     </td>
                     <td>{deal.source ? <span className="pill">{deal.source}</span> : <span className="muted">—</span>}</td>
+                    <td>
+                      <select
+                        value={deal.lead_status || 'New'}
+                        disabled={busyId === deal.id}
+                        onChange={(e) => setLeadStatus(deal, e.target.value)}
+                        className={'pill-select ' + (LEAD_STATUS_PILL[deal.lead_status] || '')}
+                      >
+                        {LEAD_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </td>
                     <td>{deal.label && <span className={'score-pill ' + deal.label.toLowerCase()}>{deal.label} · {deal.score}</span>}</td>
                     <td className="mono">{money(deal.value)}</td>
                     <td className="muted">{timeAgo(deal.created_at)}</td>

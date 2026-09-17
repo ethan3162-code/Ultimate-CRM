@@ -9,12 +9,26 @@ function insertCompany(c) {
     .run(c.name, c.industry, c.phone, c.email, c.address).lastInsertRowid;
 }
 function insertContact(c) {
-  return db.prepare(`INSERT INTO contacts (company_id, first_name, last_name, email, phone, title, address, source) VALUES (?,?,?,?,?,?,?,?)`)
-    .run(c.company_id, c.first_name, c.last_name, c.email, c.phone, c.title, c.address || null, c.source || null).lastInsertRowid;
+  return db.prepare(`INSERT INTO contacts (company_id, first_name, last_name, email, phone, mobile_phone, title, address, source) VALUES (?,?,?,?,?,?,?,?,?)`)
+    .run(c.company_id, c.first_name, c.last_name, c.email, c.phone, c.mobile_phone || null, c.title, c.address || null, c.source || null).lastInsertRowid;
 }
 function insertDeal(d) {
-  return db.prepare(`INSERT INTO deals (contact_id, company_id, title, value, stage, probability, expected_close, source) VALUES (?,?,?,?,?,?,?,?)`)
-    .run(d.contact_id, d.company_id, d.title, d.value, d.stage, d.probability, d.expected_close, d.source || null).lastInsertRowid;
+  return db.prepare(`
+    INSERT INTO deals (
+      contact_id, company_id, title, value, stage, probability, expected_close, source,
+      rep, work_type, customer_type, lead_status, lead_type, job_timeframe, followup_date,
+      lead_notes, inquiry_notes, project_description, sub_service_type, lead_owner, method_of_entry,
+      phone_estimate, repeat_referral, ha_lead_fee, ha_match_type
+    )
+    VALUES (?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?,?,?, ?,?,?,?)
+  `).run(
+    d.contact_id, d.company_id, d.title, d.value, d.stage, d.probability, d.expected_close, d.source || null,
+    d.rep || null, d.work_type || null, d.customer_type || 'Residential', d.lead_status || 'New', d.lead_type || null,
+    d.job_timeframe || null, d.followup_date || null,
+    d.lead_notes || null, d.inquiry_notes || null, d.project_description || null, d.sub_service_type || null,
+    d.lead_owner || null, d.method_of_entry || null,
+    d.phone_estimate ? 1 : 0, d.repeat_referral ? 1 : 0, d.ha_lead_fee || null, d.ha_match_type || null
+  ).lastInsertRowid;
 }
 function insertCatalogItem(c) {
   return db.prepare(`INSERT INTO catalog_items (name, description, unit, unit_price, material_key, brand, sf_per_pallet) VALUES (?,?,?,?,?,?,?)`)
@@ -94,7 +108,7 @@ const harbor = insertCompany({ name: 'Harbor Logistics Co.', industry: 'Logistic
 const graystone = insertCompany({ name: 'Graystone Property Management', industry: 'Real Estate', phone: '(555) 809-3345', email: 'info@graystonepm.com', address: '245 Elm Ct, Nashville, TN' });
 
 // --- Contacts ---
-const cJohn = insertContact({ company_id: acme, first_name: 'John', last_name: 'Meyer', email: 'john@acmeroofing.com', phone: '(555) 210-4489', title: 'Owner' });
+const cJohn = insertContact({ company_id: acme, first_name: 'John', last_name: 'Meyer', email: 'john@acmeroofing.com', phone: '(555) 210-4489', mobile_phone: '(555) 210-9821', title: 'Owner' });
 const cPriya = insertContact({ company_id: brightline, first_name: 'Priya', last_name: 'Shah', email: 'priya@brightline.io', phone: '(555) 934-1121', title: 'VP Sales' });
 const cDana = insertContact({ company_id: northwood, first_name: 'Dana', last_name: 'Ruiz', email: 'dana@northwooddental.com', phone: '(555) 662-7711', title: 'Office Manager' });
 const cTom = insertContact({ company_id: summit, first_name: 'Tom', last_name: 'Whitfield', email: 'tom@summitretail.com', phone: '(555) 447-2201', title: 'Director of Ops' });
@@ -103,17 +117,45 @@ const cMarcus = insertContact({ company_id: graystone, first_name: 'Marcus', las
 const cSara = insertContact({ company_id: acme, first_name: 'Sara', last_name: 'Meyer', email: 'sara@acmeroofing.com', phone: '(555) 210-4490', title: 'Office Admin' });
 const cLeo = insertContact({ company_id: brightline, first_name: 'Leo', last_name: 'Nakamura', email: 'leo@brightline.io', phone: '(555) 934-1122', title: 'Head of RevOps' });
 const cKaren = insertContact({ first_name: 'Karen', last_name: 'Whitfield', email: 'karen.whitfield@gmail.com', phone: '(555) 402-7788', title: 'Homeowner', address: '58 Maple Ridge Dr, Madison, WI', source: 'Web forms' });
+const cGreg = insertContact({ first_name: 'Greg', last_name: 'Alvarez', email: 'g.alvarez@example.com', phone: '(555) 771-2290', mobile_phone: '(555) 771-9081', title: 'Homeowner', address: '14 Foxglove Ln, Madison, WI', source: 'Angi/HomeAdvisor' });
 
 // --- Deals across pipeline stages ---
-const d1 = insertDeal({ contact_id: cPriya, company_id: brightline, title: 'Brightline — Growth plan upgrade', value: 42000, stage: 'negotiation', probability: 70, expected_close: '2026-10-15' });
-const d2 = insertDeal({ contact_id: cTom, company_id: summit, title: 'Summit Retail — POS rollout (12 stores)', value: 68000, stage: 'proposal', probability: 50, expected_close: '2026-11-01' });
-const d3 = insertDeal({ contact_id: cElena, company_id: harbor, title: 'Harbor Logistics — Fleet tracking pilot', value: 25000, stage: 'qualified', probability: 30, expected_close: '2026-11-20' });
-const d4 = insertDeal({ contact_id: cMarcus, company_id: graystone, title: 'Graystone — Portfolio-wide onboarding', value: 15500, stage: 'new', probability: 15, expected_close: '2026-12-05', source: 'Referral' });
-const d5 = insertDeal({ contact_id: cLeo, company_id: brightline, title: 'Brightline — Add-on seats (Q4)', value: 9800, stage: 'won', probability: 100, expected_close: '2026-09-01' });
-const d6 = insertDeal({ contact_id: cDana, company_id: northwood, title: 'Northwood Dental — Front desk suite', value: 6200, stage: 'lost', probability: 0, expected_close: '2026-08-20' });
-const d7 = insertDeal({ contact_id: cTom, company_id: summit, title: 'Summit Retail — Loyalty module', value: 18000, stage: 'qualified', probability: 35, expected_close: '2026-12-15' });
-const d8 = insertDeal({ contact_id: cElena, company_id: harbor, title: 'Harbor Logistics — Full fleet contract', value: 88000, stage: 'new', probability: 10, expected_close: '2027-01-10', source: 'SEO (organic)' });
-const d9 = insertDeal({ contact_id: cKaren, title: 'Karen Whitfield — Web forms', value: 8200, stage: 'new', probability: 20, expected_close: null, source: 'Web forms' });
+// Note: this legacy batch (d1-d8) predates the shop's re-scope to a paving/home-services
+// business — the companies are generic B2B accounts, so they get a rep/owner/property-type
+// for the new estimator & close-rate reports but no service type (there's no real paving
+// scope-of-work to categorize). d9 below is the one genuinely paving-flavored lead and gets
+// the full lead-detail treatment.
+const d1 = insertDeal({ contact_id: cPriya, company_id: brightline, title: 'Brightline — Growth plan upgrade', value: 42000, stage: 'negotiation', probability: 70, expected_close: '2026-10-15', rep: 'Ethan Levi', lead_owner: 'Ethan Levi', customer_type: 'Commercial', lead_status: 'Converted' });
+const d2 = insertDeal({ contact_id: cTom, company_id: summit, title: 'Summit Retail — POS rollout (12 stores)', value: 68000, stage: 'proposal', probability: 50, expected_close: '2026-11-01', rep: 'Mike Torres', lead_owner: 'Mike Torres', customer_type: 'Commercial', lead_status: 'Converted' });
+const d3 = insertDeal({ contact_id: cElena, company_id: harbor, title: 'Harbor Logistics — Fleet tracking pilot', value: 25000, stage: 'qualified', probability: 30, expected_close: '2026-11-20', rep: 'Ethan Levi', lead_owner: 'Ethan Levi', customer_type: 'Commercial', lead_status: 'Converted' });
+const d4 = insertDeal({
+  contact_id: cMarcus, company_id: graystone, title: 'Graystone — Portfolio-wide onboarding', value: 15500, stage: 'new', probability: 15, expected_close: '2026-12-05', source: 'Referral',
+  rep: 'Mike Torres', lead_owner: 'Mike Torres', customer_type: 'Commercial', lead_status: 'Follow Up', lead_type: 'Referral',
+  job_timeframe: '1-3 months', method_of_entry: 'Referral', followup_date: '2026-09-22',
+});
+const d5 = insertDeal({ contact_id: cLeo, company_id: brightline, title: 'Brightline — Add-on seats (Q4)', value: 9800, stage: 'won', probability: 100, expected_close: '2026-09-01', source: 'Referral', rep: 'Ethan Levi', lead_owner: 'Ethan Levi', customer_type: 'Commercial', lead_status: 'Converted' });
+const d6 = insertDeal({ contact_id: cDana, company_id: northwood, title: 'Northwood Dental — Front desk suite', value: 6200, stage: 'lost', probability: 0, expected_close: '2026-08-20', rep: 'Mike Torres', lead_owner: 'Mike Torres', customer_type: 'Commercial', lead_status: 'Lost' });
+const d7 = insertDeal({ contact_id: cTom, company_id: summit, title: 'Summit Retail — Loyalty module', value: 18000, stage: 'qualified', probability: 35, expected_close: '2026-12-15', rep: 'Ethan Levi', lead_owner: 'Ethan Levi', customer_type: 'Commercial', lead_status: 'Converted' });
+const d8 = insertDeal({
+  contact_id: cElena, company_id: harbor, title: 'Harbor Logistics — Full fleet contract', value: 88000, stage: 'new', probability: 10, expected_close: '2027-01-10', source: 'SEO (organic)',
+  rep: 'Ethan Levi', lead_owner: 'Ethan Levi', customer_type: 'Commercial', lead_status: 'New', lead_type: 'New business',
+  job_timeframe: 'Just researching', method_of_entry: 'Web form',
+});
+const d9 = insertDeal({
+  contact_id: cKaren, title: 'Karen Whitfield — Web forms', value: 8200, stage: 'new', probability: 20, expected_close: null, source: 'Web forms',
+  rep: 'Ethan Levi', lead_owner: 'Ethan Levi', customer_type: 'Residential', work_type: 'Concrete', sub_service_type: 'Driveway resurfacing',
+  lead_status: 'New', lead_type: 'New business', job_timeframe: 'Within 30 days', followup_date: '2026-09-20',
+  method_of_entry: 'Web form', project_description: 'Wants a full driveway resurface — existing concrete is cracked and heaving in a few spots.',
+  inquiry_notes: 'Submitted the website contact form asking about a driveway resurface quote.',
+});
+// A purchased Angi/HomeAdvisor lead — demonstrates the lead-fee/match-type cost tracking
+// alongside the free/organic leads above.
+const d10 = insertDeal({
+  contact_id: cGreg, title: 'Greg Alvarez — Angi/HomeAdvisor', value: 5400, stage: 'new', probability: 20, expected_close: null, source: 'Angi/HomeAdvisor',
+  rep: 'Mike Torres', lead_owner: 'Mike Torres', customer_type: 'Residential', work_type: 'Asphalt paving', sub_service_type: 'Driveway resealing',
+  lead_status: 'New', lead_type: 'New business', job_timeframe: 'ASAP', method_of_entry: 'Call center',
+  project_description: 'Asphalt driveway needs sealcoating before winter.', ha_lead_fee: 42.50, ha_match_type: 'Exact match',
+});
 
 // --- Field ops: jobs -> estimates -> invoices -> payments (Joist-style) ---
 const j1 = insertJob({ contact_id: cJohn, company_id: acme, title: 'Roof replacement — 412 Cedar St', status: 'in_progress', address: '412 Cedar St, Madison, WI', scheduled_date: '2026-09-18' });

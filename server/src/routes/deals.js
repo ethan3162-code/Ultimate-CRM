@@ -57,13 +57,36 @@ router.get('/', (req, res) => {
   res.json(rows.map(withCustomerInfo).map(withScore));
 });
 
+const LEAD_DETAIL_FIELDS = [
+  'lead_status', 'lead_type', 'job_timeframe', 'followup_date', 'lead_notes', 'inquiry_notes',
+  'project_description', 'preferred_callback_time', 'preferred_consult_time', 'sub_service_type',
+  'lead_owner', 'method_of_entry', 'ha_match_type',
+];
+
 router.post('/', (req, res) => {
-  const { contact_id, company_id, title, value, stage, probability, expected_close, source } = req.body;
+  const {
+    contact_id, company_id, title, value, stage, probability, expected_close, source, rep, work_type, customer_type,
+    phone_estimate, repeat_referral, ha_lead_fee,
+  } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
+  const detail = LEAD_DETAIL_FIELDS.reduce((acc, f) => ({ ...acc, [f]: req.body[f] ?? (f === 'lead_status' ? 'New' : null) }), {});
   const result = db.prepare(`
-    INSERT INTO deals (contact_id, company_id, title, value, stage, probability, expected_close, source)
-    VALUES (?,?,?,?,?,?,?,?)
-  `).run(contact_id || null, company_id || null, title, value || 0, stage || 'new', probability ?? 20, expected_close || null, source || null);
+    INSERT INTO deals (
+      contact_id, company_id, title, value, stage, probability, expected_close, source, rep, work_type, customer_type,
+      phone_estimate, repeat_referral, ha_lead_fee,
+      lead_status, lead_type, job_timeframe, followup_date, lead_notes, inquiry_notes,
+      project_description, preferred_callback_time, preferred_consult_time, sub_service_type,
+      lead_owner, method_of_entry, ha_match_type
+    )
+    VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?, ?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    contact_id || null, company_id || null, title, value || 0, stage || 'new', probability ?? 20, expected_close || null, source || null,
+    rep || null, work_type || null, customer_type || 'Residential',
+    phone_estimate ? 1 : 0, repeat_referral ? 1 : 0, ha_lead_fee || null,
+    detail.lead_status, detail.lead_type, detail.job_timeframe, detail.followup_date, detail.lead_notes, detail.inquiry_notes,
+    detail.project_description, detail.preferred_callback_time, detail.preferred_consult_time, detail.sub_service_type,
+    detail.lead_owner, detail.method_of_entry, detail.ha_match_type
+  );
   const deal = db.prepare(`SELECT * FROM deals WHERE id = ?`).get(result.lastInsertRowid);
   logActivity('deal', deal.id, 'note', `Deal "${deal.title}" created.`);
   const dealContact = deal.contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(deal.contact_id) : null;
@@ -93,10 +116,30 @@ router.patch('/:id', (req, res) => {
     return res.status(400).json({ error: `stage must be one of ${STAGES.join(', ')}` });
   }
   const updates = { ...existing, ...req.body };
+  // Qualifying/disqualifying a lead (via the Leads page's Qualify/Disqualify buttons, which
+  // only PATCH `stage`) implies a lead_status too, unless the caller set one explicitly.
+  if (req.body.stage && req.body.stage !== existing.stage && req.body.lead_status === undefined) {
+    if (req.body.stage === 'lost') updates.lead_status = 'Lost';
+    else if (existing.stage === 'new') updates.lead_status = 'Converted';
+  }
   db.prepare(`
-    UPDATE deals SET contact_id=?, company_id=?, title=?, value=?, stage=?, probability=?, expected_close=?, source=?, updated_at=datetime('now')
+    UPDATE deals SET
+      contact_id=?, company_id=?, title=?, value=?, stage=?, probability=?, expected_close=?, source=?, rep=?, work_type=?, customer_type=?,
+      phone_estimate=?, repeat_referral=?, ha_lead_fee=?,
+      lead_status=?, lead_type=?, job_timeframe=?, followup_date=?, lead_notes=?, inquiry_notes=?,
+      project_description=?, preferred_callback_time=?, preferred_consult_time=?, sub_service_type=?,
+      lead_owner=?, method_of_entry=?, ha_match_type=?,
+      updated_at=datetime('now')
     WHERE id=?
-  `).run(updates.contact_id, updates.company_id, updates.title, updates.value, updates.stage, updates.probability, updates.expected_close, updates.source, req.params.id);
+  `).run(
+    updates.contact_id, updates.company_id, updates.title, updates.value, updates.stage, updates.probability, updates.expected_close, updates.source,
+    updates.rep, updates.work_type, updates.customer_type,
+    updates.phone_estimate ? 1 : 0, updates.repeat_referral ? 1 : 0, updates.ha_lead_fee || null,
+    updates.lead_status, updates.lead_type, updates.job_timeframe, updates.followup_date, updates.lead_notes, updates.inquiry_notes,
+    updates.project_description, updates.preferred_callback_time, updates.preferred_consult_time, updates.sub_service_type,
+    updates.lead_owner, updates.method_of_entry, updates.ha_match_type,
+    req.params.id
+  );
 
   if (req.body.stage && req.body.stage !== existing.stage) {
     logActivity('deal', existing.id, 'stage_change', `Stage moved from "${existing.stage}" to "${req.body.stage}".`);

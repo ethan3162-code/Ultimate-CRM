@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 
 const NAV = [
-  { group: 'Overview', items: [{ to: '/', label: 'Dashboard', end: true }] },
+  { group: 'Overview', items: [{ to: '/', label: 'Home', end: true }, { to: '/dashboard', label: 'Dashboard' }] },
   {
     group: 'Sales',
     items: [

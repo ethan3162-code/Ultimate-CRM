@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { money, shortDate, mapLinks } from '../utils';
+import { WORK_TYPES, CUSTOMER_TYPES } from '../constants';
 
 // Fresh, unqualified interest lives on the Leads page now — this board picks
 // up once a lead has been qualified, so 'new' is intentionally left out here.
@@ -21,7 +22,7 @@ export default function Pipeline() {
   const [allDeals, setAllDeals] = useState([]);
   const [dragOverStage, setDragOverStage] = useState(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: '', value: '', stage: 'qualified' });
+  const [form, setForm] = useState({ title: '', value: '', stage: 'qualified', rep: '', work_type: '', customer_type: 'Residential' });
   const [view, setView] = useState('kanban');
   const [cursor, setCursor] = useState(() => { const d = new Date(); d.setDate(1); return d; });
 
@@ -67,8 +68,11 @@ export default function Pipeline() {
   async function submitDeal(e) {
     e.preventDefault();
     if (!form.title.trim()) return;
-    await api.createDeal({ title: form.title, value: Number(form.value) || 0, stage: form.stage });
-    setForm({ title: '', value: '', stage: 'qualified' });
+    await api.createDeal({
+      title: form.title, value: Number(form.value) || 0, stage: form.stage,
+      rep: form.rep || null, work_type: form.work_type || null, customer_type: form.customer_type,
+    });
+    setForm({ title: '', value: '', stage: 'qualified', rep: '', work_type: '', customer_type: 'Residential' });
     setShowForm(false);
     load();
   }
@@ -112,6 +116,23 @@ export default function Pipeline() {
               <label>Stage</label>
               <select value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })}>
                 {STAGES.map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Rep / estimator</label>
+              <input value={form.rep} onChange={(e) => setForm({ ...form, rep: e.target.value })} placeholder="Who's working this deal?" />
+            </div>
+            <div className="field">
+              <label>Type of work</label>
+              <select value={form.work_type} onChange={(e) => setForm({ ...form, work_type: e.target.value })}>
+                <option value="">— none —</option>
+                {WORK_TYPES.map((w) => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Customer type</label>
+              <select value={form.customer_type} onChange={(e) => setForm({ ...form, customer_type: e.target.value })}>
+                {CUSTOMER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div className="field" style={{ justifyContent: 'flex-end' }}>

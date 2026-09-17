@@ -141,7 +141,106 @@ router.get('/', (req, res) => {
       .slice(0, 8),
   };
 
-  res.json({ revenueByMonth, jobsByMonth, pipelineByStage, jobsByStatus, invoiceAging, topCustomers, revenueForecast, undatedForecastValue, jobProfitability });
+  // --- Sales & lead-source analytics (matches the reporting on Ethan's Salesforce
+  // dashboard: Sales/Close Rate/Avg Job Size by source, estimator, city, service type,
+  // property type; Leads by Source and Booking Rate by Source). All-time totals for now —
+  // there's no interactive date-range picker in this app yet, unlike the Salesforce
+  // dashboard's "Opp: Created Date" etc. filters.
+  const wonDeals = db.prepare(`SELECT * FROM deals WHERE stage = 'won'`).all();
+  const totalSales = wonDeals.reduce((s, d) => s + d.value, 0);
+  const closedDealCount = db.prepare(`SELECT COUNT(*) c FROM deals WHERE stage IN ('won','lost')`).get().c;
+  const closeRate = closedDealCount > 0 ? +((wonDeals.length / closedDealCount) * 100).toFixed(1) : null;
+  const avgJobSize = wonDeals.length > 0 ? +(totalSales / wonDeals.length).toFixed(2) : 0;
+  const appointmentsBooked = db.prepare(`SELECT COUNT(*) c FROM appointments`).get().c;
+  const salesSummary = {
+    totalSales: +totalSales.toFixed(2), avgJobSize, jobsWon: wonDeals.length, closeRate, appointmentsBooked,
+  };
+
+  // City is parsed out of "Street, City, ST" — the same address format used everywhere
+  // else in the app (map links, seed data), so no new field is needed just to report by city.
+  function cityOf(address) {
+    if (!address) return null;
+    const parts = address.split(',').map((s) => s.trim());
+    return parts.length >= 2 ? parts[parts.length - 2] : null;
+  }
+
+  const dealRows = db.prepare(`
+    SELECT d.*, c.address AS contact_address, co.address AS company_address
+    FROM deals d
+    LEFT JOIN contacts c ON c.id = d.contact_id
+    LEFT JOIN companies co ON co.id = d.company_id
+  `).all().map((d) => ({ ...d, resolved_address: d.contact_address || d.company_address || null }));
+
+  function groupSum(rows, keyFn, valueFn) {
+    const map = new Map();
+    for (const r of rows) {
+      const key = keyFn(r);
+      if (!key) continue;
+      map.set(key, (map.get(key) || 0) + valueFn(r));
+    }
+    return [...map.entries()].map(([label, amount]) => ({ label, amount: +amount.toFixed(2) })).sort((a, b) => b.amount - a.amount);
+  }
+  function groupCount(rows, keyFn) {
+    const map = new Map();
+    for (const r of rows) {
+      const key = keyFn(r);
+      if (!key) continue;
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    return [...map.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
+  }
+  function closeRateGroup(rows, keyFn) {
+    const wins = new Map();
+    const totals = new Map();
+    for (const r of rows) {
+      const key = keyFn(r);
+      if (!key) continue;
+      totals.set(key, (totals.get(key) || 0) + 1);
+      if (r.stage === 'won') wins.set(key, (wins.get(key) || 0) + 1);
+    }
+    return [...totals.entries()]
+      .map(([label, total]) => ({ label, rate: +(((wins.get(label) || 0) / total) * 100).toFixed(1), total }))
+      .sort((a, b) => b.rate - a.rate);
+  }
+
+  const wonDealRows = dealRows.filter((d) => d.stage === 'won');
+  const salesBySource = groupSum(wonDealRows, (d) => d.source, (d) => d.value);
+  const salesByEstimator = groupSum(wonDealRows, (d) => d.rep, (d) => d.value);
+  const salesByCity = groupSum(wonDealRows, (d) => cityOf(d.resolved_address), (d) => d.value);
+  const salesByServiceType = groupSum(wonDealRows, (d) => d.work_type, (d) => d.value);
+  const salesByType = groupSum(wonDealRows, (d) => d.customer_type, (d) => d.value);
+
+  const closedDealRows = dealRows.filter((d) => d.stage === 'won' || d.stage === 'lost');
+  const closeRateByPerson = closeRateGroup(closedDealRows, (d) => d.rep);
+  const closeRateBySource = closeRateGroup(closedDealRows, (d) => d.source);
+
+  // Leads: every deal ever created (source is attributed at lead-capture time), by source.
+  const leadsBySource = groupCount(dealRows, (d) => d.source);
+  const thisMonthKey = monthKey(new Date());
+  const leadsThisMonthBySource = groupCount(dealRows.filter((d) => d.created_at && d.created_at.slice(0, 7) === thisMonthKey), (d) => d.source);
+
+  // Booking rate by source: of leads attributed to each source, what share have at least
+  // one appointment linked via their contact — a proxy for "did we get this lead on the
+  // calendar," same idea as the Salesforce "Booking Rate by Source" widget.
+  const apptContactIds = new Set(
+    db.prepare(`SELECT DISTINCT contact_id FROM appointments WHERE contact_id IS NOT NULL`).all().map((r) => r.contact_id)
+  );
+  const bookingTotals = new Map();
+  const bookingBooked = new Map();
+  for (const d of dealRows) {
+    if (!d.source) continue;
+    bookingTotals.set(d.source, (bookingTotals.get(d.source) || 0) + 1);
+    if (d.contact_id && apptContactIds.has(d.contact_id)) bookingBooked.set(d.source, (bookingBooked.get(d.source) || 0) + 1);
+  }
+  const bookingRateBySource = [...bookingTotals.entries()]
+    .map(([label, total]) => ({ label, rate: +(((bookingBooked.get(label) || 0) / total) * 100).toFixed(1), total }))
+    .sort((a, b) => b.rate - a.rate);
+
+  res.json({
+    revenueByMonth, jobsByMonth, pipelineByStage, jobsByStatus, invoiceAging, topCustomers, revenueForecast, undatedForecastValue, jobProfitability,
+    salesSummary, salesBySource, salesByEstimator, salesByCity, salesByServiceType, salesByType,
+    closeRateByPerson, closeRateBySource, leadsBySource, leadsThisMonthBySource, bookingRateBySource,
+  });
 });
 
 module.exports = router;

@@ -12,12 +12,12 @@ export default function ContactDetail() {
   const { id } = useParams();
   const [contact, setContact] = useState(null);
   const [editing, setEditing] = useState(false);
-  const [info, setInfo] = useState({ phone: '', address: '', source: '' });
+  const [info, setInfo] = useState({ phone: '', mobile_phone: '', address: '', source: '' });
   const [saving, setSaving] = useState(false);
   const [scheduling, setScheduling] = useState(false);
 
   function load() {
-    api.contact(id).then((c) => { setContact(c); setInfo({ phone: c.phone || '', address: c.address || '', source: c.source || '' }); });
+    api.contact(id).then((c) => { setContact(c); setInfo({ phone: c.phone || '', mobile_phone: c.mobile_phone || '', address: c.address || '', source: c.source || '' }); });
   }
   useEffect(load, [id]);
 
@@ -86,6 +86,7 @@ export default function ContactDetail() {
             {editing ? (
               <form onSubmit={saveInfo} className="stack" style={{ gap: 10 }}>
                 <div className="field"><label>Phone</label><input value={info.phone} onChange={(e) => setInfo({ ...info, phone: e.target.value })} /></div>
+                <div className="field"><label>Mobile</label><input value={info.mobile_phone} onChange={(e) => setInfo({ ...info, mobile_phone: e.target.value })} /></div>
                 <div className="field"><label>Address</label><input value={info.address} onChange={(e) => setInfo({ ...info, address: e.target.value })} placeholder="Street, city, state" /></div>
                 <div className="field">
                   <label>Lead source</label>
@@ -97,12 +98,13 @@ export default function ContactDetail() {
                 </div>
                 <div className="row" style={{ gap: 8 }}>
                   <button className="btn primary sm" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-                  <button className="btn sm subtle" type="button" onClick={() => { setEditing(false); setInfo({ phone: contact.phone || '', address: contact.address || '', source: contact.source || '' }); }}>Cancel</button>
+                  <button className="btn sm subtle" type="button" onClick={() => { setEditing(false); setInfo({ phone: contact.phone || '', mobile_phone: contact.mobile_phone || '', address: contact.address || '', source: contact.source || '' }); }}>Cancel</button>
                 </div>
               </form>
             ) : (
               <div className="stack" style={{ gap: 6, marginTop: 10 }}>
                 <div className="row between"><span className="muted">Phone</span>{contact.phone ? <a href={`tel:${contact.phone}`}>{contact.phone}</a> : <span className="muted">—</span>}</div>
+                <div className="row between"><span className="muted">Mobile</span>{contact.mobile_phone ? <a href={`tel:${contact.mobile_phone}`}>{contact.mobile_phone}</a> : <span className="muted">—</span>}</div>
                 <div className="row between" style={{ alignItems: 'flex-start' }}>
                   <span className="muted">Address</span>
                   <span style={{ textAlign: 'right' }}>{contact.address || '—'}</span>

@@ -256,7 +256,30 @@ ensureColumn('catalog_items', 'brand', 'brand TEXT');
 ensureColumn('catalog_items', 'sf_per_pallet', 'sf_per_pallet REAL');
 ensureColumn('contacts', 'source', 'source TEXT');
 ensureColumn('contacts', 'address', 'address TEXT');
+ensureColumn('contacts', 'mobile_phone', 'mobile_phone TEXT');
 ensureColumn('deals', 'source', 'source TEXT');
+ensureColumn('deals', 'rep', 'rep TEXT');
+ensureColumn('deals', 'work_type', 'work_type TEXT');
+ensureColumn('deals', 'customer_type', "customer_type TEXT NOT NULL DEFAULT 'Residential'");
+// Lead-detail fields (Salesforce Lead-object parity, Sept 2026) — these carry on into the
+// same record once a lead is qualified into an opportunity, since this app never does a
+// separate Lead->Opportunity conversion step (see the Leads/Opportunities/Projects design note).
+ensureColumn('deals', 'lead_status', "lead_status TEXT NOT NULL DEFAULT 'New'");
+ensureColumn('deals', 'lead_type', 'lead_type TEXT');
+ensureColumn('deals', 'job_timeframe', 'job_timeframe TEXT');
+ensureColumn('deals', 'followup_date', 'followup_date TEXT');
+ensureColumn('deals', 'lead_notes', 'lead_notes TEXT');
+ensureColumn('deals', 'inquiry_notes', 'inquiry_notes TEXT');
+ensureColumn('deals', 'project_description', 'project_description TEXT');
+ensureColumn('deals', 'preferred_callback_time', 'preferred_callback_time TEXT');
+ensureColumn('deals', 'preferred_consult_time', 'preferred_consult_time TEXT');
+ensureColumn('deals', 'phone_estimate', 'phone_estimate INTEGER NOT NULL DEFAULT 0');
+ensureColumn('deals', 'repeat_referral', 'repeat_referral INTEGER NOT NULL DEFAULT 0');
+ensureColumn('deals', 'sub_service_type', 'sub_service_type TEXT');
+ensureColumn('deals', 'lead_owner', 'lead_owner TEXT');
+ensureColumn('deals', 'method_of_entry', 'method_of_entry TEXT');
+ensureColumn('deals', 'ha_lead_fee', 'ha_lead_fee REAL');
+ensureColumn('deals', 'ha_match_type', 'ha_match_type TEXT');
 ensureColumn('estimates', 'sign_token', 'sign_token TEXT');
 ensureColumn('estimates', 'signed_name', 'signed_name TEXT');
 ensureColumn('estimates', 'signed_at', 'signed_at TEXT');

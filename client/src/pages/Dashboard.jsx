@@ -48,12 +48,12 @@ export default function Dashboard() {
           <div className="delta">{data.openDealCount} open deals · {money(data.weightedPipelineValue)} weighted</div>
         </div>
         <div className="kpi">
-          <div className="label">Unpaid invoices</div>
+          <div className="label">Balance owed</div>
           <div className="value">{money(data.unpaidTotal)}</div>
           <div className={'delta' + (data.overdueTotal > 0 ? ' warn' : '')}>{money(data.overdueTotal)} overdue</div>
         </div>
         <div className="kpi">
-          <div className="label">Collected this month</div>
+          <div className="label">Payments in (this month)</div>
           <div className="value">{money(data.paidThisMonth)}</div>
           <div className="delta">across all field jobs</div>
         </div>
@@ -62,6 +62,35 @@ export default function Dashboard() {
           <div className="value">{data.jobsInProgress + data.jobsScheduled}</div>
           <div className="delta">{data.jobsInProgress} in progress · {data.jobsScheduled} scheduled</div>
         </div>
+        {reports && (
+          <>
+            <div className="kpi">
+              <div className="label">Sales</div>
+              <div className="value">{money(reports.salesSummary.totalSales)}</div>
+              <div className="delta">{reports.salesSummary.jobsWon} won</div>
+            </div>
+            <div className="kpi">
+              <div className="label">Average job size</div>
+              <div className="value">{money(reports.salesSummary.avgJobSize)}</div>
+              <div className="delta">per won opportunity</div>
+            </div>
+            <div className="kpi">
+              <div className="label">Close rate</div>
+              <div className="value">{reports.salesSummary.closeRate === null ? '—' : `${reports.salesSummary.closeRate}%`}</div>
+              <div className="delta">won ÷ (won + lost)</div>
+            </div>
+            <div className="kpi">
+              <div className="label">Appointments booked</div>
+              <div className="value">{reports.salesSummary.appointmentsBooked}</div>
+              <div className="delta">all-time</div>
+            </div>
+            <div className="kpi">
+              <div className="label">Gross profit</div>
+              <div className="value" style={{ color: reports.jobProfitability.totalProfit < 0 ? 'var(--red)' : undefined }}>{money(reports.jobProfitability.totalProfit)}</div>
+              <div className="delta">across jobs with logged expenses</div>
+            </div>
+          </>
+        )}
       </div>
 
       {insights && attentionCount(insights) > 0 && (
@@ -243,6 +272,97 @@ export default function Dashboard() {
               <div className="empty">No paid invoices yet.</div>
             ) : (
               <BarList data={reports.topCustomers} valueKey="amount" labelKey="name" formatValue={money} />
+            )}
+          </div>
+
+          <div className="card">
+            <h2>Leads created this month, by source</h2>
+            {reports.leadsThisMonthBySource.length === 0 ? (
+              <div className="empty">No leads yet this month.</div>
+            ) : (
+              <BarList data={reports.leadsThisMonthBySource} valueKey="count" labelKey="label" formatValue={(v) => v} />
+            )}
+          </div>
+
+          <div className="card">
+            <h2>Leads by source (all-time)</h2>
+            {reports.leadsBySource.length === 0 ? (
+              <div className="empty">No leads yet.</div>
+            ) : (
+              <BarList data={reports.leadsBySource} valueKey="count" labelKey="label" formatValue={(v) => v} />
+            )}
+          </div>
+
+          <div className="card">
+            <h2>Booking rate by source</h2>
+            <p className="sub" style={{ margin: '-4px 0 10px' }}>Share of leads from each source that got at least one appointment on the calendar.</p>
+            {reports.bookingRateBySource.length === 0 ? (
+              <div className="empty">No leads yet.</div>
+            ) : (
+              <BarList data={reports.bookingRateBySource} valueKey="rate" labelKey="label" formatValue={(v) => `${v}%`} />
+            )}
+          </div>
+
+          <div className="card">
+            <h2>Sales by source</h2>
+            {reports.salesBySource.length === 0 ? (
+              <div className="empty">No won opportunities yet.</div>
+            ) : (
+              <BarList data={reports.salesBySource} valueKey="amount" labelKey="label" formatValue={money} />
+            )}
+          </div>
+
+          <div className="card">
+            <h2>Sales by estimator</h2>
+            {reports.salesByEstimator.length === 0 ? (
+              <div className="empty">No won opportunities with an estimator set yet.</div>
+            ) : (
+              <BarList data={reports.salesByEstimator} valueKey="amount" labelKey="label" formatValue={money} />
+            )}
+          </div>
+
+          <div className="card">
+            <h2>Sales by city</h2>
+            {reports.salesByCity.length === 0 ? (
+              <div className="empty">No won opportunities with a resolvable address yet.</div>
+            ) : (
+              <BarList data={reports.salesByCity} valueKey="amount" labelKey="label" formatValue={money} />
+            )}
+          </div>
+
+          <div className="card">
+            <h2>Sales by service type</h2>
+            {reports.salesByServiceType.length === 0 ? (
+              <div className="empty">No won opportunities with a service type set yet.</div>
+            ) : (
+              <BarList data={reports.salesByServiceType} valueKey="amount" labelKey="label" formatValue={money} />
+            )}
+          </div>
+
+          <div className="card">
+            <h2>Sales by property type</h2>
+            {reports.salesByType.length === 0 ? (
+              <div className="empty">No won opportunities yet.</div>
+            ) : (
+              <BarList data={reports.salesByType} valueKey="amount" labelKey="label" formatValue={money} />
+            )}
+          </div>
+
+          <div className="card">
+            <h2>Close rate by estimator</h2>
+            {reports.closeRateByPerson.length === 0 ? (
+              <div className="empty">No closed (won/lost) opportunities with an estimator set yet.</div>
+            ) : (
+              <BarList data={reports.closeRateByPerson} valueKey="rate" labelKey="label" formatValue={(v) => `${v}%`} />
+            )}
+          </div>
+
+          <div className="card">
+            <h2>Close rate by lead source</h2>
+            {reports.closeRateBySource.length === 0 ? (
+              <div className="empty">No closed (won/lost) opportunities yet.</div>
+            ) : (
+              <BarList data={reports.closeRateBySource} valueKey="rate" labelKey="label" formatValue={(v) => `${v}%`} />
             )}
           </div>
 
