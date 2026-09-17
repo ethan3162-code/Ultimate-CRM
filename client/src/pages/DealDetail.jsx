@@ -232,6 +232,7 @@ export default function DealDetail() {
                     {LEAD_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
                     {about.source && !LEAD_SOURCES.includes(about.source) && <option value={about.source}>{about.source}</option>}
                   </select>
+                  <p className="sub" style={{ margin: '4px 0 0' }}>This is specific to this deal. The linked contact keeps their own source separately — changing one doesn't change the other.</p>
                 </div>
                 <div className="row" style={{ gap: 8 }}>
                   <button className="btn primary sm" type="submit" disabled={savingAbout}>{savingAbout ? 'Saving…' : 'Save'}</button>
@@ -244,7 +245,7 @@ export default function DealDetail() {
                 <div className="row between"><span className="muted">Value</span><span>{money(deal.value)}</span></div>
                 <div className="row between"><span className="muted">Probability</span><span>{deal.probability}%</span></div>
                 <div className="row between"><span className="muted">Expected close</span><span>{deal.expected_close ? shortDate(deal.expected_close) : '—'}</span></div>
-                <div className="row between"><span className="muted">Lead source</span><span>{deal.source || '—'}</span></div>
+                <div className="row between" title="This deal's own lead source. The linked contact keeps their own source too, which can differ."><span className="muted">Lead source</span><span>{deal.source || '—'}</span></div>
               </div>
             )}
             <div className="row between" style={{ alignItems: 'center', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--line-soft)' }}>

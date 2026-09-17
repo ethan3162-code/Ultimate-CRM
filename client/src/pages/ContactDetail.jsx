@@ -95,6 +95,7 @@ export default function ContactDetail() {
                     {LEAD_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
                     {info.source && !LEAD_SOURCES.includes(info.source) && <option value={info.source}>{info.source}</option>}
                   </select>
+                  <p className="sub" style={{ margin: '4px 0 0' }}>This person's own source. Each of their deals also records its own source, separately — changing one doesn't change the other.</p>
                 </div>
                 <div className="row" style={{ gap: 8 }}>
                   <button className="btn primary sm" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
@@ -136,7 +137,7 @@ export default function ContactDetail() {
                   <span>{contact.owner_username ? <span className="owner-chip"><span className="avatar">{contact.owner_username.slice(0, 2).toUpperCase()}</span>{contact.owner_username}</span> : '—'}</span>
                 )}
               </div>
-              <div className="row between">
+              <div className="row between" title="This contact's own lead source. Deals/opportunities linked to them each record their own source too, which can differ.">
                 <span className="muted">Lead source</span><span>{contact.source || '—'}</span>
               </div>
               <div className="row between" title="Derived from this person's most recent lead/opportunity — set it there, not here.">
