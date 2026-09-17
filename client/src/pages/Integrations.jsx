@@ -50,6 +50,22 @@ export default function Integrations() {
   "source": "Website contact form"
 }`;
 
+  const salesforcePayload = `{
+  "external_id": "{!$Record.Id}",
+  "external_source": "salesforce",
+  "first_name": "{!$Record.FirstName}",
+  "last_name": "{!$Record.LastName}",
+  "email": "{!$Record.Email}",
+  "phone": "{!$Record.Phone}",
+  "mobile_phone": "{!$Record.MobilePhone}",
+  "title": "{!$Record.Title}",
+  "address": "{!$Record.Street}, {!$Record.City}, {!$Record.State}",
+  "company": "{!$Record.Company}",
+  "source": "Salesforce",
+  "lead_owner": "{!$Record.Owner.Name}",
+  "message": "{!$Record.Description}"
+}`;
+
   return (
     <>
       <div className="page-head">
@@ -93,6 +109,31 @@ export default function Integrations() {
             </div>
           </>
         )}
+      </div>
+
+      <div className="card section-card accent-blue" style={{ marginBottom: 18 }}>
+        <h2 className="section-label">Salesforce → new leads &amp; contacts</h2>
+        <p className="sub" style={{ margin: '-4px 0 14px' }}>
+          Uses the same webhook above — no Salesforce API credentials needed on our side. In Salesforce, build a
+          record-triggered Flow that fires whenever a Lead (or Contact) is created, with an "HTTP Callout" action
+          that posts to the webhook URL above. Sending the record's <code>Id</code> as <code>external_id</code> means
+          if the Flow also fires on edits, it updates the same record here instead of creating a duplicate every time.
+        </p>
+        {webhook && (
+          <ol style={{ margin: '0 0 14px', paddingLeft: 20, fontSize: 13.5 }}>
+            <li style={{ marginBottom: 6 }}>Setup → Flows → New Flow → <strong>Record-Triggered Flow</strong>, object <strong>Lead</strong> (make a second one for <strong>Contact</strong> the same way), trigger on "A record is created or updated."</li>
+            <li style={{ marginBottom: 6 }}>Add an <strong>Action</strong> element → <strong>HTTP Callout</strong> (or an External Service pointed at this URL) → method <strong>POST</strong>, URL <code>{webhook.url}</code>, header <code>X-Webhook-Key</code> set to the webhook key below, body type JSON.</li>
+            <li>Map the JSON body to the Lead/Contact's merge fields — see the example below.</li>
+          </ol>
+        )}
+        <div className="kicker" style={{ marginBottom: 6 }}>Example Flow HTTP Callout body (Lead)</div>
+        <pre className="code-block">{salesforcePayload}</pre>
+        <p className="sub" style={{ margin: '8px 0 0' }}>
+          Every field here is optional except enough to identify the person (name, email, or phone) — send whatever
+          Salesforce fields you've mapped. <code>external_id</code>/<code>external_source</code> are what prevent
+          duplicates on re-sync; everything else lands on the matching Contact/Lead fields already in this app
+          (owner, method of entry, etc. show up on the Contact/Opportunity detail pages).
+        </p>
       </div>
 
       <div className="card">

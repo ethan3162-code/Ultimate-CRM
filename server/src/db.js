@@ -337,6 +337,15 @@ db.prepare(`UPDATE contacts SET updated_at = created_at WHERE updated_at IS NULL
 ensureColumn('deals', 'owner_user_id', 'owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 ensureColumn('deals', 'created_by_user_id', 'created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 ensureColumn('deals', 'updated_by_user_id', 'updated_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+// External-system linkage (Sept 2026, Salesforce lead-capture integration) — when a lead/contact
+// arrives via the webhook from an outside system (Salesforce, a website form, Zapier, ...), this
+// records which system and which record over there it came from, so the same Salesforce Lead
+// re-firing the webhook (e.g. on every field edit, not just on create) updates the existing
+// contact/deal instead of forking a duplicate.
+ensureColumn('contacts', 'external_source', 'external_source TEXT');
+ensureColumn('contacts', 'external_id', 'external_id TEXT');
+ensureColumn('deals', 'external_source', 'external_source TEXT');
+ensureColumn('deals', 'external_id', 'external_id TEXT');
 ensureColumn('estimates', 'sign_token', 'sign_token TEXT');
 ensureColumn('estimates', 'signed_name', 'signed_name TEXT');
 ensureColumn('estimates', 'signed_at', 'signed_at TEXT');
