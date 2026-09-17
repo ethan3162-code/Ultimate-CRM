@@ -1,4 +1,5 @@
 const db = require('./db');
+const { requiresEstimateApproval, canApproveEstimates } = require('./auth');
 
 function computeItemsTotal(items) {
   return items.reduce((sum, it) => sum + it.qty * it.unit_price, 0);
@@ -14,7 +15,41 @@ function getEstimateFull(id) {
   const est = db.prepare(`SELECT * FROM estimates WHERE id = ?`).get(id);
   if (!est) return null;
   const items = db.prepare(`SELECT * FROM estimate_items WHERE estimate_id = ? ORDER BY id`).all(id);
-  return { ...est, items, ...withTotals(est, items, est.tax_rate) };
+  const creator = est.created_by_user_id
+    ? db.prepare(`SELECT username, role, requires_estimate_approval FROM users WHERE id = ?`).get(est.created_by_user_id)
+    : null;
+  const approver = est.approved_by_user_id
+    ? db.prepare(`SELECT username FROM users WHERE id = ?`).get(est.approved_by_user_id)
+    : null;
+  // Whether this specific estimate is still blocked from going to the customer — true only while
+  // its creator's login requires approval AND this estimate hasn't been approved yet. Computed
+  // fresh every read (not stored) so turning the flag off for someone unblocks their existing
+  // estimates immediately, with nothing to migrate.
+  const requires_internal_approval = !!(creator && requiresEstimateApproval(creator) && est.approval_status !== 'approved');
+  return {
+    ...est, items, ...withTotals(est, items, est.tax_rate),
+    created_by_username: creator ? creator.username : null,
+    approved_by_username: approver ? approver.username : null,
+    requires_internal_approval,
+  };
+}
+
+// Every open estimate-approval request this login is allowed to act on — [] (and no query run)
+// for anyone who isn't flagged as an approver. Shared by the Dashboard (admin-only) and the
+// Home page (every login) so a non-admin approver — say a PM who isn't an admin — can still see
+// and act on requests even where Dashboard itself is locked to admins only.
+function getPendingEstimateApprovals(user, hidePrices) {
+  if (!canApproveEstimates(user)) return [];
+  const rows = db.prepare(`SELECT id FROM estimates WHERE approval_status = 'pending' ORDER BY approval_requested_at ASC`).all();
+  return rows.map((r) => {
+    const est = getEstimateFull(r.id);
+    const job = db.prepare(`SELECT id, title, address FROM jobs WHERE id = ?`).get(est.job_id);
+    return {
+      id: est.id, number: est.number, total: hidePrices ? null : est.total,
+      requested_at: est.approval_requested_at, requested_by: est.created_by_username,
+      job_id: job?.id, job_title: job?.title, job_address: job?.address,
+    };
+  });
 }
 
 function getInvoiceFull(id) {
@@ -236,5 +271,5 @@ function computeEndDate(job, startDate) {
 module.exports = {
   computeItemsTotal, withTotals, getEstimateFull, getInvoiceFull, getJobFull, getJobCosting, getJobBilling, logActivity,
   STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, stageDays, totalDays, computeProgress, addDays, computeEndDate,
-  redactEstimateMoney, redactInvoiceMoney, redactJobMoney,
+  redactEstimateMoney, redactInvoiceMoney, redactJobMoney, getPendingEstimateApprovals,
 };

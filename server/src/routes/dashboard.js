@@ -33,6 +33,13 @@ router.get('/', (req, res) => {
   // logged payment) — those aren't scrubbed here, only the structured $ fields below. A known,
   // documented gap rather than an oversight (see the spec doc's price-visibility section).
   const hidePrices = !canSeePrices(req.user);
+
+  // Note: the pending-estimate-approvals queue used to live on this Dashboard payload, but
+  // Dashboard is admin-only (Sept 2026) while approving an estimate is a separate, narrower
+  // flag a non-admin can hold — see routes/directory.js's /pending-approvals, which the Home
+  // page (visible to every login) reads instead, so a non-admin approver isn't locked out of
+  // acting on requests just because they can't see the Dashboard.
+
   res.json({
     openPipelineValue: hidePrices ? null : openPipelineValue,
     weightedPipelineValue: hidePrices ? null : weightedPipelineValue,

@@ -39,6 +39,7 @@ export const api = {
   // Lightweight, non-admin directory of active logins — used to populate "Owner" dropdowns on
   // Contacts/Leads/Opportunities (unlike api.users(), any signed-in role can call this).
   usersDirectory: () => request('/directory/users'),
+  pendingEstimateApprovals: () => request('/directory/pending-approvals'),
 
   // Reusable, stackable permission-template "Roles" — admin only.
   roles: () => request('/roles'),
@@ -70,6 +71,9 @@ export const api = {
   createEstimate: (jobId, data) => request(`/jobs/${jobId}/estimates`, { method: 'POST', body: JSON.stringify(data) }),
   convertEstimate: (estimateId) => request(`/jobs/estimates/${estimateId}/convert`, { method: 'POST' }),
   requestDeposit: (estimateId, data) => request(`/jobs/estimates/${estimateId}/deposit`, { method: 'POST', body: JSON.stringify(data) }),
+  requestEstimateApproval: (estimateId) => request(`/jobs/estimates/${estimateId}/request-approval`, { method: 'POST' }),
+  approveEstimate: (estimateId) => request(`/jobs/estimates/${estimateId}/approve`, { method: 'POST' }),
+  rejectEstimate: (estimateId, data) => request(`/jobs/estimates/${estimateId}/reject`, { method: 'POST', body: JSON.stringify(data || {}) }),
   createInvoice: (jobId, data) => request(`/jobs/${jobId}/invoices`, { method: 'POST', body: JSON.stringify(data) }),
   recordPayment: (invoiceId, data) => request(`/jobs/invoices/${invoiceId}/payments`, { method: 'POST', body: JSON.stringify(data) }),
 

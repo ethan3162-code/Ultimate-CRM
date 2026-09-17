@@ -7,7 +7,8 @@ const {
   redactJobMoney, redactEstimateMoney, redactInvoiceMoney,
 } = require('../helpers');
 const { fireTrigger } = require('../automationEngine');
-const { canSeePrices, checkSectionEdit, getPermissions } = require('../auth');
+const { canSeePrices, checkSectionEdit, getPermissions, canApproveEstimates } = require('../auth');
+const mailer = require('../mailer');
 
 function sendJob(req, res, job, status) {
   res.status(status || 200).json(canSeePrices(req.user) ? job : redactJobMoney(job));
@@ -169,8 +170,8 @@ router.post('/:id/estimates', (req, res) => {
   if (!items || !items.length) return res.status(400).json({ error: 'at least one line item is required' });
   const count = db.prepare(`SELECT COUNT(*) c FROM estimates`).get().c;
   const signToken = crypto.randomBytes(12).toString('hex');
-  const result = db.prepare(`INSERT INTO estimates (job_id, number, status, tax_rate, deposit_percent, sign_token) VALUES (?,?,?,?,?,?)`)
-    .run(job.id, number || `EST-${1000 + count + 1}`, 'draft', tax_rate || 0, deposit_percent || 0, signToken);
+  const result = db.prepare(`INSERT INTO estimates (job_id, number, status, tax_rate, deposit_percent, sign_token, created_by_user_id) VALUES (?,?,?,?,?,?,?)`)
+    .run(job.id, number || `EST-${1000 + count + 1}`, 'draft', tax_rate || 0, deposit_percent || 0, signToken, req.user ? req.user.id : null);
   const estimateId = result.lastInsertRowid;
   for (const it of items) {
     db.prepare(`INSERT INTO estimate_items (estimate_id, description, qty, unit_price) VALUES (?,?,?,?)`)
@@ -230,6 +231,62 @@ router.post('/estimates/:estimateId/deposit', (req, res) => {
   db.prepare(`UPDATE estimates SET deposit_percent = ? WHERE id = ?`).run(percent, estimate.id);
   logActivity('job', estimate.job_id, 'invoice', `Deposit invoice ${number} requested (${percent}% of ${estimate.number}).`);
   sendInvoice(req, res, getInvoiceFull(invoiceId), 201);
+});
+
+// --- Internal estimate approval (Sept 2026) — for a salesperson whose login is flagged
+// "requires estimate approval" (Users & permissions), gates the customer-facing send/sign
+// (see routes/public.js) until someone flagged "can approve estimates" signs off here. ---
+
+// The salesperson asks for sign-off. Anyone can call this (there's no edit-level lock on the
+// rest of the estimate routes either — see jobs.js's existing convention), but it's a no-op
+// unless the estimate is actually gated: harmless for an estimate whose creator doesn't need
+// approval, and clears a prior rejection back to a fresh pending request on resubmit.
+router.post('/estimates/:estimateId/request-approval', (req, res) => {
+  const existing = db.prepare(`SELECT * FROM estimates WHERE id = ?`).get(req.params.estimateId);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  if (existing.approval_status === 'approved') return res.status(400).json({ error: 'this estimate is already approved' });
+  db.prepare(`
+    UPDATE estimates SET approval_status = 'pending', approval_requested_at = datetime('now'),
+      rejection_reason = NULL, approved_by_user_id = NULL, approved_at = NULL
+    WHERE id = ?
+  `).run(existing.id);
+  logActivity('job', existing.job_id, 'estimate', `Estimate ${existing.number} sent for approval.`);
+
+  // Best-effort email to whoever can approve — never blocks the response, and silently does
+  // nothing for anyone without a notification email on file or if Gmail isn't connected yet.
+  const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(existing.job_id);
+  const approvers = db.prepare(`SELECT * FROM users WHERE active = 1 AND (role = 'admin' OR can_approve_estimates = 1) AND email IS NOT NULL AND email != ''`).all();
+  for (const approver of approvers) {
+    mailer.sendEmail({
+      to: approver.email,
+      subject: `Estimate ${existing.number} needs your approval`,
+      text: `${req.user.username} asked for approval to send estimate ${existing.number}${job ? ` for "${job.title}"` : ''} to the customer.\n\nReview it in Ultimate CRM: Dashboard → Pending estimate approvals.`,
+    }).catch(() => {});
+  }
+  sendEstimate(req, res, getEstimateFull(existing.id));
+});
+
+router.post('/estimates/:estimateId/approve', (req, res) => {
+  if (!canApproveEstimates(req.user)) return res.status(403).json({ error: "your account can't approve estimates" });
+  const existing = db.prepare(`SELECT * FROM estimates WHERE id = ?`).get(req.params.estimateId);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  if (existing.approval_status !== 'pending') return res.status(400).json({ error: "this estimate isn't waiting on approval" });
+  db.prepare(`UPDATE estimates SET approval_status = 'approved', approved_by_user_id = ?, approved_at = datetime('now'), rejection_reason = NULL WHERE id = ?`)
+    .run(req.user.id, existing.id);
+  logActivity('job', existing.job_id, 'estimate', `Estimate ${existing.number} approved by ${req.user.username} — ready to send.`);
+  sendEstimate(req, res, getEstimateFull(existing.id));
+});
+
+router.post('/estimates/:estimateId/reject', (req, res) => {
+  if (!canApproveEstimates(req.user)) return res.status(403).json({ error: "your account can't approve estimates" });
+  const existing = db.prepare(`SELECT * FROM estimates WHERE id = ?`).get(req.params.estimateId);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  if (existing.approval_status !== 'pending') return res.status(400).json({ error: "this estimate isn't waiting on approval" });
+  const reason = (req.body.reason || '').trim();
+  db.prepare(`UPDATE estimates SET approval_status = 'rejected', rejection_reason = ?, approved_by_user_id = ?, approved_at = datetime('now') WHERE id = ?`)
+    .run(reason || null, req.user.id, existing.id);
+  logActivity('job', existing.job_id, 'estimate', `Estimate ${existing.number}'s approval was rejected by ${req.user.username}${reason ? `: ${reason}` : '.'}`);
+  sendEstimate(req, res, getEstimateFull(existing.id));
 });
 
 // --- Invoices ---

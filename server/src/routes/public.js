@@ -23,6 +23,13 @@ function invoiceByToken(token) {
 router.get('/estimates/:token', (req, res) => {
   const estimate = estimateByToken(req.params.token);
   if (!estimate) return res.status(404).json({ error: 'not found' });
+  // Real enforcement of the internal-approval gate (see routes/jobs.js's request-approval/
+  // approve/reject) — the "Copy approval link" button is hidden client-side while this is true,
+  // but the token itself still exists, so the unauthenticated view has to refuse it too rather
+  // than trust the UI. Tell the customer it's on its way rather than exposing prices/line items.
+  if (estimate.requires_internal_approval) {
+    return res.json({ pending_internal_approval: true, number: estimate.number });
+  }
   const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(estimate.job_id);
   const contact = job?.contact_id ? db.prepare(`SELECT first_name, last_name FROM contacts WHERE id = ?`).get(job.contact_id) : null;
   const company = job?.company_id ? db.prepare(`SELECT name FROM companies WHERE id = ?`).get(job.company_id) : null;
@@ -38,6 +45,7 @@ router.get('/estimates/:token', (req, res) => {
 router.post('/estimates/:token/sign', (req, res) => {
   const estimate = estimateByToken(req.params.token);
   if (!estimate) return res.status(404).json({ error: 'not found' });
+  if (estimate.requires_internal_approval) return res.status(403).json({ error: 'this estimate is still awaiting internal approval' });
   if (estimate.signed_at) return res.status(400).json({ error: 'this estimate has already been signed' });
   const { signed_name, signature_data_url } = req.body;
   if (!signed_name || !signed_name.trim()) return res.status(400).json({ error: 'a typed name is required to sign' });

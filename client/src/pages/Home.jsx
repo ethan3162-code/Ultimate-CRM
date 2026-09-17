@@ -29,6 +29,7 @@ export default function Home() {
   const [appointments, setAppointments] = useState(null);
   const [tasks, setTasks] = useState(null);
   const [contacts, setContacts] = useState(null);
+  const [pendingApprovals, setPendingApprovals] = useState([]);
 
   useEffect(() => {
     api.deals().then(setDeals);
@@ -36,6 +37,9 @@ export default function Home() {
     api.appointments().then((d) => setAppointments(d?.appointments || []));
     api.tasks({ open: '1' }).then(setTasks);
     api.contacts().then(setContacts);
+    // Empty for anyone not flagged as an estimate approver — see routes/directory.js. Kept off
+    // the Dashboard payload on purpose since Dashboard is admin-only and approving isn't.
+    api.pendingEstimateApprovals().then(setPendingApprovals).catch(() => setPendingApprovals([]));
   }, []);
 
   if (!deals || !jobs || !appointments || !tasks || !contacts) return <div className="loading">Loading home…</div>;
@@ -96,6 +100,21 @@ export default function Home() {
           <Link to="/calendar" className="btn sm">View calendar →</Link>
         </div>
       </div>
+
+      {pendingApprovals.length > 0 && (
+        <div className="card" style={{ marginBottom: 18 }}>
+          <h2>Pending estimate approvals <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}>({pendingApprovals.length})</span></h2>
+          <p className="sub" style={{ margin: '-4px 0 12px' }}>Estimates from salespeople who need your sign-off before they can go to the customer — open the project to approve or reject.</p>
+          <div className="stack" style={{ gap: 2 }}>
+            {pendingApprovals.map((a) => (
+              <Link key={a.id} to={`/jobs/${a.job_id}`} className="attention-row">
+                <span>{a.number} — {a.job_title}{a.requested_by ? ` · requested by ${a.requested_by}` : ''}</span>
+                <span className="mono" style={{ color: 'var(--amber)' }}>{a.total !== null ? money(a.total) : ''} {timeAgo(a.requested_at)}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid-3">
         <div className="card">

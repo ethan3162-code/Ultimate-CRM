@@ -9,7 +9,7 @@
 // and give them access to what's needed [and] some users will share the same permissions." So
 // there are now only two account types: `admin` (always full access to everything, not
 // individually configurable) and `user` (a blank-slate regular login — every business page
-// starts at 'none' except Home/Dashboard, and the admin turns on view/edit per page per person
+// starts at 'none' except Home, and the admin turns on view/edit per page per person
 // from the Users & permissions page). Two logins can simply be given the same set of page
 // permissions; nothing needs a shared "role" for that.
 
@@ -20,12 +20,11 @@ const ROLE_LABEL = {
 };
 
 // Every business page permissions apply to. `admin`-only pages (Users, Automations,
-// Integrations) are system configuration, not business data — they never open up to a
-// non-admin login no matter what its individual page permissions say, so they're kept out of
-// this list and gated separately (see ADMIN_ONLY_PAGES).
+// Integrations, Dashboard) are kept out of this list and gated separately (see
+// ADMIN_ONLY_PAGES) — they never open up to a non-admin login no matter what its individual
+// page permissions say.
 const PAGES = {
   home: 'Home',
-  dashboard: 'Dashboard & reports',
   leads: 'Leads',
   pipeline: 'Opportunities',
   companies: 'Companies',
@@ -38,16 +37,16 @@ const PAGES = {
   tickets: 'Tickets',
 };
 
-// Pages every login can always at least view — the landing page and the reporting rollup have
-// no edit actions of their own worth gating, and hiding them entirely would leave someone with
-// nowhere to land after login. This is the fallback used only if a page is somehow missing a
-// row in user_permissions (it should always have one once seeded) — not an override of an
-// explicit 'none' an admin has set.
-const ALWAYS_VIEW_PAGES = ['home', 'dashboard'];
+// Pages every login can always at least view — the landing page has no edit actions of its own
+// worth gating, and hiding it entirely would leave someone with nowhere to land after login.
+// This is the fallback used only if a page is somehow missing a row in user_permissions (it
+// should always have one once seeded) — not an override of an explicit 'none' an admin has set.
+const ALWAYS_VIEW_PAGES = ['home'];
 
-// Admin-only pages: system configuration (user accounts, automation rules, integration keys),
+// Admin-only pages: system configuration (user accounts, automation rules, integration keys)
+// plus the Dashboard & reports rollup (Sept 2026 — the user asked that only admins see it),
 // never opened up to a non-admin login — not individually configurable like the business pages.
-const ADMIN_ONLY_PAGES = ['users', 'automations', 'integrations'];
+const ADMIN_ONLY_PAGES = ['users', 'automations', 'integrations', 'dashboard'];
 
 // Starting point applied when a new regular ('user') login is created: nothing but the always-
 // view pages. There's no role to infer a "home turf" from any more — the admin names the person

@@ -401,6 +401,34 @@ db.prepare(`UPDATE invoices SET public_token = lower(hex(randomblob(16))) WHERE 
 // the price book). Defaults to 1 (can see prices) so every existing login's behavior is
 // unchanged until an admin deliberately turns it off for someone.
 ensureColumn('users', 'can_see_prices', 'can_see_prices INTEGER NOT NULL DEFAULT 1');
+// Estimate internal-approval workflow (Sept 2026) — lets an admin require specific salespeople
+// (e.g. someone new) to get a manager's sign-off before an estimate can go out to the customer.
+// Two independent per-login flags, both off by default so nothing changes for any existing
+// login until an admin deliberately turns them on: whether this login's own estimates need
+// approval before they can be sent, and whether this login is one of the people allowed to
+// approve someone else's request (admins can always approve, regardless of this flag).
+ensureColumn('users', 'requires_estimate_approval', 'requires_estimate_approval INTEGER NOT NULL DEFAULT 0');
+ensureColumn('users', 'can_approve_estimates', 'can_approve_estimates INTEGER NOT NULL DEFAULT 0');
+// Optional notification email for a login (separate from a contact's email — a login doesn't
+// need one to use the app) — used only to email an approver when someone requests estimate
+// approval, best-effort via the same Gmail mailer automations use.
+ensureColumn('users', 'email', 'email TEXT');
+// Who created an estimate, and the internal-approval workflow's own state — independent of
+// `status` above, which tracks the customer-facing draft/sent/approved lifecycle. `approval_status`
+// is null until someone requests approval, then 'pending' -> 'approved' or 'rejected' (a rejected
+// estimate can be edited and resubmitted, which clears back to 'pending').
+ensureColumn('estimates', 'created_by_user_id', 'created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+ensureColumn('estimates', 'approval_status', 'approval_status TEXT');
+ensureColumn('estimates', 'approval_requested_at', 'approval_requested_at TEXT');
+ensureColumn('estimates', 'approved_by_user_id', 'approved_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+ensureColumn('estimates', 'approved_at', 'approved_at TEXT');
+ensureColumn('estimates', 'rejection_reason', 'rejection_reason TEXT');
+// Dashboard moved from an always-view page to an admin-only one (Sept 2026 — the user asked
+// that only admins see it, alongside Users & permissions, which was already admin-only). Any
+// leftover per-user 'dashboard' rows from when it was individually configurable are now dead —
+// getPermissions() forces every admin-only page from a fixed list, not from this table — so
+// clean them out rather than leave stale, unused rows behind.
+db.prepare(`DELETE FROM user_permissions WHERE page = 'dashboard'`).run();
 // Rename of an earlier stage key ('material_order' -> 'site_prep') on any DB seeded before the rename.
 db.prepare(`UPDATE jobs SET stage = 'site_prep' WHERE stage = 'material_order'`).run();
 // Project status lifecycle expanded to 6 states ('completed' -> 'complete', plus new 'accepted'/'on_hold')
@@ -413,7 +441,7 @@ db.prepare(`UPDATE jobs SET status = 'complete' WHERE status = 'completed'`).run
 // Users & permissions page; two logins can simply be handed the same set of pages — there's no
 // role in between to keep in sync). A starter login is seeded per historical "home turf" so the
 // app is usable the moment it's deployed; new logins created from here on start with nothing but
-// Home/Dashboard until an admin grants more. Idempotent — never touched by re-seeding business
+// Home until an admin grants more. Idempotent — never touched by re-seeding business
 // data, and never overwrites a password or permission an admin has since changed.
 const { PAGES, DEFAULT_PRIMARY_PAGES, ALWAYS_VIEW_PAGES } = require('./permissionsConfig');
 

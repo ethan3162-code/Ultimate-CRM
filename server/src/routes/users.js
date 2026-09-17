@@ -14,6 +14,11 @@ function safeUser(u) {
     id: u.id, username: u.username, role: u.role, roleLabel: ROLE_LABEL[u.role] || u.role,
     active: !!u.active, created_at: u.created_at, permissions: getPermissions(u),
     sections: getSectionLevels(u), can_see_prices: canSeePrices(u),
+    email: u.email || '',
+    // Admins never need approval and can always approve — the flags below only matter for a
+    // regular login, same convention as can_see_prices/permissions above.
+    requires_estimate_approval: u.role === 'admin' ? false : !!u.requires_estimate_approval,
+    can_approve_estimates: u.role === 'admin' ? true : !!u.can_approve_estimates,
     custom_role_ids: u.role === 'admin' ? [] : getUserCustomRoleIds(u.id),
     // The person's own baseline, with no role's contribution mixed in — what the Users &
     // permissions admin editor seeds its draft from (see startEditPerms in Users.jsx). `permissions`/
@@ -33,15 +38,15 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { username, password, role } = req.body;
+  const { username, password, role, email } = req.body;
   if (!username || !password || !role) return res.status(400).json({ error: 'username, password, and role are required' });
   if (!ROLES.includes(role)) return res.status(400).json({ error: `role must be one of: ${ROLES.join(', ')}` });
   if (password.length < 6) return res.status(400).json({ error: 'password must be at least 6 characters' });
   const clean = String(username).trim().toLowerCase();
   const existing = db.prepare(`SELECT id FROM users WHERE username = ?`).get(clean);
   if (existing) return res.status(400).json({ error: 'that username is already taken' });
-  const result = db.prepare(`INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)`)
-    .run(clean, hashPassword(password), role);
+  const result = db.prepare(`INSERT INTO users (username, password_hash, role, email) VALUES (?, ?, ?, ?)`)
+    .run(clean, hashPassword(password), role, (email || '').trim() || null);
   if (role !== 'admin') seedPagePermissions(result.lastInsertRowid, role);
   res.status(201).json(safeUser(db.prepare(`SELECT * FROM users WHERE id = ?`).get(result.lastInsertRowid)));
 });
@@ -49,7 +54,7 @@ router.post('/', (req, res) => {
 router.patch('/:id', (req, res) => {
   const existing = db.prepare(`SELECT * FROM users WHERE id = ?`).get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'not found' });
-  const { role, active, password, can_see_prices } = req.body;
+  const { role, active, password, can_see_prices, email, requires_estimate_approval, can_approve_estimates } = req.body;
   if (role !== undefined && !ROLES.includes(role)) return res.status(400).json({ error: `role must be one of: ${ROLES.join(', ')}` });
   if (existing.role === 'admin' && role && role !== 'admin') {
     const otherAdmins = db.prepare(`SELECT COUNT(*) c FROM users WHERE role = 'admin' AND id != ?`).get(existing.id).c;
@@ -63,9 +68,15 @@ router.patch('/:id', (req, res) => {
   const nextActive = active !== undefined ? (active ? 1 : 0) : existing.active;
   const nextHash = password ? hashPassword(password) : existing.password_hash;
   const nextCanSeePrices = can_see_prices !== undefined ? (can_see_prices ? 1 : 0) : existing.can_see_prices;
+  const nextEmail = email !== undefined ? ((email || '').trim() || null) : existing.email;
+  const nextRequiresApproval = requires_estimate_approval !== undefined ? (requires_estimate_approval ? 1 : 0) : existing.requires_estimate_approval;
+  const nextCanApprove = can_approve_estimates !== undefined ? (can_approve_estimates ? 1 : 0) : existing.can_approve_estimates;
   if (password && password.length < 6) return res.status(400).json({ error: 'password must be at least 6 characters' });
-  db.prepare(`UPDATE users SET role = ?, active = ?, password_hash = ?, can_see_prices = ?, updated_at = datetime('now') WHERE id = ?`)
-    .run(nextRole, nextActive, nextHash, nextCanSeePrices, req.params.id);
+  db.prepare(`
+    UPDATE users SET role = ?, active = ?, password_hash = ?, can_see_prices = ?, email = ?,
+      requires_estimate_approval = ?, can_approve_estimates = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(nextRole, nextActive, nextHash, nextCanSeePrices, nextEmail, nextRequiresApproval, nextCanApprove, req.params.id);
   // Changing role resets that person's page permissions to the new role's defaults — their old
   // custom permissions were set for the old role and may not make sense for the new one. The
   // admin can re-customize any page for them afterward, same as any other login.

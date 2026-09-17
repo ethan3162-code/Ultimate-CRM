@@ -83,6 +83,18 @@ export default function EstimateApproval() {
 
   if (estimate === undefined) return <div className="approval-shell"><div className="loading">Loading…</div></div>;
   if (estimate === null) return <div className="approval-shell"><div className="card"><div className="empty">This estimate link isn't valid. Ask your contractor to resend it.</div></div></div>;
+  if (estimate.pending_internal_approval) {
+    return (
+      <div className="approval-shell">
+        <div className="doc-brand">
+          <img src="/logo-full.png" alt="Precision Paving & Masonry" className="brand-logo" />
+        </div>
+        <div className="card">
+          <div className="empty">Estimate {estimate.number} is still being finalized on our end — check back shortly, or reach out to your contractor.</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="approval-shell">

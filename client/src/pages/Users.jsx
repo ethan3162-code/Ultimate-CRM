@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { api } from '../api';
 
-const BLANK_FORM = { username: '', password: '', role: 'user' };
+const BLANK_FORM = { username: '', password: '', role: 'user', email: '' };
 const BLANK_ROLE_FORM = { name: '' };
 const LEVELS = [
   { key: 'edit', label: 'Edit' },
@@ -21,6 +21,7 @@ export default function Users() {
   const [error, setError] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [resetPassword, setResetPassword] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
   const [permEditingId, setPermEditingId] = useState(null);
   const [permDraft, setPermDraft] = useState(null);
   const [sectionDraft, setSectionDraft] = useState(null);
@@ -74,9 +75,21 @@ export default function Users() {
     load();
   }
 
+  async function toggleRequiresApproval(user) {
+    await api.updateUser(user.id, { requires_estimate_approval: !user.requires_estimate_approval }).catch((err) => window.alert(err.message));
+    load();
+  }
+
+  async function toggleCanApprove(user) {
+    await api.updateUser(user.id, { can_approve_estimates: !user.can_approve_estimates }).catch((err) => window.alert(err.message));
+    load();
+  }
+
   async function saveReset(user) {
-    if (!resetPassword || resetPassword.length < 6) return;
-    await api.updateUser(user.id, { password: resetPassword }).catch((err) => window.alert(err.message));
+    if (resetPassword && resetPassword.length < 6) return;
+    const payload = { email: resetEmail.trim() };
+    if (resetPassword) payload.password = resetPassword;
+    await api.updateUser(user.id, payload).catch((err) => window.alert(err.message));
     setEditingId(null);
     setResetPassword('');
     load();
@@ -172,7 +185,7 @@ export default function Users() {
       <div className="page-head">
         <div>
           <h1>Users &amp; permissions</h1>
-          <p className="sub">Logins for the team, exactly which pages (and parts of a page) each person can edit, view, or not see, whether they can see dollar figures, and which reusable roles they hold.</p>
+          <p className="sub">Logins for the team, exactly which pages (and parts of a page) each person can edit, view, or not see, whether they can see dollar figures, whether their estimates need a manager's approval before going to a customer, who can approve those requests, and which reusable roles they hold.</p>
         </div>
         <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New login</button>
       </div>
@@ -182,6 +195,7 @@ export default function Users() {
           <form onSubmit={submit} className="form-grid">
             <div className="field"><label>Username</label><input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoCapitalize="none" required /></div>
             <div className="field"><label>Temporary password</label><input type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="At least 6 characters" required /></div>
+            <div className="field"><label>Notification email (optional)</label><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Only used for approval emails" /></div>
             <div className="field" style={{ justifyContent: 'center' }}>
               <label style={{ visibility: 'hidden' }}>Admin</label>
               <span className="row" style={{ gap: 8, alignItems: 'center' }}>
@@ -302,7 +316,7 @@ export default function Users() {
         <h2>Logins</h2>
         <div className="table-wrap">
           <table className="list">
-            <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Prices</th><th>Created</th><th></th></tr></thead>
+            <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Prices</th><th>Estimate approval</th><th>Approver</th><th>Created</th><th></th></tr></thead>
             <tbody>
               {users.map((u) => (
                 <Fragment key={u.id}>
@@ -322,11 +336,26 @@ export default function Users() {
                         </button>
                       )}
                     </td>
+                    <td>
+                      {u.role === 'admin' ? <span className="muted">never needed</span> : (
+                        <button className="btn sm subtle" onClick={() => toggleRequiresApproval(u)}>
+                          {u.requires_estimate_approval ? '🔎 Needs approval' : '➡️ Sends directly'}
+                        </button>
+                      )}
+                    </td>
+                    <td>
+                      {u.role === 'admin' ? <span className="muted">always</span> : (
+                        <button className="btn sm subtle" onClick={() => toggleCanApprove(u)}>
+                          {u.can_approve_estimates ? '✅ Can approve' : '—'}
+                        </button>
+                      )}
+                    </td>
                     <td className="muted">{u.created_at ? u.created_at.slice(0, 10) : '—'}</td>
                     <td>
                       {editingId === u.id ? (
-                        <span className="row" style={{ gap: 6 }}>
-                          <input type="text" placeholder="New password" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} style={{ width: 140 }} />
+                        <span className="row" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          <input type="text" placeholder="New password" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} style={{ width: 130 }} />
+                          <input type="email" placeholder="Notification email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} style={{ width: 150 }} />
                           <button className="btn sm primary" onClick={() => saveReset(u)}>Save</button>
                           <button className="btn sm subtle" onClick={() => { setEditingId(null); setResetPassword(''); }}>Cancel</button>
                         </span>
@@ -337,7 +366,7 @@ export default function Users() {
                               {permEditingId === u.id ? 'Close permissions' : 'Permissions'}
                             </button>
                           )}
-                          <button className="btn sm subtle" onClick={() => { setEditingId(u.id); setResetPassword(''); }}>Reset password</button>
+                          <button className="btn sm subtle" onClick={() => { setEditingId(u.id); setResetPassword(''); setResetEmail(u.email || ''); }}>Edit login</button>
                           <button className="btn sm subtle" onClick={() => toggleActive(u)}>{u.active ? 'Disable' : 'Enable'}</button>
                           <button className="btn sm subtle" onClick={() => removeUser(u)}>Delete</button>
                         </span>
@@ -346,7 +375,7 @@ export default function Users() {
                   </tr>
                   {permEditingId === u.id && permDraft && (
                     <tr>
-                      <td colSpan={6} style={{ background: 'var(--paper-raised)' }}>
+                      <td colSpan={8} style={{ background: 'var(--paper-raised)' }}>
                         <div style={{ padding: '10px 4px' }}>
                           <p className="sub" style={{ margin: '0 0 10px' }}>
                             Exactly what <strong>{u.username}</strong> can do on each page — nothing here is tied to their role after the fact, so any combination is fine. Any role held below can only add access on top of this, never take it away.

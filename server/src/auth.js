@@ -16,7 +16,7 @@ const COOKIE_NAME = 'ucrm_session';
 const TOKEN_TTL = '30d';
 
 /** Seeds (or resets) one login's individual page permissions to a blank slate: nothing but the
-    always-view pages (Home/Dashboard). Used when a login is first created, and when it's
+    always-view pages (just Home now — Dashboard became admin-only, Sept 2026). Used when a login is first created, and when it's
     demoted from admin back to a regular login (its old permissions, if any, are reset rather
     than carried over — the admin re-grants whatever pages this person actually needs from the
     Users & permissions page). After this runs, every page is independently editable per person —
@@ -39,8 +39,8 @@ function seedPagePermissions(userId, role) {
     custom role they hold (see custom_roles/custom_role_permissions, assigned via
     user_custom_roles) — a role can only ever grant access on top of the individual baseline,
     never take it away, so holding an extra role is always safe to add. Falls back to 'view' for
-    Home/Dashboard and 'none' elsewhere only if a row is somehow missing (normal operation always
-    has a row per page once seeded). Admin-only pages (Users, Automations, Integrations) are
+    Home and 'none' elsewhere only if a row is somehow missing (normal operation always
+    has a row per page once seeded). Admin-only pages (Users, Automations, Integrations, Dashboard) are
     never individually configurable — they stay closed to every non-admin regardless of what that
     person's business-page permissions or roles say. */
 function getPermissions(user) {
@@ -142,6 +142,19 @@ function getSectionLevels(user) {
     unrelated role. Admins always see prices. */
 function canSeePrices(user) {
   return user.role === 'admin' || !!user.can_see_prices;
+}
+
+/** Whether this login's own estimates must get a manager's internal approval before they can go
+    out to a customer (Users & permissions — "Estimate approval"). Admins never need approval —
+    there's no one above them to grant it. */
+function requiresEstimateApproval(user) {
+  return user.role !== 'admin' && !!user.requires_estimate_approval;
+}
+
+/** Whether this login is allowed to approve someone else's pending estimate-approval request.
+    Admins can always approve, in addition to whoever an admin has explicitly flagged here. */
+function canApproveEstimates(user) {
+  return user.role === 'admin' || !!user.can_approve_estimates;
 }
 
 /** Rejects a PATCH whose body touches a restricted section. `updates` is the raw req.body for a
@@ -283,6 +296,8 @@ function publicUser(user) {
     active: !!user.active, permissions: getPermissions(user),
     sections: getSectionLevels(user),
     can_see_prices: canSeePrices(user),
+    requires_estimate_approval: requiresEstimateApproval(user),
+    can_approve_estimates: canApproveEstimates(user),
     custom_role_ids: user.role === 'admin' ? [] : getUserCustomRoleIds(user.id),
   };
 }
@@ -348,6 +363,7 @@ module.exports = {
   ROLES, ROLE_LABEL, PAGES, ALWAYS_VIEW_PAGES, ADMIN_ONLY_PAGES, DEFAULT_PRIMARY_PAGES, VALID_LEVELS, SECTIONS,
   seedPagePermissions, getPermissions, setUserPermissions, getUserDirectPermissions, getUserDirectSections,
   getSectionLevel, getSectionLevels, checkSectionEdit, canSeePrices,
+  requiresEstimateApproval, canApproveEstimates,
   listCustomRoles, createCustomRole, updateCustomRole, deleteCustomRole, setUserCustomRoles, getUserCustomRoleIds,
   hashPassword, verifyPassword, signToken, setSessionCookie, clearSessionCookie, publicUser,
   readSession, requireAuth, requirePage, requireAnyPage, requireAdmin,

@@ -6,7 +6,7 @@ import { EXPENSE_CATEGORIES, PROJECT_STATUSES, PROJECT_STATUS_LABEL } from '../c
 import LineItemEditor from '../components/LineItemEditor';
 import PaymentModal from '../components/PaymentModal';
 import TaskList from '../components/TaskList';
-import { usePermission, useSection, usePriceVisibility } from '../auth';
+import { usePermission, useSection, usePriceVisibility, useAuth } from '../auth';
 
 const REVENUE_BASIS_LABEL = { invoiced: 'Invoiced', estimated: 'Approved estimate (projected — not yet invoiced)', none: 'No invoice or approved estimate yet' };
 const BLANK_EXPENSE = { category: 'Materials', description: '', qty: '1', unit_cost: '', incurred_on: '' };
@@ -67,6 +67,8 @@ function resizeImageFile(file) {
 export default function JobDetail() {
   const { id } = useParams();
   const { canEdit } = usePermission('jobs');
+  const { user: me } = useAuth();
+  const canApprove = !!(me && me.can_approve_estimates);
   const billingSectionEditable = useSection('jobs.billing');
   const scheduleSectionEditable = useSection('jobs.schedule');
   const canEditBilling = canEdit && billingSectionEditable;
@@ -79,6 +81,8 @@ export default function JobDetail() {
   const [taxRate, setTaxRate] = useState('0');
   const [depositPercent, setDepositPercent] = useState('');
   const [requestingDepositFor, setRequestingDepositFor] = useState(null);
+  const [rejectingFor, setRejectingFor] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
   const [payingInvoice, setPayingInvoice] = useState(null);
   const [schedule, setSchedule] = useState({ start_date: '', demo_days: 1, site_prep_days: 2, installation_days: 5, final_walkthrough_days: 1 });
   const [savingStage, setSavingStage] = useState(false);
@@ -216,6 +220,23 @@ export default function JobDetail() {
     if (!percent || percent <= 0) return;
     await api.requestDeposit(estimateId, { percent });
     setRequestingDepositFor(null);
+    load();
+  }
+
+  async function requestApproval(estimateId) {
+    await api.requestEstimateApproval(estimateId).catch((err) => window.alert(err.message));
+    load();
+  }
+
+  async function approveEstimateRequest(estimateId) {
+    await api.approveEstimate(estimateId).catch((err) => window.alert(err.message));
+    load();
+  }
+
+  async function rejectEstimateRequest(estimateId) {
+    await api.rejectEstimate(estimateId, { reason: rejectReason.trim() }).catch((err) => window.alert(err.message));
+    setRejectingFor(null);
+    setRejectReason('');
     load();
   }
 
@@ -495,10 +516,58 @@ export default function JobDetail() {
                     ) : (
                       <div className="sub" style={{ margin: '6px 0 0' }}>Not signed by the customer yet.</div>
                     )}
+
+                    {est.requires_internal_approval && est.approval_status === 'pending' && (
+                      <div className="sub" style={{ margin: '6px 0 0', color: 'var(--amber)' }}>
+                        ⏳ Waiting on manager approval before this can go to the customer{est.created_by_username ? ` (requested by ${est.created_by_username})` : ''}.
+                      </div>
+                    )}
+                    {est.requires_internal_approval && est.approval_status === 'rejected' && (
+                      <div className="sub" style={{ margin: '6px 0 0', color: 'var(--red)' }}>
+                        ✗ Approval rejected{est.approved_by_username ? ` by ${est.approved_by_username}` : ''}{est.rejection_reason ? `: ${est.rejection_reason}` : '.'} Edit and re-request.
+                      </div>
+                    )}
+                    {!est.requires_internal_approval && est.approval_status === 'approved' && est.approved_by_username && (
+                      <div className="sub" style={{ margin: '6px 0 0', color: 'var(--accent-ink)' }}>
+                        ✓ Approved by {est.approved_by_username} — ready to send.
+                      </div>
+                    )}
+
+                    {canApprove && est.approval_status === 'pending' && (
+                      <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: 'wrap' }}>
+                        {rejectingFor === est.id ? (
+                          <>
+                            <input
+                              type="text" placeholder="Reason (optional)" value={rejectReason}
+                              onChange={(e) => setRejectReason(e.target.value)}
+                              style={{ minWidth: 180, border: '1px solid var(--line)', borderRadius: 6, padding: '4px 6px' }}
+                            />
+                            <button className="btn sm" style={{ borderColor: 'var(--red)', color: 'var(--red)' }} onClick={() => rejectEstimateRequest(est.id)}>Confirm reject</button>
+                            <button className="btn subtle sm" onClick={() => { setRejectingFor(null); setRejectReason(''); }}>Cancel</button>
+                          </>
+                        ) : (
+                          <>
+                            <button className="btn primary sm" onClick={() => approveEstimateRequest(est.id)}>Approve</button>
+                            <button className="btn sm" onClick={() => setRejectingFor(est.id)}>Reject…</button>
+                          </>
+                        )}
+                      </div>
+                    )}
+
                     {canEdit && (
                     <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: 'wrap' }}>
                       <button className="btn sm" onClick={() => convert(est.id)}>Convert to invoice →</button>
-                      <button className="btn sm" onClick={() => copyApprovalLink(est)}>{copiedLink === est.id ? 'Copied!' : 'Copy approval link'}</button>
+                      {est.requires_internal_approval ? (
+                        est.approval_status === 'pending' ? (
+                          <span className="pill amber">Pending approval…</span>
+                        ) : (
+                          <button className="btn sm" onClick={() => requestApproval(est.id)}>
+                            {est.approval_status === 'rejected' ? 'Re-request approval' : 'Request approval'}
+                          </button>
+                        )
+                      ) : (
+                        <button className="btn sm" onClick={() => copyApprovalLink(est)}>{copiedLink === est.id ? 'Copied!' : 'Copy approval link'}</button>
+                      )}
                       {requestingDepositFor === est.id ? (
                         <>
                           <input
