@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, mapLinks } from '../utils';
+import { money, shortDate, mapLinks, splitWorkTypes, joinWorkTypes } from '../utils';
 import { WORK_TYPES, CUSTOMER_TYPES } from '../constants';
 import { usePermission } from '../auth';
 
@@ -127,12 +127,27 @@ export default function Pipeline() {
               <label>Rep / estimator</label>
               <input value={form.rep} onChange={(e) => setForm({ ...form, rep: e.target.value })} placeholder="Who's working this deal?" />
             </div>
-            <div className="field">
+            <div className="field" style={{ gridColumn: '1 / -1' }}>
               <label>Type of work</label>
-              <select value={form.work_type} onChange={(e) => setForm({ ...form, work_type: e.target.value })}>
-                <option value="">— none —</option>
-                {WORK_TYPES.map((w) => <option key={w} value={w}>{w}</option>)}
-              </select>
+              <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+                {WORK_TYPES.map((w) => {
+                  const selected = splitWorkTypes(form.work_type);
+                  const checked = selected.includes(w);
+                  return (
+                    <label key={w} className="row" style={{ gap: 5, alignItems: 'center', fontWeight: 400 }}>
+                      <input
+                        type="checkbox" style={{ width: 'auto' }} checked={checked}
+                        onChange={(e) => {
+                          const next = e.target.checked ? [...selected, w] : selected.filter((v) => v !== w);
+                          setForm({ ...form, work_type: joinWorkTypes(WORK_TYPES.filter((t) => next.includes(t))) });
+                        }}
+                      />
+                      {w}
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="sub" style={{ margin: '4px 0 0' }}>Pick as many as this project needs.</p>
             </div>
             <div className="field">
               <label>Customer type</label>

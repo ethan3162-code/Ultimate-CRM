@@ -10,6 +10,17 @@ export function money(n) {
   return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
 }
 
+// A deal's work_type is stored as one TEXT column — a single value for a single-service project
+// (the common case, and every pre-existing deal), or several comma-separated values for a
+// project that needs more than one (e.g. "Asphalt paving, Pavers"). No schema change needed:
+// a lone legacy value already round-trips through these as a one-item list.
+export function splitWorkTypes(s) {
+  return String(s || '').split(',').map((t) => t.trim()).filter(Boolean);
+}
+export function joinWorkTypes(list) {
+  return (list || []).filter(Boolean).join(', ');
+}
+
 export function shortDate(s) {
   if (!s) return '—';
   const d = new Date(s.replace(' ', 'T'));

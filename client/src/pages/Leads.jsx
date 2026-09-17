@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { money, timeAgo, mapLinks } from '../utils';
+import { money, timeAgo, mapLinks, splitWorkTypes, joinWorkTypes } from '../utils';
 import { usePermission } from '../auth';
 import {
   LEAD_SOURCES, LEAD_STATUSES, LEAD_TYPES, JOB_TIMEFRAMES, METHOD_OF_ENTRY,
@@ -147,12 +147,27 @@ export default function Leads() {
                 {CUSTOMER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
-            <div className="field">
+            <div className="field" style={{ gridColumn: '1 / -1' }}>
               <label>Service type</label>
-              <select value={form.work_type} onChange={(e) => setForm({ ...form, work_type: e.target.value })}>
-                <option value="">— none —</option>
-                {WORK_TYPES.map((w) => <option key={w} value={w}>{w}</option>)}
-              </select>
+              <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+                {WORK_TYPES.map((w) => {
+                  const selected = splitWorkTypes(form.work_type);
+                  const checked = selected.includes(w);
+                  return (
+                    <label key={w} className="row" style={{ gap: 5, alignItems: 'center', fontWeight: 400 }}>
+                      <input
+                        type="checkbox" style={{ width: 'auto' }} checked={checked}
+                        onChange={(e) => {
+                          const next = e.target.checked ? [...selected, w] : selected.filter((v) => v !== w);
+                          setForm({ ...form, work_type: joinWorkTypes(WORK_TYPES.filter((t) => next.includes(t))) });
+                        }}
+                      />
+                      {w}
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="sub" style={{ margin: '4px 0 0' }}>Pick as many as this project needs.</p>
             </div>
             <div className="field"><label>Sub-service type</label><input value={form.sub_service_type} onChange={(e) => setForm({ ...form, sub_service_type: e.target.value })} placeholder="e.g. Driveway repair" /></div>
             <div className="field" style={{ gridColumn: '1 / -1' }}>

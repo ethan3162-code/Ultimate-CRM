@@ -35,9 +35,12 @@ export const EXPENSE_CATEGORIES = [
 // Type-of-work categorization for an opportunity (Salesforce "Service Type" equivalent) —
 // closes the "type of work" reporting gap so Sales can be broken out the way the business
 // actually quotes jobs.
+// A deal can hold more than one of these at once (see utils.js's splitWorkTypes/joinWorkTypes) —
+// e.g. a project needing both asphalt paving and pavers work.
 export const WORK_TYPES = [
   'Asphalt paving',
   'Concrete',
+  'Pavers',
   'Sealcoating & striping',
   'Outdoor kitchen',
   'Sidewalks',

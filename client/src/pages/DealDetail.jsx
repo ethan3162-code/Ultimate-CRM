@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, timeAgo, mapLinks } from '../utils';
+import { money, shortDate, timeAgo, mapLinks, splitWorkTypes, joinWorkTypes } from '../utils';
 import {
   WORK_TYPES, CUSTOMER_TYPES, LEAD_STATUSES, LEAD_TYPES, JOB_TIMEFRAMES,
   METHOD_OF_ENTRY, HA_MATCH_TYPES, LEAD_SOURCES,
@@ -321,10 +321,25 @@ export default function DealDetail() {
                 </div>
                 <div className="field">
                   <label>Service type</label>
-                  <select value={details.work_type} onChange={(e) => setDetails({ ...details, work_type: e.target.value })}>
-                    <option value="">— none —</option>
-                    {WORK_TYPES.map((w) => <option key={w} value={w}>{w}</option>)}
-                  </select>
+                  <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+                    {WORK_TYPES.map((w) => {
+                      const selected = splitWorkTypes(details.work_type);
+                      const checked = selected.includes(w);
+                      return (
+                        <label key={w} className="row" style={{ gap: 5, alignItems: 'center', fontWeight: 400 }}>
+                          <input
+                            type="checkbox" style={{ width: 'auto' }} checked={checked}
+                            onChange={(e) => {
+                              const next = e.target.checked ? [...selected, w] : selected.filter((v) => v !== w);
+                              setDetails({ ...details, work_type: joinWorkTypes(WORK_TYPES.filter((t) => next.includes(t))) });
+                            }}
+                          />
+                          {w}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="sub" style={{ margin: '4px 0 0' }}>Pick as many as this project needs.</p>
                 </div>
                 <div className="field">
                   <label>Sub-service type</label>
@@ -374,7 +389,18 @@ export default function DealDetail() {
                 <div className="row between"><span className="muted">Rep / estimator</span><span>{deal.rep || '—'}</span></div>
                 <div className="row between"><span className="muted">Lead owner</span><span>{deal.lead_owner || '—'}</span></div>
                 <div className="row between"><span className="muted">Property type</span><span>{deal.customer_type || 'Residential'}</span></div>
-                <div className="row between"><span className="muted">Service type</span><span>{deal.work_type || '—'}</span></div>
+                <div className="row between">
+                  <span className="muted">Service type</span>
+                  <span>
+                    {splitWorkTypes(deal.work_type).length
+                      ? (
+                        <span className="row" style={{ gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          {splitWorkTypes(deal.work_type).map((w) => <span key={w} className="pill">{w}</span>)}
+                        </span>
+                      )
+                      : '—'}
+                  </span>
+                </div>
                 <div className="row between"><span className="muted">Sub-service type</span><span>{deal.sub_service_type || '—'}</span></div>
                 <div className="row between"><span className="muted">Phone estimate</span><span>{deal.phone_estimate ? 'Yes' : 'No'}</span></div>
                 <div className="row between"><span className="muted">Repeat / referral</span><span>{deal.repeat_referral ? 'Yes' : 'No'}</span></div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, timeAgo } from '../utils';
+import { money, shortDate, timeAgo, splitWorkTypes } from '../utils';
 import { EXPENSE_CATEGORIES, PROJECT_STATUSES, PROJECT_STATUS_LABEL } from '../constants';
 import LineItemEditor from '../components/LineItemEditor';
 import PaymentModal from '../components/PaymentModal';
@@ -365,7 +365,18 @@ export default function JobDetail() {
                 <div className="row between"><span className="muted">Start date</span><span>{job.start_date ? shortDate(job.start_date) : '—'}</span></div>
                 <div className="row between"><span className="muted">End date</span><span>{job.end_date ? shortDate(job.end_date) : '—'}</span></div>
                 <div className="row between"><span className="muted">Lead source</span><span>{job.lead_source || '—'}</span></div>
-                <div className="row between"><span className="muted">Service type</span><span>{job.opportunity?.work_type || '—'}</span></div>
+                <div className="row between">
+                  <span className="muted">Service type</span>
+                  <span>
+                    {splitWorkTypes(job.opportunity?.work_type).length
+                      ? (
+                        <span className="row" style={{ gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          {splitWorkTypes(job.opportunity?.work_type).map((w) => <span key={w} className="pill">{w}</span>)}
+                        </span>
+                      )
+                      : '—'}
+                  </span>
+                </div>
                 <div className="row between"><span className="muted">Sub-service type</span><span>{job.opportunity?.sub_service_type || '—'}</span></div>
                 <div className="row between"><span className="muted">Project status</span><span className={'pill ' + (STATUS_PILL[job.status] || '')}>{PROJECT_STATUS_LABEL[job.status] || job.status}</span></div>
                 <div className="row between"><span className="muted">Unqualified reason</span><span>{job.unqualified_reason || '—'}</span></div>
