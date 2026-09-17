@@ -76,24 +76,6 @@ export default function ContactDetail() {
       </div>
 
       <div className="grid-2">
-        <div className="card">
-          <h2>Activity timeline</h2>
-          <p className="sub" style={{ marginBottom: 12 }}>Notes, calls, and payments across every deal and job tied to this person — one graph, not three exports.</p>
-          {contact.activities.length === 0 ? <div className="empty">No activity yet.</div> : (
-            <div className="timeline">
-              {contact.activities.map((a) => (
-                <div className="timeline-item" key={`${a.related_type}-${a.id}`}>
-                  <div className="when">{timeAgo(a.created_at)}</div>
-                  <div className="body">
-                    <span className="type-tag">{a.type.replace('_', ' ')}</span>
-                    {a.note}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
         <div className="stack">
           <div className="card section-card accent-blue">
             <div className="row between" style={{ marginBottom: editing ? 10 : 6 }}>
@@ -163,24 +145,6 @@ export default function ContactDetail() {
             </div>
           </div>
 
-          <div className="card section-card" style={{ borderLeftColor: 'var(--line)' }}>
-            <h2 className="section-label" style={{ color: 'var(--muted)' }}>History</h2>
-            <div className="stack" style={{ gap: 6 }}>
-              <div className="row between">
-                <span className="muted">Created by</span>
-                <span>{contact.created_by_username || 'system'} · {shortDate(contact.created_at)}</span>
-              </div>
-              <div className="row between">
-                <span className="muted">Last modified</span>
-                <span>{contact.updated_by_username || contact.created_by_username || 'system'} · {timeAgo(contact.updated_at || contact.created_at)}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <h2>Next steps</h2>
-            <TaskList relatedType="contact" relatedId={contact.id} />
-          </div>
           <div className="card">
             <h2>Deals ({contact.deals.length})</h2>
             {contact.deals.length === 0 ? <div className="empty">No deals.</div> : contact.deals.map((d) => (
@@ -207,6 +171,45 @@ export default function ContactDetail() {
                 <span className={'pill ' + (TICKET_PILL[t.status] || '')}>{t.status}</span>
               </div>
             ))}
+          </div>
+        </div>
+
+        <div className="stack">
+          <div className="card section-card" style={{ borderLeftColor: 'var(--line)' }}>
+            <h2 className="section-label" style={{ color: 'var(--muted)' }}>History</h2>
+            <div className="stack" style={{ gap: 6 }}>
+              <div className="row between">
+                <span className="muted">Created by</span>
+                <span>{contact.created_by_username || 'system'} · {shortDate(contact.created_at)}</span>
+              </div>
+              <div className="row between">
+                <span className="muted">Last modified</span>
+                <span>{contact.updated_by_username || contact.created_by_username || 'system'} · {timeAgo(contact.updated_at || contact.created_at)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <h2>Next steps</h2>
+            <TaskList relatedType="contact" relatedId={contact.id} />
+          </div>
+
+          <div className="card">
+            <h2>Activity timeline</h2>
+            <p className="sub" style={{ marginBottom: 12 }}>Notes, calls, and payments across every deal and job tied to this person — one graph, not three exports.</p>
+            {contact.activities.length === 0 ? <div className="empty">No activity yet.</div> : (
+              <div className="timeline">
+                {contact.activities.map((a) => (
+                  <div className="timeline-item" key={`${a.related_type}-${a.id}`}>
+                    <div className="when">{timeAgo(a.created_at)}</div>
+                    <div className="body">
+                      <span className="type-tag">{a.type.replace('_', ' ')}</span>
+                      {a.note}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -186,7 +186,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   flex-shrink: 0;
 }
 .brand .name { font-family: 'Source Serif 4', serif; font-weight: 600; font-size: 1.02rem; }
-.brand-logo { height: 26px; width: auto; display: block; max-width: 100%; object-fit: contain; }
+.brand-logo { height: 40px; width: auto; display: block; max-width: 100%; object-fit: contain; }
 
 .nav-group .kicker {
   font-family: 'IBM Plex Mono', monospace;
@@ -600,7 +600,7 @@ table.list tbody tr.row-hot:hover td, table.list tbody tr.row-warm:hover td { ba
 .approval-shell { max-width: 640px; margin: 0 auto; padding: 32px 16px 60px; }
 .sign-pad { border: 1px dashed var(--line); border-radius: 10px; background: var(--paper); touch-action: none; cursor: crosshair; width: 100%; height: 160px; }
 .doc-brand { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; }
-.doc-brand .brand-logo { height: 34px; }
+.doc-brand .brand-logo { height: 44px; }
 
 @media print {
   .no-print { display: none !important; }
