@@ -9,6 +9,8 @@ import { usePermission } from '../auth';
 // up once a lead has been qualified, so 'new' is intentionally left out here.
 const STAGES = ['qualified', 'proposal', 'negotiation', 'won', 'lost'];
 const STAGE_LABELS = { new: 'New', qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
+const STAGE_TEXT = { new: 'muted', qualified: 'muted', proposal: 'amber', negotiation: 'amber', won: 'green', lost: 'red' };
+const SCORE_ROW_CLASS = { Hot: 'row-hot', Warm: 'row-warm', Cool: '' };
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function ymd(d) {
@@ -207,13 +209,13 @@ export default function Pipeline() {
         <div className="table-wrap">
           <table className="list deal-table">
             <thead>
-              <tr><th>Deal</th><th>Contact / company</th><th>Phone</th><th>Address</th><th>Stage</th><th>Value</th><th>Score</th><th>Expected close</th></tr>
+              <tr><th>Deal</th><th>Contact / company</th><th>Phone</th><th>Address</th><th>Stage</th><th>Value</th><th>Score</th><th>Owner</th><th>Expected close</th></tr>
             </thead>
             <tbody>
               {deals.map((deal) => {
                 const links = deal.customer_address ? mapLinks(deal.customer_address) : null;
                 return (
-                  <tr key={deal.id}>
+                  <tr key={deal.id} className={SCORE_ROW_CLASS[deal.label] || ''}>
                     <td className="title-cell"><Link to={`/pipeline/${deal.id}`} className="link-strong">{deal.title}</Link></td>
                     <td className="muted">{deal.company_name || (deal.first_name ? `${deal.first_name} ${deal.last_name}` : '—')}</td>
                     <td className="muted">{deal.customer_phone || '—'}</td>
@@ -224,14 +226,15 @@ export default function Pipeline() {
                         </a>
                       ) : '—'}
                     </td>
-                    <td>{STAGE_LABELS[deal.stage]}</td>
+                    <td><span className={'status-text ' + (STAGE_TEXT[deal.stage] || 'muted')}>{STAGE_LABELS[deal.stage]}</span></td>
                     <td className="mono">{money(deal.value)}</td>
-                    <td>{deal.label && <span className={'score-pill ' + deal.label.toLowerCase()}>{deal.label} · {deal.score}</span>}</td>
+                    <td>{deal.label && <span className={'score-text ' + deal.label.toLowerCase()}>{deal.label} · {deal.score}</span>}</td>
+                    <td className="muted">{deal.owner_username || '—'}</td>
                     <td className="muted">{shortDate(deal.expected_close)}</td>
                   </tr>
                 );
               })}
-              {deals.length === 0 && <tr><td colSpan={8}><div className="empty">No deals yet.</div></td></tr>}
+              {deals.length === 0 && <tr><td colSpan={9}><div className="empty">No deals yet.</div></td></tr>}
             </tbody>
           </table>
         </div>

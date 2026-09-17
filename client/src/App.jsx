@@ -21,6 +21,7 @@ import Materials from './pages/Materials';
 import Items from './pages/Items';
 import Integrations from './pages/Integrations';
 import EstimateApproval from './pages/EstimateApproval';
+import InvoiceView from './pages/InvoiceView';
 import Users from './pages/Users';
 import Login from './pages/Login';
 import { AuthProvider, useAuth, Protected } from './auth';
@@ -41,6 +42,7 @@ function AuthedApp() {
   return (
     <Routes>
       <Route path="/approve/:token" element={<EstimateApproval />} />
+      <Route path="/invoice/:token" element={<InvoiceView />} />
       {!user ? (
         <Route path="*" element={<Login />} />
       ) : (

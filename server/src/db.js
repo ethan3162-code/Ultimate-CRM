@@ -352,6 +352,10 @@ ensureColumn('estimates', 'signed_at', 'signed_at TEXT');
 ensureColumn('estimates', 'signature_data_url', 'signature_data_url TEXT');
 // Back-fill a sign token for any estimate created before this column existed.
 db.prepare(`UPDATE estimates SET sign_token = lower(hex(randomblob(16))) WHERE sign_token IS NULL`).run();
+// A public, unauthenticated link for a branded, printable invoice view — same pattern as the
+// estimate's sign_token above, just without a signature step (invoices aren't signed).
+ensureColumn('invoices', 'public_token', 'public_token TEXT');
+db.prepare(`UPDATE invoices SET public_token = lower(hex(randomblob(16))) WHERE public_token IS NULL`).run();
 // Rename of an earlier stage key ('material_order' -> 'site_prep') on any DB seeded before the rename.
 db.prepare(`UPDATE jobs SET stage = 'site_prep' WHERE stage = 'material_order'`).run();
 // Project status lifecycle expanded to 6 states ('completed' -> 'complete', plus new 'accepted'/'on_hold')

@@ -1,10 +1,11 @@
-// Unauthenticated, token-gated routes for the customer-facing estimate approval page
-// (Joist-style e-signature). The token is a random 24-char hex string generated when
-// the estimate is created — long enough that guessing it isn't practical — so no login
-// is required for a customer to view and sign their own estimate.
+// Unauthenticated, token-gated routes for customer-facing documents — the estimate
+// approval page (Joist-style e-signature) and the branded invoice view. Each token is a
+// random 24-char hex string generated when the record is created — long enough that
+// guessing it isn't practical — so no login is required for a customer to view their own
+// estimate or invoice.
 const express = require('express');
 const db = require('../db');
-const { getEstimateFull, logActivity } = require('../helpers');
+const { getEstimateFull, getInvoiceFull, logActivity } = require('../helpers');
 const { fireTrigger } = require('../automationEngine');
 
 const router = express.Router();
@@ -12,6 +13,11 @@ const router = express.Router();
 function estimateByToken(token) {
   const row = db.prepare(`SELECT id FROM estimates WHERE sign_token = ?`).get(token);
   return row ? getEstimateFull(row.id) : null;
+}
+
+function invoiceByToken(token) {
+  const row = db.prepare(`SELECT id FROM invoices WHERE public_token = ?`).get(token);
+  return row ? getInvoiceFull(row.id) : null;
 }
 
 router.get('/estimates/:token', (req, res) => {
@@ -54,6 +60,24 @@ router.post('/estimates/:token/sign', (req, res) => {
   });
 
   res.json({ ok: true });
+});
+
+router.get('/invoices/:token', (req, res) => {
+  const invoice = invoiceByToken(req.params.token);
+  if (!invoice) return res.status(404).json({ error: 'not found' });
+  const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(invoice.job_id);
+  const contact = job?.contact_id ? db.prepare(`SELECT first_name, last_name, email, phone, address FROM contacts WHERE id = ?`).get(job.contact_id) : null;
+  const company = job?.company_id ? db.prepare(`SELECT name FROM companies WHERE id = ?`).get(job.company_id) : null;
+  res.json({
+    number: invoice.number, status: invoice.status, kind: invoice.kind, due_date: invoice.due_date,
+    items: invoice.items, subtotal: invoice.subtotal, tax: invoice.tax, total: invoice.total,
+    tax_rate: invoice.tax_rate, amount_paid: invoice.amount_paid, balance: invoice.balance,
+    payments: invoice.payments,
+    job_title: job?.title, job_address: job?.address,
+    customer_name: contact ? `${contact.first_name} ${contact.last_name}` : (company ? company.name : null),
+    customer_email: contact ? contact.email : null,
+    customer_address: (contact && contact.address) || job?.address || null,
+  });
 });
 
 module.exports = router;

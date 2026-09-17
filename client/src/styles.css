@@ -8,10 +8,10 @@
   --muted: #767A6E;
   --line: #DBD7C9;
   --line-soft: #E7E4D8;
-  --accent: #2B6E58;
-  --accent-ink: #1D4B3C;
-  --accent-soft: #E3EDE7;
-  --accent-soft-line: #C7DBD0;
+  --accent: #2E5C8A;
+  --accent-ink: #1D3F63;
+  --accent-soft: #DEE8F2;
+  --accent-soft-line: #B9CEE3;
   --amber: #9C6B25;
   --amber-soft: #F1E7D3;
   --red: #A23B2E;
@@ -22,6 +22,10 @@
   --purple: #6B4C9A;
   --purple-soft: #EAE2F3;
   --purple-soft-line: #D3BFE9;
+  --success: #2B6E58;
+  --success-ink: #1D4B3C;
+  --success-soft: #E3EDE7;
+  --success-soft-line: #C7DBD0;
   --shadow: 0 1px 2px rgba(28,32,41,0.04), 0 6px 20px -8px rgba(28,32,41,0.14);
   color-scheme: light;
 }
@@ -35,10 +39,10 @@
     --muted: #8B8F82;
     --line: #2C2F2A;
     --line-soft: #23261F;
-    --accent: #4FA485;
-    --accent-ink: #8FD1B7;
-    --accent-soft: #1B2B25;
-    --accent-soft-line: #2C4238;
+    --accent: #7CAEE0;
+    --accent-ink: #A8CEF0;
+    --accent-soft: #1B2733;
+    --accent-soft-line: #2D4356;
     --amber: #D6A85C;
     --amber-soft: #2E271A;
     --red: #E08579;
@@ -49,6 +53,10 @@
     --purple: #C2A4EA;
     --purple-soft: #271F30;
     --purple-soft-line: #3E3050;
+    --success: #4FA485;
+    --success-ink: #8FD1B7;
+    --success-soft: #1B2B25;
+    --success-soft-line: #2C4238;
     --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 24px -8px rgba(0,0,0,0.55);
   }
 }
@@ -61,10 +69,10 @@
   --muted: #8B8F82;
   --line: #2C2F2A;
   --line-soft: #23261F;
-  --accent: #4FA485;
-  --accent-ink: #8FD1B7;
-  --accent-soft: #1B2B25;
-  --accent-soft-line: #2C4238;
+  --accent: #7CAEE0;
+  --accent-ink: #A8CEF0;
+  --accent-soft: #1B2733;
+  --accent-soft-line: #2D4356;
   --amber: #D6A85C;
   --amber-soft: #2E271A;
   --red: #E08579;
@@ -75,6 +83,10 @@
   --purple: #C2A4EA;
   --purple-soft: #271F30;
   --purple-soft-line: #3E3050;
+  --success: #4FA485;
+  --success-ink: #8FD1B7;
+  --success-soft: #1B2B25;
+  --success-soft-line: #2C4238;
   --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 24px -8px rgba(0,0,0,0.55);
 }
 
@@ -174,6 +186,7 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   flex-shrink: 0;
 }
 .brand .name { font-family: 'Source Serif 4', serif; font-weight: 600; font-size: 1.02rem; }
+.brand-logo { height: 26px; width: auto; display: block; max-width: 100%; object-fit: contain; }
 
 .nav-group .kicker {
   font-family: 'IBM Plex Mono', monospace;
@@ -266,7 +279,7 @@ table.list tbody tr:last-child td { border-bottom: none; }
   padding: 3px 9px; border-radius: 20px; white-space: nowrap;
   background: var(--line-soft); color: var(--ink-soft); border: 1px solid var(--line);
 }
-.pill.green { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent-soft-line); }
+.pill.green { background: var(--success-soft); color: var(--success-ink); border-color: var(--success-soft-line); }
 .pill.amber { background: var(--amber-soft); color: var(--amber); border-color: var(--amber); }
 .pill.red { background: var(--red-soft); color: var(--red); border-color: var(--red); }
 .pill.blue { background: var(--blue-soft); color: var(--blue); border-color: var(--blue-soft-line); }
@@ -280,7 +293,7 @@ table.list tbody tr:last-child td { border-bottom: none; }
   background: var(--line-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none'/%3E%3C/svg%3E") no-repeat right 8px center;
   color: var(--ink-soft); border: 1px solid var(--line); appearance: none; -webkit-appearance: none;
 }
-.pill-select.green { background-color: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent-soft-line); }
+.pill-select.green { background-color: var(--success-soft); color: var(--success-ink); border-color: var(--success-soft-line); }
 .pill-select.amber { background-color: var(--amber-soft); color: var(--amber); border-color: var(--amber); }
 .pill-select.red { background-color: var(--red-soft); color: var(--red); border-color: var(--red); }
 
@@ -532,12 +545,44 @@ table.list tbody tr:last-child td { border-bottom: none; }
 .task-due { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); white-space: nowrap; }
 .task-due.overdue { color: var(--red); font-weight: 600; }
 
+/* --- Status-tinted table rows (Leads / Opportunities, Sept 2026) — the row's own background
+   carries a soft tint by priority (hot/warm), so what needs attention reads at a glance without
+   hunting for a pill in a dense table. Status and score render as plain bold colored text
+   instead of pills, since the tinted row already does the "this needs a look" signaling. */
+table.list tbody tr.row-hot td { background: var(--red-soft); }
+table.list tbody tr.row-warm td { background: var(--amber-soft); }
+table.list tbody tr.row-hot:hover td, table.list tbody tr.row-warm:hover td { background: var(--line-soft); }
+
+.status-text { font-size: 12.5px; font-weight: 600; }
+.status-text.amber { color: var(--amber); }
+.status-text.red { color: var(--red); }
+.status-text.green { color: var(--success-ink); }
+.status-text.muted { color: var(--ink-soft); }
+
+.status-select {
+  font-weight: 600; font-size: 12.5px; background-color: transparent; border: none; cursor: pointer;
+  padding: 2px 16px 2px 0; color: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right center; appearance: none; -webkit-appearance: none;
+}
+.status-select.amber { color: var(--amber); }
+.status-select.red { color: var(--red); }
+.status-select.green { color: var(--success-ink); }
+.status-select.muted { color: var(--ink-soft); }
+
+.score-text { font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 12px; white-space: nowrap; }
+.score-text.hot { color: var(--red); }
+.score-text.warm { color: var(--amber); }
+.score-text.cool { color: var(--muted); }
+.score-text.won { color: var(--success-ink); }
+.score-text.lost { color: var(--muted); }
+
 /* --- Deal score pill --- */
 .score-pill { display: inline-flex; align-items: center; gap: 4px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
 .score-pill.hot { background: var(--red-soft); color: var(--red); }
 .score-pill.warm { background: var(--amber-soft); color: var(--amber); }
 .score-pill.cool { background: var(--line-soft); color: var(--ink-soft); }
-.score-pill.won { background: var(--accent-soft); color: var(--accent-ink); }
+.score-pill.won { background: var(--success-soft); color: var(--success-ink); }
 .score-pill.lost { background: var(--line-soft); color: var(--muted); }
 
 /* --- Job photos --- */
@@ -551,6 +596,16 @@ table.list tbody tr:last-child td { border-bottom: none; }
 .deal-table td, .deal-table th { white-space: nowrap; }
 .deal-table td.title-cell { white-space: normal; }
 
-/* --- Public estimate approval page --- */
+/* --- Public estimate approval + invoice pages --- */
 .approval-shell { max-width: 640px; margin: 0 auto; padding: 32px 16px 60px; }
 .sign-pad { border: 1px dashed var(--line); border-radius: 10px; background: var(--paper); touch-action: none; cursor: crosshair; width: 100%; height: 160px; }
+.doc-brand { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; }
+.doc-brand .brand-logo { height: 34px; }
+
+@media print {
+  .no-print { display: none !important; }
+  .sidebar, .topbar, .nav-backdrop { display: none !important; }
+  .approval-shell { max-width: none; padding: 0; }
+  body { background: #fff; }
+  .card { box-shadow: none; border: 1px solid #ccc; }
+}

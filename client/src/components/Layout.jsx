@@ -75,8 +75,7 @@ export default function Layout() {
           <span />
         </button>
         <div className="brand">
-          <div className="mark">U</div>
-          <div className="name">Ultimate CRM</div>
+          <img src="/logo-full.png" alt="Precision Paving & Masonry" className="brand-logo" />
         </div>
       </header>
 
@@ -84,8 +83,7 @@ export default function Layout() {
 
       <aside className={'sidebar' + (navOpen ? ' open' : '')}>
         <div className="brand sidebar-brand">
-          <div className="mark">U</div>
-          <div className="name">Ultimate CRM</div>
+          <img src="/logo-full.png" alt="Precision Paving & Masonry" className="brand-logo" />
         </div>
         {visibleNav.map((group) => (
           <nav className="nav-group" key={group.group}>

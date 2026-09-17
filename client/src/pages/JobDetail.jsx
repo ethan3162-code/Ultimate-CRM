@@ -266,6 +266,13 @@ export default function JobDetail() {
     setTimeout(() => setCopiedLink(null), 1500);
   }
 
+  function copyInvoiceLink(invoice) {
+    const url = `${window.location.origin}/invoice/${invoice.public_token}`;
+    navigator.clipboard?.writeText(url);
+    setCopiedLink(`inv-${invoice.id}`);
+    setTimeout(() => setCopiedLink(null), 1500);
+  }
+
   if (!job) return <div className="loading">Loading…</div>;
 
   return (
@@ -685,9 +692,12 @@ export default function JobDetail() {
                       </div>
                     )}
 
-                    {inv.balance > 0 && canEdit && (
-                      <button className="btn primary sm" style={{ marginTop: 8 }} onClick={() => setPayingInvoice(inv)}>Charge / record payment</button>
-                    )}
+                    <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                      {inv.balance > 0 && canEdit && (
+                        <button className="btn primary sm" onClick={() => setPayingInvoice(inv)}>Charge / record payment</button>
+                      )}
+                      <button className="btn sm" onClick={() => copyInvoiceLink(inv)}>{copiedLink === `inv-${inv.id}` ? 'Copied!' : 'Copy invoice link'}</button>
+                    </div>
                   </div>
                 ))}
               </div>

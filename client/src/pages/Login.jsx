@@ -25,8 +25,7 @@ export default function Login() {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--paper)' }}>
       <div className="card" style={{ width: 340 }}>
         <div className="brand" style={{ marginBottom: 18 }}>
-          <div className="mark">U</div>
-          <div className="name">Ultimate CRM</div>
+          <img src="/logo-full.png" alt="Precision Paving & Masonry" className="brand-logo" style={{ height: 34 }} />
         </div>
         <h2 style={{ marginTop: 0 }}>Sign in</h2>
         <form onSubmit={submit} className="stack" style={{ gap: 12 }}>

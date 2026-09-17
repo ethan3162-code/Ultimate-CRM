@@ -17,7 +17,8 @@ const BLANK_FORM = {
   lead_owner: '', rep: '', ha_lead_fee: '', ha_match_type: '',
 };
 
-const LEAD_STATUS_PILL = { New: '', 'Follow Up': 'amber', Unresponsive: 'red', Restart: 'amber', Lost: 'red', Converted: 'green' };
+const LEAD_STATUS_TEXT = { New: 'muted', 'Follow Up': 'amber', Unresponsive: 'red', Restart: 'amber', Lost: 'red', Converted: 'green' };
+const SCORE_ROW_CLASS = { Hot: 'row-hot', Warm: 'row-warm', Cool: '' };
 
 export default function Leads() {
   const { canEdit } = usePermission('leads');
@@ -191,31 +192,32 @@ export default function Leads() {
         <div className="table-wrap">
           <table className="list deal-table">
             <thead>
-              <tr><th>Lead</th><th>Contact / company</th><th>Phone</th><th>Address</th><th>Source</th><th>Status</th><th>Score</th><th>Value</th><th>Received</th><th></th></tr>
+              <tr><th>Lead</th><th>Contact / company</th><th>Phone</th><th>Address</th><th>Source</th><th>Status</th><th>Score</th><th>Owner</th><th>Value</th><th>Received</th><th></th></tr>
             </thead>
             <tbody>
               {leads.map((deal) => {
                 const links = deal.customer_address ? mapLinks(deal.customer_address) : null;
                 return (
-                  <tr key={deal.id}>
+                  <tr key={deal.id} className={SCORE_ROW_CLASS[deal.label] || ''}>
                     <td className="title-cell"><Link to={`/pipeline/${deal.id}`} className="link-strong">{deal.title}</Link></td>
                     <td className="muted">{deal.company_name || (deal.first_name ? `${deal.first_name} ${deal.last_name}` : '—')}</td>
                     <td className="muted">{deal.customer_phone || '—'}</td>
                     <td className="muted">
                       {links ? <a href={links.view} target="_blank" rel="noreferrer" className="map-link" title="View on Google Maps (satellite)">📍 {deal.customer_address}</a> : '—'}
                     </td>
-                    <td>{deal.source ? <span className="pill">{deal.source}</span> : <span className="muted">—</span>}</td>
+                    <td className="muted">{deal.source || '—'}</td>
                     <td>
                       <select
                         value={deal.lead_status || 'New'}
                         disabled={busyId === deal.id || !canEdit}
                         onChange={(e) => setLeadStatus(deal, e.target.value)}
-                        className={'pill-select ' + (LEAD_STATUS_PILL[deal.lead_status] || '')}
+                        className={'status-select ' + (LEAD_STATUS_TEXT[deal.lead_status] || 'muted')}
                       >
                         {LEAD_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </td>
-                    <td>{deal.label && <span className={'score-pill ' + deal.label.toLowerCase()}>{deal.label} · {deal.score}</span>}</td>
+                    <td>{deal.label && <span className={'score-text ' + deal.label.toLowerCase()}>{deal.label} · {deal.score}</span>}</td>
+                    <td className="muted">{deal.owner_username || '—'}</td>
                     <td className="mono">{money(deal.value)}</td>
                     <td className="muted">{timeAgo(deal.created_at)}</td>
                     <td>

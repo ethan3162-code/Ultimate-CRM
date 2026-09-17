@@ -86,6 +86,10 @@ export default function EstimateApproval() {
 
   return (
     <div className="approval-shell">
+      <div className="doc-brand">
+        <img src="/logo-full.png" alt="Precision Paving & Masonry" className="brand-logo" />
+        <button type="button" className="btn sm no-print" onClick={() => window.print()}>Print</button>
+      </div>
       <div className="page-head">
         <div>
           <h1>Estimate {estimate.number}</h1>
@@ -119,7 +123,7 @@ export default function EstimateApproval() {
             <p className="sub">Approved by {estimate.signed_name}. Your contractor has been notified — thanks!</p>
           </div>
         ) : (
-          <>
+          <div className="no-print">
             <h2>Approve &amp; sign</h2>
             <p className="sub" style={{ margin: '-4px 0 12px' }}>Typing your name and drawing a signature below confirms you approve this estimate as shown.</p>
             <form onSubmit={submitSignature}>
@@ -136,7 +140,7 @@ export default function EstimateApproval() {
                 {submitting ? 'Submitting…' : 'Approve & sign'}
               </button>
             </form>
-          </>
+          </div>
         )}
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { initials, mapLinks } from '../utils';
+import { mapLinks } from '../utils';
 import { LEAD_SOURCES } from '../constants';
 import { usePermission } from '../auth';
 
@@ -69,26 +69,22 @@ export default function Contacts() {
       {!contacts ? <div className="loading">Loading…</div> : (
         <div className="table-wrap">
           <table className="list">
-            <thead><tr><th></th><th>Name</th><th>Title</th><th>Company</th><th>Email</th><th>Phone</th><th>Address</th><th>Source</th></tr></thead>
+            <thead><tr><th>Name</th><th>Title</th><th>Company</th><th>Owner</th><th>Email</th><th>Phone</th><th>Address</th><th>Source</th></tr></thead>
             <tbody>
               {contacts.map((c) => {
                 const links = c.address ? mapLinks(c.address) : null;
                 return (
                   <tr key={c.id}>
-                    <td>
-                      <div style={{ width: 26, height: 26, borderRadius: 7, background: 'var(--accent-soft)', color: 'var(--accent-ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
-                        {initials(c.first_name, c.last_name)}
-                      </div>
-                    </td>
                     <td><Link to={`/contacts/${c.id}`} className="link-strong">{c.first_name} {c.last_name}</Link></td>
                     <td className="muted">{c.title || '—'}</td>
                     <td>{c.company_name || '—'}</td>
+                    <td className="muted">{c.owner_username || '—'}</td>
                     <td className="muted">{c.email || '—'}</td>
                     <td className="muted">{c.phone || '—'}</td>
                     <td className="muted">
                       {links ? <a href={links.view} target="_blank" rel="noreferrer" className="map-link" title="View on Google Maps (satellite)">📍 {c.address}</a> : '—'}
                     </td>
-                    <td>{c.source ? <span className="pill">{c.source}</span> : <span className="muted">—</span>}</td>
+                    <td className="muted">{c.source || '—'}</td>
                   </tr>
                 );
               })}

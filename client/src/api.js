@@ -112,4 +112,5 @@ export const api = {
 
   publicEstimate: (token) => request(`/public/estimates/${token}`),
   signEstimate: (token, data) => request(`/public/estimates/${token}/sign`, { method: 'POST', body: JSON.stringify(data) }),
+  publicInvoice: (token) => request(`/public/invoices/${token}`),
 };

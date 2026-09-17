@@ -180,8 +180,9 @@ router.post('/estimates/:estimateId/convert', (req, res) => {
   const count = db.prepare(`SELECT COUNT(*) c FROM invoices`).get().c;
   const number = `INV-${2000 + count + 1}`;
   const dueDate = req.body.due_date || null;
-  const result = db.prepare(`INSERT INTO invoices (job_id, estimate_id, number, status, tax_rate, due_date) VALUES (?,?,?,?,?,?)`)
-    .run(estimate.job_id, estimate.id, number, 'sent', estimate.tax_rate, dueDate);
+  const publicToken = crypto.randomBytes(12).toString('hex');
+  const result = db.prepare(`INSERT INTO invoices (job_id, estimate_id, number, status, tax_rate, due_date, public_token) VALUES (?,?,?,?,?,?,?)`)
+    .run(estimate.job_id, estimate.id, number, 'sent', estimate.tax_rate, dueDate, publicToken);
   const invoiceId = result.lastInsertRowid;
   for (const it of estimate.items) {
     db.prepare(`INSERT INTO invoice_items (invoice_id, description, qty, unit_price) VALUES (?,?,?,?)`)
@@ -202,8 +203,9 @@ router.post('/estimates/:estimateId/deposit', (req, res) => {
   const count = db.prepare(`SELECT COUNT(*) c FROM invoices`).get().c;
   const number = `INV-${2000 + count + 1}`;
   const depositAmount = +(estimate.total * (percent / 100)).toFixed(2);
-  const result = db.prepare(`INSERT INTO invoices (job_id, estimate_id, number, status, kind, tax_rate, due_date) VALUES (?,?,?,?,?,?,?)`)
-    .run(estimate.job_id, estimate.id, number, 'sent', 'deposit', 0, req.body.due_date || null);
+  const depositToken = crypto.randomBytes(12).toString('hex');
+  const result = db.prepare(`INSERT INTO invoices (job_id, estimate_id, number, status, kind, tax_rate, due_date, public_token) VALUES (?,?,?,?,?,?,?,?)`)
+    .run(estimate.job_id, estimate.id, number, 'sent', 'deposit', 0, req.body.due_date || null, depositToken);
   const invoiceId = result.lastInsertRowid;
   db.prepare(`INSERT INTO invoice_items (invoice_id, description, qty, unit_price) VALUES (?,?,?,?)`)
     .run(invoiceId, `Deposit (${percent}%) for estimate ${estimate.number}`, 1, depositAmount);
@@ -219,8 +221,9 @@ router.post('/:id/invoices', (req, res) => {
   const { number, tax_rate, due_date, items } = req.body;
   if (!items || !items.length) return res.status(400).json({ error: 'at least one line item is required' });
   const count = db.prepare(`SELECT COUNT(*) c FROM invoices`).get().c;
-  const result = db.prepare(`INSERT INTO invoices (job_id, number, status, tax_rate, due_date) VALUES (?,?,?,?,?)`)
-    .run(job.id, number || `INV-${2000 + count + 1}`, 'draft', tax_rate || 0, due_date || null);
+  const expressToken = crypto.randomBytes(12).toString('hex');
+  const result = db.prepare(`INSERT INTO invoices (job_id, number, status, tax_rate, due_date, public_token) VALUES (?,?,?,?,?,?)`)
+    .run(job.id, number || `INV-${2000 + count + 1}`, 'draft', tax_rate || 0, due_date || null, expressToken);
   const invoiceId = result.lastInsertRowid;
   for (const it of items) {
     db.prepare(`INSERT INTO invoice_items (invoice_id, description, qty, unit_price) VALUES (?,?,?,?)`)
