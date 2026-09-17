@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { getInvoiceFull } = require('../helpers');
+const { canSeePrices } = require('../auth');
 
 const router = express.Router();
 
@@ -28,17 +29,24 @@ router.get('/', (req, res) => {
 
   const recentActivity = db.prepare(`SELECT * FROM activities ORDER BY created_at DESC LIMIT 10`).all();
 
+  // Note: recentActivity's free-text notes can themselves mention a dollar figure (e.g. a
+  // logged payment) — those aren't scrubbed here, only the structured $ fields below. A known,
+  // documented gap rather than an oversight (see the spec doc's price-visibility section).
+  const hidePrices = !canSeePrices(req.user);
   res.json({
-    openPipelineValue,
-    weightedPipelineValue,
+    openPipelineValue: hidePrices ? null : openPipelineValue,
+    weightedPipelineValue: hidePrices ? null : weightedPipelineValue,
     openDealCount: openDeals.length,
-    stageCounts,
-    unpaidTotal,
-    overdueTotal,
-    paidThisMonth,
+    stageCounts: hidePrices
+      ? Object.fromEntries(Object.entries(stageCounts).map(([k, v]) => [k, { c: v.c, v: null }]))
+      : stageCounts,
+    unpaidTotal: hidePrices ? null : unpaidTotal,
+    overdueTotal: hidePrices ? null : overdueTotal,
+    paidThisMonth: hidePrices ? null : paidThisMonth,
     jobsInProgress,
     jobsScheduled,
     recentActivity,
+    price_hidden: hidePrices,
   });
 });
 

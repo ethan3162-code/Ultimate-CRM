@@ -6,7 +6,7 @@ import { EXPENSE_CATEGORIES, PROJECT_STATUSES, PROJECT_STATUS_LABEL } from '../c
 import LineItemEditor from '../components/LineItemEditor';
 import PaymentModal from '../components/PaymentModal';
 import TaskList from '../components/TaskList';
-import { usePermission } from '../auth';
+import { usePermission, useSection, usePriceVisibility } from '../auth';
 
 const REVENUE_BASIS_LABEL = { invoiced: 'Invoiced', estimated: 'Approved estimate (projected — not yet invoiced)', none: 'No invoice or approved estimate yet' };
 const BLANK_EXPENSE = { category: 'Materials', description: '', qty: '1', unit_cost: '', incurred_on: '' };
@@ -67,6 +67,11 @@ function resizeImageFile(file) {
 export default function JobDetail() {
   const { id } = useParams();
   const { canEdit } = usePermission('jobs');
+  const billingSectionEditable = useSection('jobs.billing');
+  const scheduleSectionEditable = useSection('jobs.schedule');
+  const canEditBilling = canEdit && billingSectionEditable;
+  const canEditSchedule = canEdit && scheduleSectionEditable;
+  const canSeePrices = usePriceVisibility();
   const [job, setJob] = useState(null);
   const [catalog, setCatalog] = useState(null);
   const [showEstimateForm, setShowEstimateForm] = useState(false);
@@ -285,7 +290,7 @@ export default function JobDetail() {
         </div>
         <div className="row" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {PROJECT_STATUSES.map((s) => (
-            <button key={s} className={'btn sm' + (job.status === s ? ' primary' : '')} onClick={() => changeStatus(s)} disabled={!canEdit}>{PROJECT_STATUS_LABEL[s]}</button>
+            <button key={s} className={'btn sm' + (job.status === s ? ' primary' : '')} onClick={() => changeStatus(s)} disabled={!canEditSchedule}>{PROJECT_STATUS_LABEL[s]}</button>
           ))}
         </div>
       </div>
@@ -309,7 +314,7 @@ export default function JobDetail() {
           <div>
             <div className="kicker">Gross profit %</div>
             <span className="mono" style={{ fontWeight: 600, color: marginColor(job.billing.grossProfitPercent) }}>
-              {job.billing.grossProfitPercent === null ? '—' : `${job.billing.grossProfitPercent}%`}
+              {job.price_hidden ? '🔒 Hidden' : (job.billing.grossProfitPercent === null ? '—' : `${job.billing.grossProfitPercent}%`)}
             </span>
           </div>
         </div>
@@ -377,7 +382,7 @@ export default function JobDetail() {
             <form onSubmit={saveSchedule} className="form-grid">
               <div className="field">
                 <label>Start date</label>
-                <input type="date" value={schedule.start_date || ''} onChange={(e) => setSchedule({ ...schedule, start_date: e.target.value })} />
+                <input type="date" value={schedule.start_date || ''} onChange={(e) => setSchedule({ ...schedule, start_date: e.target.value })} disabled={!canEditSchedule} />
               </div>
               <div className="field">
                 <label>Projected end date</label>
@@ -390,6 +395,7 @@ export default function JobDetail() {
                     type="number" min="0"
                     value={schedule[s.field]}
                     onChange={(e) => setSchedule({ ...schedule, [s.field]: e.target.value })}
+                    disabled={!canEditSchedule}
                   />
                 </div>
               ))}
@@ -398,7 +404,7 @@ export default function JobDetail() {
                   Total project length: <strong>{totalDays} day{totalDays === 1 ? '' : 's'}</strong>
                   {projectedEnd ? ` — ends ${projectedEnd.toLocaleDateString()}` : ''}
                 </span>
-                {canEdit && <button className="btn primary sm" type="submit">Save schedule</button>}
+                {canEditSchedule && <button className="btn primary sm" type="submit">Save schedule</button>}
               </div>
             </form>
 
@@ -508,30 +514,39 @@ export default function JobDetail() {
           <div className="card">
             <div className="row between" style={{ marginBottom: editingBilling ? 10 : 0 }}>
               <h2 style={{ margin: 0 }}>Project billing</h2>
-              {!editingBilling && canEdit && <button className="btn sm subtle" onClick={() => setEditingBilling(true)}>Edit</button>}
+              {!editingBilling && canEditBilling && <button className="btn sm subtle" onClick={() => setEditingBilling(true)}>Edit</button>}
             </div>
+            {!canEditBilling && canEdit && <p className="sub" style={{ margin: '0 0 8px' }}>Your account can't edit this section.</p>}
             {editingBilling ? (
               <form onSubmit={saveBilling} className="stack" style={{ gap: 10 }}>
+                {canSeePrices && (
                 <div className="field">
                   <label>Contract amount ($)</label>
                   <input type="number" min="0" step="0.01" value={billingForm.contract_amount} onChange={(e) => setBillingForm({ ...billingForm, contract_amount: e.target.value })} />
                 </div>
+                )}
+                {canSeePrices && (
                 <div className="field">
                   <label>Change order amount ($)</label>
                   <input type="number" step="0.01" value={billingForm.change_order_amount} onChange={(e) => setBillingForm({ ...billingForm, change_order_amount: e.target.value })} />
                 </div>
+                )}
+                {canSeePrices && (
                 <div className="field">
                   <label>Sales tax amount ($)</label>
                   <input type="number" min="0" step="0.01" value={billingForm.sales_tax_amount} onChange={(e) => setBillingForm({ ...billingForm, sales_tax_amount: e.target.value })} />
                 </div>
+                )}
                 <div className="row" style={{ gap: 8, alignItems: 'center' }}>
                   <input type="checkbox" id="capital_improvement" checked={billingForm.capital_improvement} onChange={(e) => setBillingForm({ ...billingForm, capital_improvement: e.target.checked })} style={{ width: 'auto' }} />
                   <label htmlFor="capital_improvement" style={{ margin: 0 }}>Capital improvement</label>
                 </div>
+                {canSeePrices && (
                 <div className="field">
                   <label>Labor paid so far ($)</label>
                   <input type="number" min="0" step="0.01" value={billingForm.labor_paid} onChange={(e) => setBillingForm({ ...billingForm, labor_paid: e.target.value })} />
                 </div>
+                )}
                 <div className="row" style={{ gap: 8 }}>
                   <button className="btn primary sm" type="submit" disabled={savingBilling}>{savingBilling ? 'Saving…' : 'Save'}</button>
                   <button className="btn sm subtle" type="button" onClick={() => { setEditingBilling(false); setBillingForm(blankBilling(job)); }}>Cancel</button>
@@ -623,7 +638,7 @@ export default function JobDetail() {
               <div className="row between">
                 <span className="muted" style={{ fontSize: 13 }}>Margin</span>
                 <span className="mono" style={{ fontWeight: 600, color: marginColor(job.costing.margin) }}>
-                  {job.costing.margin === null ? '—' : `${job.costing.margin}%`}
+                  {job.price_hidden ? '🔒 Hidden' : (job.costing.margin === null ? '—' : `${job.costing.margin}%`)}
                 </span>
               </div>
             </div>

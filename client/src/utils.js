@@ -1,4 +1,11 @@
+// `null` (as opposed to 0, or missing/undefined) is what the server sends specifically for a
+// dollar figure it redacted because the signed-in login's price visibility is off (see
+// server/src/helpers.js's redactJobMoney/redactEstimateMoney/redactInvoiceMoney and deals.js's
+// redactDealMoney) — a real, unset amount comes through as 0, never null. Rendering that as a
+// lock icon here means every existing money(...) call site in the app hides prices correctly
+// with no per-call-site changes needed.
 export function money(n) {
+  if (n === null) return '🔒 Hidden';
   const v = Number(n || 0);
   return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
 }

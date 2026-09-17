@@ -34,9 +34,17 @@ export const api = {
   updateUser: (id, data) => request(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteUser: (id) => request(`/users/${id}`, { method: 'DELETE' }),
   updateUserPermissions: (id, permissions) => request(`/users/${id}/permissions`, { method: 'PATCH', body: JSON.stringify({ permissions }) }),
+  updateUserSections: (id, sections) => request(`/users/${id}/sections`, { method: 'PATCH', body: JSON.stringify({ sections }) }),
+  updateUserRoles: (id, role_ids) => request(`/users/${id}/roles`, { method: 'PATCH', body: JSON.stringify({ role_ids }) }),
   // Lightweight, non-admin directory of active logins — used to populate "Owner" dropdowns on
   // Contacts/Leads/Opportunities (unlike api.users(), any signed-in role can call this).
   usersDirectory: () => request('/directory/users'),
+
+  // Reusable, stackable permission-template "Roles" — admin only.
+  roles: () => request('/roles'),
+  createRole: (data) => request('/roles', { method: 'POST', body: JSON.stringify(data) }),
+  updateRole: (id, data) => request(`/roles/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteRole: (id) => request(`/roles/${id}`, { method: 'DELETE' }),
 
   dashboard: () => request('/dashboard'),
 

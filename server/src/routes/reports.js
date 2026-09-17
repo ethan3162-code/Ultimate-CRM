@@ -1,8 +1,36 @@
 const express = require('express');
 const db = require('../db');
 const { getInvoiceFull, getJobCosting } = require('../helpers');
+const { canSeePrices } = require('../auth');
 
 const router = express.Router();
+
+// Hides every dollar figure in the reports payload for a login whose price visibility is off,
+// while leaving percentages/rates and counts alone (a close rate or a lead count isn't itself a
+// price, even though it's computed alongside $ figures) — same explicit-field philosophy as
+// deals.js/helpers.js's redaction, just shaped for this endpoint's report cards.
+function redactReportsMoney(r) {
+  return {
+    ...r,
+    revenueByMonth: r.revenueByMonth.map((m) => ({ ...m, total: null })),
+    pipelineByStage: r.pipelineByStage.map((s) => ({ ...s, value: null })),
+    invoiceAging: r.invoiceAging.map((b) => ({ ...b, amount: null })),
+    topCustomers: r.topCustomers.map((c) => ({ ...c, amount: null })),
+    revenueForecast: r.revenueForecast.map((m) => ({ ...m, total: null })),
+    undatedForecastValue: null,
+    jobProfitability: {
+      ...r.jobProfitability, totalRevenue: null, totalCost: null, totalProfit: null,
+      byJob: r.jobProfitability.byJob.map((j) => ({ ...j, revenue: null, cost: null, profit: null })),
+    },
+    salesSummary: { ...r.salesSummary, totalSales: null, avgJobSize: null },
+    salesBySource: r.salesBySource.map((s) => ({ ...s, amount: null })),
+    salesByEstimator: r.salesByEstimator.map((s) => ({ ...s, amount: null })),
+    salesByCity: r.salesByCity.map((s) => ({ ...s, amount: null })),
+    salesByServiceType: r.salesByServiceType.map((s) => ({ ...s, amount: null })),
+    salesByType: r.salesByType.map((s) => ({ ...s, amount: null })),
+    price_hidden: true,
+  };
+}
 
 const DEAL_STAGES = ['new', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
 const STAGE_LABEL = { new: 'New', qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
@@ -236,11 +264,12 @@ router.get('/', (req, res) => {
     .map(([label, total]) => ({ label, rate: +(((bookingBooked.get(label) || 0) / total) * 100).toFixed(1), total }))
     .sort((a, b) => b.rate - a.rate);
 
-  res.json({
+  const payload = {
     revenueByMonth, jobsByMonth, pipelineByStage, jobsByStatus, invoiceAging, topCustomers, revenueForecast, undatedForecastValue, jobProfitability,
     salesSummary, salesBySource, salesByEstimator, salesByCity, salesByServiceType, salesByType,
     closeRateByPerson, closeRateBySource, leadsBySource, leadsThisMonthBySource, bookingRateBySource,
-  });
+  };
+  res.json(canSeePrices(req.user) ? payload : redactReportsMoney(payload));
 });
 
 module.exports = router;

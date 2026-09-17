@@ -8,7 +8,7 @@ import {
 } from '../constants';
 import AiDraftModal from '../components/AiDraftModal';
 import TaskList from '../components/TaskList';
-import { usePermission } from '../auth';
+import { usePermission, useSection, usePriceVisibility } from '../auth';
 
 const STAGES = ['new', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
 
@@ -16,6 +16,11 @@ export default function DealDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { canEdit } = usePermission('pipeline');
+  const aboutSectionEditable = useSection('pipeline.about');
+  const notesSectionEditable = useSection('pipeline.notes');
+  const canEditAbout = canEdit && aboutSectionEditable;
+  const canEditNotes = canEdit && notesSectionEditable;
+  const canSeePrices = usePriceVisibility();
   const [deal, setDeal] = useState(null);
   const [note, setNote] = useState('');
   const [draft, setDraft] = useState(null);
@@ -217,12 +222,13 @@ export default function DealDetail() {
           <div className="card section-card accent-purple">
             <div className="row between" style={{ marginBottom: editingAbout ? 10 : 6 }}>
               <h2 className="section-label" style={{ margin: 0 }}>About</h2>
-              {!editingAbout && canEdit && <button className="btn sm subtle" onClick={() => setEditingAbout(true)}>Edit</button>}
+              {!editingAbout && canEditAbout && <button className="btn sm subtle" onClick={() => setEditingAbout(true)}>Edit</button>}
             </div>
+            {!canEditAbout && canEdit && <p className="sub" style={{ margin: '0 0 8px' }}>Your account can't edit this section.</p>}
             {editingAbout ? (
               <form onSubmit={saveAbout} className="stack" style={{ gap: 10 }}>
                 <div className="field"><label>Title</label><input value={about.title} onChange={(e) => setAbout({ ...about, title: e.target.value })} required /></div>
-                <div className="field"><label>Value ($)</label><input type="number" min="0" step="0.01" value={about.value} onChange={(e) => setAbout({ ...about, value: e.target.value })} /></div>
+                {canSeePrices && <div className="field"><label>Value ($)</label><input type="number" min="0" step="0.01" value={about.value} onChange={(e) => setAbout({ ...about, value: e.target.value })} /></div>}
                 <div className="field"><label>Probability (%)</label><input type="number" min="0" max="100" value={about.probability} onChange={(e) => setAbout({ ...about, probability: e.target.value })} /></div>
                 <div className="field"><label>Expected close</label><input type="date" value={about.expected_close || ''} onChange={(e) => setAbout({ ...about, expected_close: e.target.value })} /></div>
                 <div className="field">
@@ -332,10 +338,12 @@ export default function DealDetail() {
                   <input type="checkbox" id="de_repeat_referral" checked={details.repeat_referral} onChange={(e) => setDetails({ ...details, repeat_referral: e.target.checked })} style={{ width: 'auto' }} />
                   <label htmlFor="de_repeat_referral" style={{ margin: 0 }}>Repeat customer / referral</label>
                 </div>
+                {canSeePrices && (
                 <div className="field">
                   <label>Lead fee ($)</label>
                   <input type="number" min="0" step="0.01" value={details.ha_lead_fee} onChange={(e) => setDetails({ ...details, ha_lead_fee: e.target.value })} placeholder="e.g. HomeAdvisor/Angi fee" />
                 </div>
+                )}
                 <div className="field">
                   <label>Lead match type</label>
                   <select value={details.ha_match_type} onChange={(e) => setDetails({ ...details, ha_match_type: e.target.value })}>
@@ -370,7 +378,7 @@ export default function DealDetail() {
                 <div className="row between"><span className="muted">Sub-service type</span><span>{deal.sub_service_type || '—'}</span></div>
                 <div className="row between"><span className="muted">Phone estimate</span><span>{deal.phone_estimate ? 'Yes' : 'No'}</span></div>
                 <div className="row between"><span className="muted">Repeat / referral</span><span>{deal.repeat_referral ? 'Yes' : 'No'}</span></div>
-                <div className="row between"><span className="muted">Lead fee</span><span>{deal.ha_lead_fee ? money(deal.ha_lead_fee) : '—'}</span></div>
+                <div className="row between"><span className="muted">Lead fee</span><span>{deal.price_hidden ? money(null) : (deal.ha_lead_fee ? money(deal.ha_lead_fee) : '—')}</span></div>
                 <div className="row between"><span className="muted">Lead match type</span><span>{deal.ha_match_type || '—'}</span></div>
                 <div className="row between"><span className="muted">Preferred callback time</span><span>{deal.preferred_callback_time || '—'}</span></div>
                 <div className="row between"><span className="muted">Preferred consult time</span><span>{deal.preferred_consult_time || '—'}</span></div>
@@ -380,7 +388,7 @@ export default function DealDetail() {
           <div className="card">
             <div className="row between" style={{ marginBottom: editingNotes ? 10 : 0 }}>
               <h2 style={{ margin: 0 }}>Notes &amp; inquiry</h2>
-              {!editingNotes && canEdit && <button className="btn sm subtle" onClick={() => setEditingNotes(true)}>Edit</button>}
+              {!editingNotes && canEditNotes && <button className="btn sm subtle" onClick={() => setEditingNotes(true)}>Edit</button>}
             </div>
             {editingNotes ? (
               <form onSubmit={saveNotes} className="stack" style={{ gap: 10 }}>

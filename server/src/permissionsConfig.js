@@ -60,4 +60,22 @@ const DEFAULT_PRIMARY_PAGES = {
 
 const VALID_LEVELS = ['edit', 'view', 'none'];
 
-module.exports = { ROLES, ROLE_LABEL, PAGES, ALWAYS_VIEW_PAGES, ADMIN_ONLY_PAGES, DEFAULT_PRIMARY_PAGES, VALID_LEVELS };
+// Sub-page sections (Sept 2026) — the user asked to restrict editing to specific *parts* of a
+// page, not just the whole page (e.g. edit a deal's notes but not its value, or a job's schedule
+// but not its billing). Each key here corresponds exactly to one existing save-form's PATCH
+// payload (see DealDetail.jsx's saveAbout/saveNotes and JobDetail.jsx's saveBilling/saveSchedule/
+// changeStatus), so the server can tell which section a request touches purely from which body
+// keys are present — no new form-splitting needed. Sections only ever restrict DOWN to 'view'
+// within a page that's otherwise 'edit'; a page that's 'view' or 'none' already caps everything
+// under it, section overrides or not (see auth.js's getSectionLevel).
+const SECTIONS = {
+  'pipeline.about': { label: 'Deal value & info (the "About" card)', page: 'pipeline', fields: ['title', 'value', 'probability', 'expected_close', 'source'] },
+  'pipeline.notes': { label: 'Notes & inquiry', page: 'pipeline', fields: ['project_description', 'inquiry_notes', 'lead_notes'] },
+  'jobs.billing': { label: 'Project billing', page: 'jobs', fields: ['contract_amount', 'change_order_amount', 'sales_tax_amount', 'capital_improvement', 'labor_paid'] },
+  'jobs.schedule': { label: 'Schedule & status', page: 'jobs', fields: ['status', 'start_date', 'demo_days', 'site_prep_days', 'installation_days', 'final_walkthrough_days'] },
+};
+
+module.exports = {
+  ROLES, ROLE_LABEL, PAGES, ALWAYS_VIEW_PAGES, ADMIN_ONLY_PAGES, DEFAULT_PRIMARY_PAGES, VALID_LEVELS,
+  SECTIONS,
+};

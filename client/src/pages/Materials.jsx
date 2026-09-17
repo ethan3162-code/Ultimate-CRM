@@ -50,7 +50,7 @@ export default function Materials() {
     const product = paverProducts.find((p) => String(p.id) === String(id));
     if (!product) return;
     setPavers((p) => ({ ...p, sfPerPallet: product.sf_per_pallet }));
-    setPrice('pavers', String(product.unit_price));
+    setPrice('pavers', product.unit_price == null ? '' : String(product.unit_price));
   }
 
   const result = useMemo(() => {
@@ -91,7 +91,7 @@ export default function Materials() {
       for (const r of rows) {
         if (!(r.key in next)) {
           const match = catalog.find((c) => c.material_key === r.key);
-          if (match) { next[r.key] = String(match.unit_price); changed = true; }
+          if (match) { next[r.key] = match.unit_price == null ? '' : String(match.unit_price); changed = true; }
         }
       }
       return changed ? next : prev;

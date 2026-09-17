@@ -4,8 +4,20 @@ const db = require('../db');
 const {
   getJobFull, getEstimateFull, getInvoiceFull, logActivity,
   STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, computeProgress, computeEndDate,
+  redactJobMoney, redactEstimateMoney, redactInvoiceMoney,
 } = require('../helpers');
 const { fireTrigger } = require('../automationEngine');
+const { canSeePrices, checkSectionEdit, getPermissions } = require('../auth');
+
+function sendJob(req, res, job, status) {
+  res.status(status || 200).json(canSeePrices(req.user) ? job : redactJobMoney(job));
+}
+function sendEstimate(req, res, estimate, status) {
+  res.status(status || 200).json(canSeePrices(req.user) ? estimate : redactEstimateMoney(estimate));
+}
+function sendInvoice(req, res, invoice, status) {
+  res.status(status || 200).json(canSeePrices(req.user) ? invoice : redactInvoiceMoney(invoice));
+}
 
 const router = express.Router();
 
@@ -46,7 +58,10 @@ router.get('/', (req, res) => {
     LEFT JOIN companies co ON co.id = j.company_id
     ORDER BY j.created_at DESC
   `).all();
-  res.json(rows);
+  if (canSeePrices(req.user)) return res.json(rows);
+  res.json(rows.map((r) => ({
+    ...r, contract_amount: null, change_order_amount: null, sales_tax_amount: null, labor_paid: null, price_hidden: true,
+  })));
 });
 
 router.post('/', (req, res) => {
@@ -79,19 +94,22 @@ router.post('/', (req, res) => {
     detail.contract_amount, detail.change_order_amount, detail.sales_tax_amount, detail.capital_improvement, detail.labor_paid
   );
   logActivity('job', result.lastInsertRowid, 'note', `Job "${title}" created.`);
-  res.status(201).json(getJobFull(result.lastInsertRowid));
+  sendJob(req, res, getJobFull(result.lastInsertRowid), 201);
 });
 
 router.get('/:id', (req, res) => {
   const job = getJobFull(req.params.id);
   if (!job) return res.status(404).json({ error: 'not found' });
   const activities = db.prepare(`SELECT * FROM activities WHERE related_type = 'job' AND related_id = ? ORDER BY created_at DESC`).all(req.params.id);
-  res.json({ ...job, activities });
+  const full = canSeePrices(req.user) ? job : redactJobMoney(job);
+  res.json({ ...full, activities });
 });
 
 router.patch('/:id', (req, res) => {
   const existing = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'not found' });
+  const sectionError = checkSectionEdit(req.user, getPermissions(req.user).jobs === 'edit' ? 'edit' : 'view', req.body);
+  if (sectionError) return res.status(403).json({ error: sectionError });
   const updates = { ...existing, ...req.body };
   const days = readStageDays(req.body, existing);
   Object.assign(updates, days);
@@ -140,7 +158,7 @@ router.patch('/:id', (req, res) => {
       });
     }
   }
-  res.json(getJobFull(req.params.id));
+  sendJob(req, res, getJobFull(req.params.id));
 });
 
 // --- Estimates ---
@@ -159,7 +177,7 @@ router.post('/:id/estimates', (req, res) => {
       .run(estimateId, it.description, it.qty, it.unit_price);
   }
   logActivity('job', job.id, 'estimate', `Estimate ${number || ''} created.`);
-  res.status(201).json(getEstimateFull(estimateId));
+  sendEstimate(req, res, getEstimateFull(estimateId), 201);
 });
 
 router.patch('/estimates/:estimateId', (req, res) => {
@@ -171,7 +189,7 @@ router.patch('/estimates/:estimateId', (req, res) => {
   if (status && status !== existing.status) {
     logActivity('job', existing.job_id, 'estimate', `Estimate ${existing.number} marked ${status}.`);
   }
-  res.json(getEstimateFull(req.params.estimateId));
+  sendEstimate(req, res, getEstimateFull(req.params.estimateId));
 });
 
 router.post('/estimates/:estimateId/convert', (req, res) => {
@@ -190,7 +208,7 @@ router.post('/estimates/:estimateId/convert', (req, res) => {
   }
   db.prepare(`UPDATE estimates SET status = 'approved' WHERE id = ?`).run(estimate.id);
   logActivity('job', estimate.job_id, 'invoice', `Invoice ${number} generated from estimate ${estimate.number}.`);
-  res.status(201).json(getInvoiceFull(invoiceId));
+  sendInvoice(req, res, getInvoiceFull(invoiceId), 201);
 });
 
 // Request a deposit invoice — a separate, smaller invoice for a percentage of the estimate,
@@ -211,7 +229,7 @@ router.post('/estimates/:estimateId/deposit', (req, res) => {
     .run(invoiceId, `Deposit (${percent}%) for estimate ${estimate.number}`, 1, depositAmount);
   db.prepare(`UPDATE estimates SET deposit_percent = ? WHERE id = ?`).run(percent, estimate.id);
   logActivity('job', estimate.job_id, 'invoice', `Deposit invoice ${number} requested (${percent}% of ${estimate.number}).`);
-  res.status(201).json(getInvoiceFull(invoiceId));
+  sendInvoice(req, res, getInvoiceFull(invoiceId), 201);
 });
 
 // --- Invoices ---
@@ -230,7 +248,7 @@ router.post('/:id/invoices', (req, res) => {
       .run(invoiceId, it.description, it.qty, it.unit_price);
   }
   logActivity('job', job.id, 'invoice', `Express invoice ${number || ''} created.`);
-  res.status(201).json(getInvoiceFull(invoiceId));
+  sendInvoice(req, res, getInvoiceFull(invoiceId), 201);
 });
 
 router.patch('/invoices/:invoiceId', (req, res) => {
@@ -239,7 +257,7 @@ router.patch('/invoices/:invoiceId', (req, res) => {
   const { status, due_date } = req.body;
   db.prepare(`UPDATE invoices SET status = ?, due_date = ? WHERE id = ?`)
     .run(status ?? existing.status, due_date ?? existing.due_date, req.params.invoiceId);
-  res.json(getInvoiceFull(req.params.invoiceId));
+  sendInvoice(req, res, getInvoiceFull(req.params.invoiceId));
 });
 
 router.post('/invoices/:invoiceId/payments', (req, res) => {
@@ -265,7 +283,7 @@ router.post('/invoices/:invoiceId/payments', (req, res) => {
       contact_email: contact ? contact.email : null,
     });
   }
-  res.status(201).json(getInvoiceFull(invoice.id));
+  sendInvoice(req, res, getInvoiceFull(invoice.id), 201);
 });
 
 // --- Job photos (before/progress/after) ---
@@ -299,7 +317,7 @@ router.post('/:id/expenses', (req, res) => {
   `).run(job.id, category || 'Materials', description, Number(qty) || 1, Number(unit_cost) || 0, incurred_on || new Date().toISOString().slice(0, 10), billable === false ? 0 : 1);
   const amount = (Number(qty) || 1) * (Number(unit_cost) || 0);
   logActivity('job', job.id, 'expense', `Expense logged: ${description} — $${amount.toFixed(2)} (${category || 'Materials'}).`);
-  res.status(201).json(getJobFull(job.id));
+  sendJob(req, res, getJobFull(job.id), 201);
 });
 
 router.delete('/expenses/:expenseId', (req, res) => {
@@ -307,7 +325,7 @@ router.delete('/expenses/:expenseId', (req, res) => {
   if (!expense) return res.status(404).json({ error: 'not found' });
   db.prepare(`DELETE FROM job_expenses WHERE id = ?`).run(req.params.expenseId);
   logActivity('job', expense.job_id, 'expense', `Expense removed: ${expense.description}.`);
-  res.json(getJobFull(expense.job_id));
+  sendJob(req, res, getJobFull(expense.job_id));
 });
 
 module.exports = router;

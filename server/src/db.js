@@ -253,6 +253,45 @@ CREATE TABLE IF NOT EXISTS user_permissions (
   level TEXT NOT NULL DEFAULT 'view',
   PRIMARY KEY (user_id, page)
 );
+
+-- Reusable named permission templates ("Roles" in the UI — Sept 2026). Distinct from the
+-- users.role account TYPE column (admin/user) above; a custom role here is just a named bundle
+-- of page + section permissions an admin can build once (e.g. "Sales", "Scheduler") and hand to
+-- any number of logins. A login can hold more than one at once (user_custom_roles below is a
+-- join table) — its effective access is the union (most-permissive) of every role it holds,
+-- combined with its own individual user_permissions/user_section_permissions overrides. See
+-- auth.js's getEffectivePermissions/getSectionLevel for exactly how these combine.
+CREATE TABLE IF NOT EXISTS custom_roles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS custom_role_permissions (
+  role_id INTEGER NOT NULL REFERENCES custom_roles(id) ON DELETE CASCADE,
+  page TEXT NOT NULL,
+  level TEXT NOT NULL DEFAULT 'none',
+  PRIMARY KEY (role_id, page)
+);
+-- Section-level overrides, both for a custom role and (below) for an individual login directly.
+-- Only ever holds 'view' rows in practice (a restriction below the page's own 'edit') — see
+-- permissionsConfig.js's SECTIONS for the fixed list of restrictable sections.
+CREATE TABLE IF NOT EXISTS custom_role_section_permissions (
+  role_id INTEGER NOT NULL REFERENCES custom_roles(id) ON DELETE CASCADE,
+  section TEXT NOT NULL,
+  level TEXT NOT NULL DEFAULT 'edit',
+  PRIMARY KEY (role_id, section)
+);
+CREATE TABLE IF NOT EXISTS user_custom_roles (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role_id INTEGER NOT NULL REFERENCES custom_roles(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, role_id)
+);
+CREATE TABLE IF NOT EXISTS user_section_permissions (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  section TEXT NOT NULL,
+  level TEXT NOT NULL DEFAULT 'edit',
+  PRIMARY KEY (user_id, section)
+);
 `);
 
 // --- Lightweight migrations ---
@@ -356,6 +395,12 @@ db.prepare(`UPDATE estimates SET sign_token = lower(hex(randomblob(16))) WHERE s
 // estimate's sign_token above, just without a signature step (invoices aren't signed).
 ensureColumn('invoices', 'public_token', 'public_token TEXT');
 db.prepare(`UPDATE invoices SET public_token = lower(hex(randomblob(16))) WHERE public_token IS NULL`).run();
+// Per-user price visibility (Sept 2026) — a standalone yes/no, independent of the page/section
+// permission system above and not affected by which custom roles a login holds: whether this
+// login can see dollar figures at all (deal value, job costing/billing, estimate/invoice prices,
+// the price book). Defaults to 1 (can see prices) so every existing login's behavior is
+// unchanged until an admin deliberately turns it off for someone.
+ensureColumn('users', 'can_see_prices', 'can_see_prices INTEGER NOT NULL DEFAULT 1');
 // Rename of an earlier stage key ('material_order' -> 'site_prep') on any DB seeded before the rename.
 db.prepare(`UPDATE jobs SET stage = 'site_prep' WHERE stage = 'material_order'`).run();
 // Project status lifecycle expanded to 6 states ('completed' -> 'complete', plus new 'accepted'/'on_hold')

@@ -151,7 +151,8 @@ export default function Pipeline() {
       <div className="kanban">
         {STAGES.map((stage) => {
           const list = byStage[stage];
-          const total = list.reduce((s, d) => s + d.value, 0);
+          const priceHidden = list.some((d) => d.price_hidden);
+          const total = priceHidden ? null : list.reduce((s, d) => s + d.value, 0);
           return (
             <div
               key={stage}

@@ -34,6 +34,49 @@ function getInvoiceFull(id) {
   return { ...inv, status, items, payments, ...totals, amount_paid, balance };
 }
 
+// Hides dollar figures for a login whose price visibility is off (Users & permissions —
+// "Can see prices"). Explicit field lists rather than name-matching, on purpose — a generic
+// "anything called total/amount" scan would also catch same-named fields that aren't money
+// (e.g. a count), so each of these only touches fields this file itself knows are dollars.
+function redactEstimateMoney(estimate) {
+  if (!estimate) return estimate;
+  return {
+    ...estimate, subtotal: null, tax: null, total: null, price_hidden: true,
+    items: estimate.items.map((it) => ({ ...it, unit_price: null })),
+  };
+}
+function redactInvoiceMoney(invoice) {
+  if (!invoice) return invoice;
+  return {
+    ...invoice, subtotal: null, tax: null, total: null, amount_paid: null, balance: null, price_hidden: true,
+    items: invoice.items.map((it) => ({ ...it, unit_price: null })),
+    payments: invoice.payments.map((p) => ({ ...p, amount: null })),
+  };
+}
+function redactJobMoney(job) {
+  if (!job) return job;
+  return {
+    ...job,
+    contract_amount: null, change_order_amount: null, sales_tax_amount: null, labor_paid: null,
+    price_hidden: true,
+    costing: job.costing && {
+      ...job.costing, revenue: null, cost: null, profit: null, margin: null, billable: null, notBillable: null,
+      laborCost: null, materialsCost: null,
+      byCategory: job.costing.byCategory.map((c) => ({ ...c, amount: null })),
+      expenses: job.costing.expenses.map((e) => ({ ...e, unit_cost: null })),
+    },
+    billing: job.billing && {
+      ...job.billing,
+      contractAmount: null, changeOrderAmount: null, totalContractAmount: null, salesTaxAmount: null,
+      totalCharges: null, grossProfitAmount: null, grossProfitPercent: null, laborCost: null, laborPaid: null,
+      laborBalance: null, laborCostPercent: null, allCustomerPayments: null, customerBalance: null,
+      materialsCost: null, billable: null, notBillable: null,
+    },
+    estimates: (job.estimates || []).map(redactEstimateMoney),
+    invoices: (job.invoices || []).map(redactInvoiceMoney),
+  };
+}
+
 // Job costing: what a job actually made, once real expenses are logged against it.
 // Revenue basis prefers billed reality (invoice totals) over a paid-so-far figure —
 // job costing measures what the work was worth, not collections — and only falls
@@ -193,4 +236,5 @@ function computeEndDate(job, startDate) {
 module.exports = {
   computeItemsTotal, withTotals, getEstimateFull, getInvoiceFull, getJobFull, getJobCosting, getJobBilling, logActivity,
   STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, stageDays, totalDays, computeProgress, addDays, computeEndDate,
+  redactEstimateMoney, redactInvoiceMoney, redactJobMoney,
 };

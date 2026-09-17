@@ -226,19 +226,19 @@ export default function Dashboard() {
           <div className="card span-2">
             <div className="report-card-head">
               <h2>Revenue collected</h2>
-              <div className="report-card-total">{money(reports.revenueByMonth.reduce((s, m) => s + m.total, 0))}</div>
+              <div className="report-card-total">{reports.price_hidden ? money(null) : money(reports.revenueByMonth.reduce((s, m) => s + m.total, 0))}</div>
             </div>
-            <TrendChart data={reports.revenueByMonth} valueKey="total" labelKey="month" formatValue={money} />
+            {reports.price_hidden ? <p className="sub">🔒 Prices are hidden for your account.</p> : <TrendChart data={reports.revenueByMonth} valueKey="total" labelKey="month" formatValue={money} />}
           </div>
 
           <div className="card span-2">
             <div className="report-card-head">
               <h2>Revenue forecast</h2>
-              <div className="report-card-total">{money(reports.revenueForecast.reduce((s, m) => s + m.total, 0))}</div>
+              <div className="report-card-total">{reports.price_hidden ? money(null) : money(reports.revenueForecast.reduce((s, m) => s + m.total, 0))}</div>
             </div>
             <p className="sub" style={{ margin: '-4px 0 10px' }}>Open deals' value × probability, by expected close month — a weighted look at what's likely coming in next, not a guarantee.</p>
-            <ColumnChart data={reports.revenueForecast} valueKey="total" labelKey="month" formatValue={money} color="var(--amber)" />
-            {reports.undatedForecastValue > 0 && (
+            {reports.price_hidden ? <p className="sub">🔒 Prices are hidden for your account.</p> : <ColumnChart data={reports.revenueForecast} valueKey="total" labelKey="month" formatValue={money} color="var(--amber)" />}
+            {!reports.price_hidden && reports.undatedForecastValue > 0 && (
               <p className="sub" style={{ margin: '10px 0 0' }}>Plus {money(reports.undatedForecastValue)} weighted in open deals with no expected close date set yet.</p>
             )}
           </div>

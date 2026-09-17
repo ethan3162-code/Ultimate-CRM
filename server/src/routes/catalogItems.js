@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../db');
+const { canSeePrices } = require('../auth');
 
 const router = express.Router();
 
@@ -14,7 +15,8 @@ const router = express.Router();
 
 router.get('/', (req, res) => {
   const rows = db.prepare(`SELECT * FROM catalog_items ORDER BY name`).all();
-  res.json(rows);
+  if (canSeePrices(req.user)) return res.json(rows);
+  res.json(rows.map((r) => ({ ...r, unit_price: null, price_hidden: true })));
 });
 
 router.post('/', (req, res) => {

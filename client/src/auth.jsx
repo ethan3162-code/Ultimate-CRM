@@ -48,6 +48,26 @@ export function usePermission(pageKey) {
   return { level, canView: level !== 'none', canEdit: level === 'edit' };
 }
 
+/** 'edit' | 'view' for one of the fixed set of restrictable sub-page sections (e.g.
+    'pipeline.about', 'jobs.billing' — see server/src/permissionsConfig.js's SECTIONS). Only
+    meaningful within a page that's already 'edit' overall; a page-level 'view'/'none' already
+    caps everything under it regardless of what this returns. Defaults to 'edit' (nothing
+    restricted) if the section is missing, so a stale/older session payload fails open rather
+    than silently locking someone out of a section no admin ever restricted. */
+export function useSection(sectionKey) {
+  const { user } = useAuth();
+  const level = (user && user.sections && user.sections[sectionKey]) || 'edit';
+  return level === 'edit';
+}
+
+/** Whether the signed-in login can see dollar figures anywhere in the app. Admins and any
+    session that hasn't loaded yet default to true, so this fails open rather than flashing
+    hidden-then-shown prices while /session/me is still in flight. */
+export function usePriceVisibility() {
+  const { user } = useAuth();
+  return !user || user.can_see_prices !== false;
+}
+
 /** Wraps a route's element: shows a plain "you don't have access" card instead of the page when
     the signed-in role's permission for `page` is 'none'. Home/Dashboard never need this (every
     role can always view them). */

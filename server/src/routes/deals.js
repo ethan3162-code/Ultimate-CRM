@@ -2,6 +2,15 @@ const express = require('express');
 const db = require('../db');
 const { logActivity } = require('../helpers');
 const { fireTrigger } = require('../automationEngine');
+const { canSeePrices, checkSectionEdit, getPermissions } = require('../auth');
+
+// Hides dollar figures for a login whose price visibility is off (see Users & permissions —
+// "Can see prices"). Deliberately explicit about which fields count as a price, rather than
+// matching by field name, so a differently-named non-money field never gets swept up by
+// accident. `null` (not 0) so the client can tell "hidden" apart from "actually zero".
+function redactDealMoney(deal) {
+  return { ...deal, value: null, ha_lead_fee: null, price_hidden: true };
+}
 
 const router = express.Router();
 
@@ -59,7 +68,8 @@ const DEAL_SELECT = `
 
 router.get('/', (req, res) => {
   const rows = db.prepare(`${DEAL_SELECT} ORDER BY d.updated_at DESC`).all();
-  res.json(rows.map(withCustomerInfo).map(withScore));
+  const out = rows.map(withCustomerInfo).map(withScore);
+  res.json(canSeePrices(req.user) ? out : out.map(redactDealMoney));
 });
 
 const LEAD_DETAIL_FIELDS = [
@@ -112,7 +122,8 @@ router.get('/:id', (req, res) => {
   if (!deal) return res.status(404).json({ error: 'not found' });
   const activities = db.prepare(`SELECT * FROM activities WHERE related_type = 'deal' AND related_id = ? ORDER BY created_at DESC`).all(req.params.id);
   const jobs = db.prepare(`SELECT id, title, status FROM jobs WHERE deal_id = ? ORDER BY created_at DESC`).all(req.params.id);
-  res.json({ ...withScore(withCustomerInfo(deal)), activities, jobs });
+  const full = withScore(withCustomerInfo(deal));
+  res.json({ ...(canSeePrices(req.user) ? full : redactDealMoney(full)), activities, jobs });
 });
 
 router.patch('/:id', (req, res) => {
@@ -121,6 +132,9 @@ router.patch('/:id', (req, res) => {
   if (req.body.stage && !STAGES.includes(req.body.stage)) {
     return res.status(400).json({ error: `stage must be one of ${STAGES.join(', ')}` });
   }
+  const pageLevel = (getPermissions(req.user).pipeline === 'edit' || getPermissions(req.user).leads === 'edit') ? 'edit' : 'view';
+  const sectionError = checkSectionEdit(req.user, pageLevel, req.body);
+  if (sectionError) return res.status(403).json({ error: sectionError });
   const updates = { ...existing, ...req.body };
   // Qualifying/disqualifying a lead (via the Leads page's Qualify/Disqualify buttons, which
   // only PATCH `stage`) implies a lead_status too, unless the caller set one explicitly.
