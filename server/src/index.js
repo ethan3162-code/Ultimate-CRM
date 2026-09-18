@@ -8,6 +8,7 @@ const { getInvoiceFull } = require('./helpers');
 const { fireTrigger } = require('./automationEngine');
 const leadInbox = require('./leadInbox');
 const subcontractorCompliance = require('./subcontractorCompliance');
+const vehicleCompliance = require('./vehicleCompliance');
 const { readSession, requireAuth, requirePage, requireAnyPage, requireAdmin } = require('./auth');
 
 const app = express();
@@ -49,6 +50,7 @@ app.use('/api/catalog-items', requireAuth, requirePage('items'), require('./rout
 app.use('/api/reports', requireAuth, requirePage('dashboard'), require('./routes/reports'));
 app.use('/api/employees', requireAuth, requirePage('employees'), require('./routes/employees'));
 app.use('/api/subcontractors', requireAuth, requirePage('subcontractors'), require('./routes/subcontractors'));
+app.use('/api/vehicles', requireAuth, requirePage('vehicles'), require('./routes/vehicles'));
 // Global search across every record type — no single-page gate; it filters each category
 // internally by that category's own permission (see search.js), same as a dashboard rollup would.
 app.use('/api/search', requireAuth, require('./routes/search'));
@@ -192,6 +194,14 @@ async function checkSubcontractorDocs() {
 }
 checkSubcontractorDocs();
 setInterval(checkSubcontractorDocs, 6 * 60 * 60_000);
+
+// --- Periodic check: vehicle registration/insurance/inspection documents nearing or past expiry
+// — same pattern as the subcontractor check above, office-only (see vehicleCompliance.js). ---
+async function checkVehicleDocs() {
+  try { await vehicleCompliance.checkExpiringDocuments(); } catch (err) { console.error('[vehicleCompliance] check failed:', err.message); }
+}
+checkVehicleDocs();
+setInterval(checkVehicleDocs, 6 * 60 * 60_000);
 
 // Serve the built React client in production
 const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');

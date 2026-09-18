@@ -453,6 +453,69 @@ CREATE TABLE IF NOT EXISTS subcontractor_documents (
 );
 `);
 
+// --- Company vehicles (Sept 2026) — the truck/trailer/equipment fleet, who's currently assigned
+// to drive each one, its registration/insurance/inspection paperwork with expiry tracking (same
+// worst-status-wins + throttled-office-notification pattern as subcontractor compliance above,
+// minus the "send to" step — there's no outside party to email, so vehicleCompliance.js only ever
+// notifies the office), and a simple maintenance log (service date, cost, odometer). Deliberately
+// not wired into job costing — a vehicle isn't billed to a specific customer job the way labor or
+// materials are, so this stays a standalone internal record, same spirit as employee pay.
+db.exec(`
+CREATE TABLE IF NOT EXISTS vehicles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  make TEXT,
+  model TEXT,
+  year INTEGER,
+  vin TEXT,
+  license_plate TEXT,
+  assigned_employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  odometer INTEGER,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS vehicle_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vehicle_id INTEGER NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+  doc_type TEXT NOT NULL DEFAULT 'Registration',
+  file_name TEXT,
+  data_url TEXT,
+  expiry_date TEXT,
+  last_notified_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS vehicle_maintenance (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vehicle_id INTEGER NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+  service_date TEXT NOT NULL,
+  description TEXT NOT NULL,
+  cost REAL NOT NULL DEFAULT 0,
+  odometer INTEGER,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Location check-ins (Sept 2026) — the phone-based tracking the user asked for: whoever has a
+-- vehicle's detail page open on their phone can share their current GPS position, which lands
+-- here as one row per ping. There's no hardware GPS tracker involved (that's a separate paid
+-- provider decision the user hasn't made yet) — this only ever knows where a vehicle was as of
+-- its last check-in, not a continuous live feed, so every reader of this table treats a stale
+-- last-ping as exactly that: stale, not "vehicle not moving."
+CREATE TABLE IF NOT EXISTS vehicle_locations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vehicle_id INTEGER NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+  lat REAL NOT NULL,
+  lng REAL NOT NULL,
+  accuracy REAL,
+  reported_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  recorded_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_vehicle_locations_vehicle_time ON vehicle_locations (vehicle_id, recorded_at DESC);
+`);
+
 // --- Lightweight migrations ---
 // The SQLite file ships committed in the repo (Render's free tier has no persistent disk,
 // so every redeploy resets storage to whatever is checked in). CREATE TABLE IF NOT EXISTS

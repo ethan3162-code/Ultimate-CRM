@@ -18,6 +18,9 @@ import Employees from './pages/Employees';
 import EmployeeDetail from './pages/EmployeeDetail';
 import Subcontractors from './pages/Subcontractors';
 import SubcontractorDetail from './pages/SubcontractorDetail';
+import Vehicles from './pages/Vehicles';
+import VehicleDetail from './pages/VehicleDetail';
+import VehicleMap from './pages/VehicleMap';
 import Automations from './pages/Automations';
 import Tickets from './pages/Tickets';
 import TicketDetail from './pages/TicketDetail';
@@ -71,6 +74,9 @@ function AuthedApp() {
           <Route path="/employees/:id" element={<Protected page="employees"><EmployeeDetail /></Protected>} />
           <Route path="/subcontractors" element={<Protected page="subcontractors"><Subcontractors /></Protected>} />
           <Route path="/subcontractors/:id" element={<Protected page="subcontractors"><SubcontractorDetail /></Protected>} />
+          <Route path="/vehicles" element={<Protected page="vehicles"><Vehicles /></Protected>} />
+          <Route path="/vehicles/map" element={<Protected page="vehicles"><VehicleMap /></Protected>} />
+          <Route path="/vehicles/:id" element={<Protected page="vehicles"><VehicleDetail /></Protected>} />
           <Route path="/automations" element={<Protected page="automations"><Automations /></Protected>} />
           <Route path="/tickets" element={<Protected page="tickets"><Tickets /></Protected>} />
           <Route path="/tickets/:id" element={<Protected page="tickets"><TicketDetail /></Protected>} />

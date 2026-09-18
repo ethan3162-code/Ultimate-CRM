@@ -144,6 +144,24 @@ router.get('/', (req, res) => {
     });
   }
 
+  // --- Vehicles ---
+  if (perms.vehicles !== 'none') {
+    const rows = db.prepare(`
+      SELECT id, name, make, model, license_plate, vin FROM vehicles
+      WHERE name LIKE ? ESCAPE '\\' OR make LIKE ? ESCAPE '\\' OR model LIKE ? ESCAPE '\\'
+         OR license_plate LIKE ? ESCAPE '\\' OR vin LIKE ? ESCAPE '\\'
+      ORDER BY status = 'retired', name LIMIT ?
+    `).all(p, p, p, p, p, LIMIT);
+    if (rows.length) groups.push({
+      key: 'vehicles', label: 'Vehicles',
+      results: rows.map((v) => ({
+        id: v.id, title: v.name,
+        subtitle: [v.make, v.model].filter(Boolean).join(' ') || v.license_plate || '',
+        path: `/vehicles/${v.id}`,
+      })),
+    });
+  }
+
   res.json({ query: q, groups });
 });
 

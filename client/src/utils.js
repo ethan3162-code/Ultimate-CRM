@@ -41,6 +41,15 @@ export function timeAgo(s) {
   return shortDate(s);
 }
 
+// Raw minutes-since for a timestamp in the same shape timeAgo parses — used where a caller needs
+// to bucket a check-in's freshness (e.g. the fleet map's fresh/stale marker coloring) rather than
+// just display it.
+export function minutesSince(s) {
+  if (!s) return null;
+  const d = new Date(s.replace(' ', 'T') + (s.includes('Z') ? '' : 'Z'));
+  return Math.max(0, Math.round((Date.now() - d.getTime()) / 60000));
+}
+
 export function initials(first, last) {
   return `${(first || '?')[0] || ''}${(last || '')[0] || ''}`.toUpperCase();
 }
@@ -69,4 +78,11 @@ export function mapLinks(address) {
     view: `https://www.google.com/maps?q=${q}&t=k`,
     embed: `https://maps.google.com/maps?q=${q}&t=k&z=17&output=embed`,
   };
+}
+
+// Same idea as mapLinks, for a raw lat/lng (a vehicle location check-in) instead of a street
+// address — used since a vehicle's location comes from the browser's GPS, not a geocoded address.
+export function mapLinksForCoords(lat, lng) {
+  if (lat === null || lat === undefined || lng === null || lng === undefined) return null;
+  return { view: `https://www.google.com/maps?q=${lat},${lng}&t=k` };
 }

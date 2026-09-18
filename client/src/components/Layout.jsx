@@ -34,6 +34,8 @@ const NAV = [
       { to: '/items', label: 'Items & price book', page: 'items' },
       { to: '/employees', label: 'Employees', page: 'employees' },
       { to: '/subcontractors', label: 'Subcontractors', page: 'subcontractors' },
+      { to: '/vehicles', label: 'Vehicles', page: 'vehicles', end: true },
+      { to: '/vehicles/map', label: 'Fleet map', page: 'vehicles' },
     ],
   },
   {
@@ -89,10 +91,7 @@ export default function Layout() {
           <span />
           <span />
         </button>
-        <div className="brand">
-          <img src="/logo-full.png" alt="Precision Paving & Masonry" className="brand-logo" />
-        </div>
-        <GlobalSearch compact />
+        <div className="topbar-search"><GlobalSearch /></div>
       </header>
 
       {navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} />}
@@ -101,7 +100,6 @@ export default function Layout() {
         <div className="brand sidebar-brand">
           <img src="/logo-full.png" alt="Precision Paving & Masonry" className="brand-logo" />
         </div>
-        <GlobalSearch />
         {visibleNav.map((group) => (
           <nav className="nav-group" key={group.group}>
             <div className="kicker">{group.group}</div>
@@ -130,9 +128,12 @@ export default function Layout() {
           </div>
         )}
       </aside>
-      <main className="content">
-        <Outlet />
-      </main>
+      <div className="content-col">
+        <div className="global-search-bar"><GlobalSearch /></div>
+        <main className="content">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

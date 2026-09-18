@@ -37,6 +37,7 @@ const PAGES = {
   tickets: 'Tickets',
   employees: 'Employees',
   subcontractors: 'Subcontractors',
+  vehicles: 'Vehicles',
 };
 
 // Pages every login can always at least view — the landing page has no edit actions of its own
