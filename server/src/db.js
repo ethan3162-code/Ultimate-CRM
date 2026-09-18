@@ -514,6 +514,31 @@ CREATE TABLE IF NOT EXISTS vehicle_locations (
   recorded_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_vehicle_locations_vehicle_time ON vehicle_locations (vehicle_id, recorded_at DESC);
+
+-- Ad-hoc / custom reports (Sept 2026) — separate from the fixed rollup routes/reports.js
+-- computes for the Dashboard's "Reports" grid. Those ~20 cards are a good fixed set but can't be
+-- reconfigured; this table lets an admin build their own on top of leads/opportunities/projects/
+-- invoices/tickets/employees/vehicles/subcontractors (see reportSources.js for the whitelisted
+-- dimensions/metrics per source — group_by/metric/date_field are never interpolated into SQL
+-- directly, only ever used as a lookup key into that whitelist). A report is edited in place —
+-- every field here can change after creation, no separate "draft vs published" state — so
+-- ReportDetail.jsx just PATCHes whatever changed as the person adjusts the builder.
+CREATE TABLE IF NOT EXISTS custom_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL DEFAULT 'New report',
+  description TEXT,
+  data_source TEXT NOT NULL DEFAULT 'leads',
+  group_by TEXT NOT NULL DEFAULT 'source',
+  metric TEXT NOT NULL DEFAULT 'count',
+  date_field TEXT,
+  date_range TEXT NOT NULL DEFAULT 'all',
+  date_start TEXT,
+  date_end TEXT,
+  chart_type TEXT NOT NULL DEFAULT 'bar',
+  created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
 `);
 
 // --- Lightweight migrations ---

@@ -48,6 +48,7 @@ app.use('/api/appointments', requireAuth, requirePage('calendar'), require('./ro
 app.use('/api/auth', requireAuth, requirePage('integrations'), require('./routes/auth'));
 app.use('/api/catalog-items', requireAuth, requirePage('items'), require('./routes/catalogItems'));
 app.use('/api/reports', requireAuth, requirePage('dashboard'), require('./routes/reports'));
+app.use('/api/custom-reports', requireAuth, requirePage('reports'), require('./routes/customReports'));
 app.use('/api/employees', requireAuth, requirePage('employees'), require('./routes/employees'));
 app.use('/api/subcontractors', requireAuth, requirePage('subcontractors'), require('./routes/subcontractors'));
 app.use('/api/vehicles', requireAuth, requirePage('vehicles'), require('./routes/vehicles'));

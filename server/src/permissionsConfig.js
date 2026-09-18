@@ -49,7 +49,10 @@ const ALWAYS_VIEW_PAGES = ['home'];
 // Admin-only pages: system configuration (user accounts, automation rules, integration keys)
 // plus the Dashboard & reports rollup (Sept 2026 — the user asked that only admins see it),
 // never opened up to a non-admin login — not individually configurable like the business pages.
-const ADMIN_ONLY_PAGES = ['users', 'automations', 'integrations', 'dashboard'];
+// 'reports' (Sept 2026) is the custom report builder — kept admin-only for the same reason as
+// 'dashboard': it's a cross-cutting rollup over other people's data (pipeline, revenue, jobs),
+// not a single business object with its own natural owner.
+const ADMIN_ONLY_PAGES = ['users', 'automations', 'integrations', 'dashboard', 'reports'];
 
 // Starting point applied when a new regular ('user') login is created: nothing but the always-
 // view pages. There's no role to infer a "home turf" from any more — the admin names the person
