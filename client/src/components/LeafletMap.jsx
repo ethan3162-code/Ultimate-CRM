@@ -22,9 +22,9 @@ function makeIcon(color) {
   });
 }
 
-// Continental-US fallback view for an empty map (no vehicles have ever checked in yet).
-const FALLBACK_CENTER = [39.5, -98.35];
-const FALLBACK_ZOOM = 4;
+// Fallback view for an empty map (no vehicles have ever checked in yet) — New York, NY.
+const FALLBACK_CENTER = [40.7128, -74.006];
+const FALLBACK_ZOOM = 11;
 
 export default function LeafletMap({ markers = [], height = 320 }) {
   const containerRef = useRef(null);

@@ -157,6 +157,10 @@ input, select, textarea { font-family: inherit; font-size: inherit; color: inher
   display: flex;
   flex-direction: column;
   gap: 22px;
+  /* The nav has grown (Employees, Subcontractors, Vehicles, Fleet map, ...) enough that it can
+     now be taller than a short browser window — without this, anything past the visible edge
+     (often "Users & permissions" or the sign-out row) was simply unreachable. */
+  overflow-y: auto;
 }
 
 @media (max-width: 820px) {
