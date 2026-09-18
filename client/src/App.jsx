@@ -3,6 +3,8 @@ import { Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
+import Reports from './pages/Reports';
+import ReportDetail from './pages/ReportDetail';
 import Messages from './pages/Messages';
 import Conversations from './pages/Conversations';
 import Leads from './pages/Leads';
@@ -59,6 +61,8 @@ function AuthedApp() {
           <Route path="/" element={<Home />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/dashboard" element={<Protected page="dashboard"><Dashboard /></Protected>} />
+          <Route path="/reports" element={<Protected page="reports"><Reports /></Protected>} />
+          <Route path="/reports/:id" element={<Protected page="reports"><ReportDetail /></Protected>} />
           <Route path="/leads" element={<Protected page="leads"><Leads /></Protected>} />
           <Route path="/pipeline" element={<Protected page="pipeline"><Pipeline /></Protected>} />
           <Route path="/pipeline/:id" element={<Protected page="pipeline"><DealDetail /></Protected>} />

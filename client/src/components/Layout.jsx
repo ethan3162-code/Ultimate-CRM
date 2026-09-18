@@ -9,6 +9,7 @@ const NAV = [
     items: [
       { to: '/', label: 'Home', end: true, page: 'home' },
       { to: '/dashboard', label: 'Dashboard', page: 'dashboard' },
+      { to: '/reports', label: 'Reports', page: 'reports' },
       // Internal team chat (Sept 2026) — a utility every active login can use, not one of the
       // individually-configurable business pages, so it's always shown regardless of `perms`.
       { to: '/messages', label: 'Messages', always: true },

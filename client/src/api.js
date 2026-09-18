@@ -183,4 +183,14 @@ export const api = {
   publicEstimate: (token) => request(`/public/estimates/${token}`),
   signEstimate: (token, data) => request(`/public/estimates/${token}/sign`, { method: 'POST', body: JSON.stringify(data) }),
   publicInvoice: (token) => request(`/public/invoices/${token}`),
+
+  // Custom report builder (Sept 2026) — distinct from `reports` above, which is the fixed
+  // rollup baked into the Dashboard. These are user-created, freely editable report definitions.
+  customReports: (limit) => request(`/custom-reports${limit ? `?limit=${limit}` : ''}`),
+  customReportMeta: () => request('/custom-reports/meta'),
+  createCustomReport: (data) => request('/custom-reports', { method: 'POST', body: JSON.stringify(data || {}) }),
+  customReport: (id) => request(`/custom-reports/${id}`),
+  updateCustomReport: (id, data) => request(`/custom-reports/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteCustomReport: (id) => request(`/custom-reports/${id}`, { method: 'DELETE' }),
+  customReportData: (id) => request(`/custom-reports/${id}/data`),
 };

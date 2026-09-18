@@ -19,12 +19,14 @@ export default function Dashboard() {
   const [insights, setInsights] = useState(null);
   const [reports, setReports] = useState(null);
   const [tasks, setTasks] = useState(null);
+  const [customReports, setCustomReports] = useState(null);
 
   useEffect(() => {
     api.dashboard().then(setData);
     api.insights().then(setInsights);
     api.reports().then(setReports);
     api.tasks({ open: '1' }).then(setTasks);
+    api.customReports(5).then(setCustomReports).catch(() => setCustomReports([]));
   }, []);
 
   if (!data) return <div className="loading">Loading dashboard…</div>;
@@ -210,6 +212,33 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 28, marginBottom: 18 }}>
+        <div className="row between" style={{ alignItems: 'flex-start' }}>
+          <div>
+            <h2 style={{ marginBottom: 2 }}>Your reports</h2>
+            <p className="sub" style={{ margin: 0 }}>Build your own report on any data below — pick what to group by, and keep adjusting it any time.</p>
+          </div>
+          <Link to="/reports" className="btn sm">+ New report</Link>
+        </div>
+        {customReports === null ? (
+          <div className="loading" style={{ marginTop: 10 }}>Loading…</div>
+        ) : customReports.length === 0 ? (
+          <div className="empty" style={{ marginTop: 10 }}>No custom reports yet — click "+ New report" to build one.</div>
+        ) : (
+          <div className="stack" style={{ gap: 2, marginTop: 10 }}>
+            {customReports.map((r) => (
+              <Link key={r.id} to={`/reports/${r.id}`} className="attention-row">
+                <span>{r.name}</span>
+                <span className="muted" style={{ fontSize: 12.5, textTransform: 'capitalize' }}>{r.data_source}</span>
+              </Link>
+            ))}
+            <div style={{ marginTop: 8 }}>
+              <Link to="/reports" className="btn sm subtle">View all reports →</Link>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="page-head" style={{ marginTop: 28 }}>
