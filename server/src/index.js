@@ -49,6 +49,9 @@ app.use('/api/catalog-items', requireAuth, requirePage('items'), require('./rout
 app.use('/api/reports', requireAuth, requirePage('dashboard'), require('./routes/reports'));
 app.use('/api/employees', requireAuth, requirePage('employees'), require('./routes/employees'));
 app.use('/api/subcontractors', requireAuth, requirePage('subcontractors'), require('./routes/subcontractors'));
+// Global search across every record type — no single-page gate; it filters each category
+// internally by that category's own permission (see search.js), same as a dashboard rollup would.
+app.use('/api/search', requireAuth, require('./routes/search'));
 // External lead-capture webhook — no session, it authenticates with its own `key` secret.
 app.use('/api/leads', require('./routes/leadIntake'));
 app.use('/api/integrations', requireAuth, requirePage('integrations'), require('./routes/integrations'));

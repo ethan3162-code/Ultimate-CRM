@@ -120,6 +120,8 @@ export const api = {
   updateTicket: (id, data) => request(`/tickets/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   addTicketNote: (id, note) => request(`/tickets/${id}/activities`, { method: 'POST', body: JSON.stringify({ note }) }),
 
+  search: (q) => request(`/search?q=${encodeURIComponent(q)}`),
+
   insights: () => request('/insights'),
   reports: () => request('/reports'),
   aiDraft: (kind, id) => request('/ai/draft', { method: 'POST', body: JSON.stringify({ kind, id }) }),

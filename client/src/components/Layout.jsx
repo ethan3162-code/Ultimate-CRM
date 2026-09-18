@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth';
+import GlobalSearch from './GlobalSearch';
 
 const NAV = [
   {
@@ -91,6 +92,7 @@ export default function Layout() {
         <div className="brand">
           <img src="/logo-full.png" alt="Precision Paving & Masonry" className="brand-logo" />
         </div>
+        <GlobalSearch compact />
       </header>
 
       {navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} />}
@@ -99,6 +101,7 @@ export default function Layout() {
         <div className="brand sidebar-brand">
           <img src="/logo-full.png" alt="Precision Paving & Masonry" className="brand-logo" />
         </div>
+        <GlobalSearch />
         {visibleNav.map((group) => (
           <nav className="nav-group" key={group.group}>
             <div className="kicker">{group.group}</div>
