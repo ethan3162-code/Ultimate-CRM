@@ -35,6 +35,8 @@ const PAGES = {
   calendar: 'Appointments',
   schedule: 'Project schedule',
   tickets: 'Tickets',
+  employees: 'Employees',
+  subcontractors: 'Subcontractors',
 };
 
 // Pages every login can always at least view — the landing page has no edit actions of its own

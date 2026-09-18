@@ -92,6 +92,9 @@ export default function JobDetail() {
   const [copiedLink, setCopiedLink] = useState(null);
   const [expenseForm, setExpenseForm] = useState(BLANK_EXPENSE);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [employees, setEmployees] = useState([]);
+  const [attendanceForm, setAttendanceForm] = useState({ employee_id: '', work_date: new Date().toISOString().slice(0, 10) });
+  const [loggingAttendance, setLoggingAttendance] = useState(false);
   const [editingInfo, setEditingInfo] = useState(false);
   const [infoForm, setInfoForm] = useState(blankInfo());
   const [savingInfo, setSavingInfo] = useState(false);
@@ -131,6 +134,7 @@ export default function JobDetail() {
   }
   useEffect(load, [id]);
   useEffect(() => { api.usersDirectory().then(setDirectory).catch(() => setDirectory([])); }, []);
+  useEffect(() => { api.employees().then(setEmployees).catch(() => setEmployees([])); }, []);
 
   async function saveInfo(e) {
     e.preventDefault();
@@ -286,6 +290,26 @@ export default function JobDetail() {
 
   async function removeExpense(expenseId) {
     await api.deleteJobExpense(expenseId);
+    load();
+  }
+
+  async function logAttendance(e) {
+    e.preventDefault();
+    if (!attendanceForm.employee_id || !attendanceForm.work_date) return;
+    setLoggingAttendance(true);
+    try {
+      await api.addAttendance(id, attendanceForm);
+      setAttendanceForm({ employee_id: '', work_date: new Date().toISOString().slice(0, 10) });
+      load();
+    } catch (err) {
+      window.alert(err.message);
+    } finally {
+      setLoggingAttendance(false);
+    }
+  }
+
+  async function removeAttendance(attendanceId) {
+    await api.deleteAttendance(attendanceId);
     load();
   }
 
@@ -761,6 +785,39 @@ export default function JobDetail() {
                     <span className="row" style={{ gap: 8 }}>
                       <span className="mono">{money(exp.qty * exp.unit_cost)}</span>
                       {canEdit && <button type="button" className="btn subtle sm" onClick={() => removeExpense(exp.id)}>✕</button>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <div className="row between" style={{ alignItems: 'flex-start' }}>
+              <h2 style={{ marginBottom: 4 }}>Attendance / crew</h2>
+            </div>
+            <p className="sub" style={{ margin: '4px 0 12px' }}>Log a crew member for a day on this job — their daily rate is added to Job costing above as a Labor expense automatically, and never appears on an estimate or invoice.</p>
+            {canEdit && (
+              <form onSubmit={logAttendance} className="row" style={{ gap: 8, flexWrap: 'wrap', marginBottom: 14, borderBottom: '1px solid var(--line-soft)', paddingBottom: 14 }}>
+                <select value={attendanceForm.employee_id} onChange={(e) => setAttendanceForm({ ...attendanceForm, employee_id: e.target.value })} required>
+                  <option value="">— select employee —</option>
+                  {employees.filter((e) => e.active).map((e) => <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}
+                </select>
+                <input type="date" value={attendanceForm.work_date} onChange={(e) => setAttendanceForm({ ...attendanceForm, work_date: e.target.value })} required />
+                <button className="btn primary sm" type="submit" disabled={loggingAttendance}>{loggingAttendance ? 'Logging…' : '+ Log day'}</button>
+              </form>
+            )}
+            {job.attendance.length === 0 ? <div className="empty">No crew logged on this job yet.</div> : (
+              <div className="stack" style={{ gap: 2 }}>
+                {job.attendance.map((a) => (
+                  <div key={a.id} className="attention-row">
+                    <span>
+                      <Link to={`/employees/${a.employee_id}`}>{a.employee_first_name} {a.employee_last_name}</Link>
+                      <span className="muted" style={{ marginLeft: 6 }}>{shortDate(a.work_date)}</span>
+                    </span>
+                    <span className="row" style={{ gap: 8 }}>
+                      <span className="mono">{money(a.daily_rate)}</span>
+                      {canEdit && <button type="button" className="btn subtle sm" onClick={() => removeAttendance(a.id)}>✕</button>}
                     </span>
                   </div>
                 ))}

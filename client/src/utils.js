@@ -45,6 +45,20 @@ export function initials(first, last) {
   return `${(first || '?')[0] || ''}${(last || '')[0] || ''}`.toUpperCase();
 }
 
+// Generic file → data URL, for documents that aren't necessarily images (insurance PDFs, W9s,
+// certifications, ...) — unlike JobDetail.jsx's resizeImageFile, this does no canvas/image
+// processing, since a canvas can't touch a non-image file. Used by the Employees and
+// Subcontractors document-upload UI, which stores files the same data_url-in-the-row way job
+// photos already do.
+export function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(file);
+  });
+}
+
 // Keyless Google Maps links for a street address — no API key/billing needed.
 // `view` opens Maps in a new tab in hybrid (satellite + labels) mode; `embed`
 // is a same-origin-safe iframe src for dropping the map straight into a page.

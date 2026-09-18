@@ -382,6 +382,77 @@ CREATE TABLE IF NOT EXISTS answerforce_emails (
 );
 `);
 
+// --- Crew, pay & attendance, and subcontractor compliance (Sept 2026) ---
+// Employee pay (daily_rate) and a subcontractor's own insurance/license documents are internal
+// records only — neither is ever read by the estimate/invoice code path (estimates draw their
+// line items from catalog_items via estimate_items; a job's labor cost is a Labor-category row in
+// the existing job_expenses table, same as any other cost, never copied onto a customer-facing
+// document). Attendance doesn't duplicate that cost tracking — logging a day against a job here
+// creates exactly one job_expenses row (category 'Labor', unit_cost = that employee's daily rate
+// at the time), so job costing/billing's existing laborCost subtotal picks it up for free; the
+// job_expense_id link lets removing an attendance entry clean up its cost row too.
+db.exec(`
+CREATE TABLE IF NOT EXISTS employees (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  position TEXT,
+  phone TEXT,
+  email TEXT,
+  hire_date TEXT,
+  daily_rate REAL NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS employee_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  label TEXT NOT NULL DEFAULT 'Document',
+  file_name TEXT,
+  data_url TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS attendance (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  work_date TEXT NOT NULL,
+  daily_rate REAL NOT NULL DEFAULT 0,
+  job_expense_id INTEGER REFERENCES job_expenses(id) ON DELETE SET NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(job_id, employee_id, work_date)
+);
+
+CREATE TABLE IF NOT EXISTS subcontractors (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  trade TEXT,
+  contact_name TEXT,
+  phone TEXT,
+  email TEXT,
+  notes TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS subcontractor_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  subcontractor_id INTEGER NOT NULL REFERENCES subcontractors(id) ON DELETE CASCADE,
+  doc_type TEXT NOT NULL DEFAULT 'Insurance',
+  file_name TEXT,
+  data_url TEXT,
+  expiry_date TEXT,
+  last_notified_at TEXT,
+  last_request_sent_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+`);
+
 // --- Lightweight migrations ---
 // The SQLite file ships committed in the repo (Render's free tier has no persistent disk,
 // so every redeploy resets storage to whatever is checked in). CREATE TABLE IF NOT EXISTS

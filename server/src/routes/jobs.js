@@ -400,4 +400,39 @@ router.delete('/expenses/:expenseId', (req, res) => {
   sendJob(req, res, getJobFull(expense.job_id));
 });
 
+// --- Crew attendance: log a day worked, which becomes exactly one Labor-category job_expenses
+// row so job costing's existing laborCost subtotal picks it up — no separate cost-tracking path,
+// and nothing here ever reaches a customer-facing estimate/invoice (those never read job_expenses
+// at all). One row per employee per job per day (the UNIQUE constraint on attendance catches an
+// accidental double-entry with a clear error rather than double-billing that day's labor). ---
+router.post('/:id/attendance', (req, res) => {
+  const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(req.params.id);
+  if (!job) return res.status(404).json({ error: 'job not found' });
+  const { employee_id, work_date } = req.body;
+  if (!employee_id || !work_date) return res.status(400).json({ error: 'employee_id and work_date are required' });
+  const employee = db.prepare(`SELECT * FROM employees WHERE id = ?`).get(employee_id);
+  if (!employee) return res.status(404).json({ error: 'employee not found' });
+  const already = db.prepare(`SELECT 1 FROM attendance WHERE job_id = ? AND employee_id = ? AND work_date = ?`).get(job.id, employee_id, work_date);
+  if (already) return res.status(409).json({ error: `${employee.first_name} ${employee.last_name} is already logged on this job for ${work_date}.` });
+
+  const expenseResult = db.prepare(`
+    INSERT INTO job_expenses (job_id, category, description, qty, unit_cost, incurred_on, billable)
+    VALUES (?, 'Labor', ?, 1, ?, ?, 1)
+  `).run(job.id, `${employee.first_name} ${employee.last_name} — ${work_date}`, employee.daily_rate, work_date);
+  db.prepare(`
+    INSERT INTO attendance (job_id, employee_id, work_date, daily_rate, job_expense_id) VALUES (?,?,?,?,?)
+  `).run(job.id, employee_id, work_date, employee.daily_rate, expenseResult.lastInsertRowid);
+  logActivity('job', job.id, 'expense', `${employee.first_name} ${employee.last_name} logged for ${work_date} ($${Number(employee.daily_rate).toFixed(2)}/day).`);
+  sendJob(req, res, getJobFull(job.id), 201);
+});
+
+router.delete('/attendance/:attendanceId', (req, res) => {
+  const att = db.prepare(`SELECT * FROM attendance WHERE id = ?`).get(req.params.attendanceId);
+  if (!att) return res.status(404).json({ error: 'not found' });
+  if (att.job_expense_id) db.prepare(`DELETE FROM job_expenses WHERE id = ?`).run(att.job_expense_id);
+  db.prepare(`DELETE FROM attendance WHERE id = ?`).run(att.id);
+  logActivity('job', att.job_id, 'expense', 'Attendance entry removed.');
+  sendJob(req, res, getJobFull(att.job_id));
+});
+
 module.exports = router;

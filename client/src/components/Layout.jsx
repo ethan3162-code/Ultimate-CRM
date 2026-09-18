@@ -31,6 +31,8 @@ const NAV = [
       { to: '/jobs', label: 'Projects & billing', page: 'jobs' },
       { to: '/materials', label: 'Material calculator', page: 'materials' },
       { to: '/items', label: 'Items & price book', page: 'items' },
+      { to: '/employees', label: 'Employees', page: 'employees' },
+      { to: '/subcontractors', label: 'Subcontractors', page: 'subcontractors' },
     ],
   },
   {

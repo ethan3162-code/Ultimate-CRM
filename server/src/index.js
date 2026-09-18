@@ -7,6 +7,7 @@ const db = require('./db'); // ensures schema is created
 const { getInvoiceFull } = require('./helpers');
 const { fireTrigger } = require('./automationEngine');
 const leadInbox = require('./leadInbox');
+const subcontractorCompliance = require('./subcontractorCompliance');
 const { readSession, requireAuth, requirePage, requireAnyPage, requireAdmin } = require('./auth');
 
 const app = express();
@@ -46,6 +47,8 @@ app.use('/api/appointments', requireAuth, requirePage('calendar'), require('./ro
 app.use('/api/auth', requireAuth, requirePage('integrations'), require('./routes/auth'));
 app.use('/api/catalog-items', requireAuth, requirePage('items'), require('./routes/catalogItems'));
 app.use('/api/reports', requireAuth, requirePage('dashboard'), require('./routes/reports'));
+app.use('/api/employees', requireAuth, requirePage('employees'), require('./routes/employees'));
+app.use('/api/subcontractors', requireAuth, requirePage('subcontractors'), require('./routes/subcontractors'));
 // External lead-capture webhook — no session, it authenticates with its own `key` secret.
 app.use('/api/leads', require('./routes/leadIntake'));
 app.use('/api/integrations', requireAuth, requirePage('integrations'), require('./routes/integrations'));
@@ -175,6 +178,17 @@ async function checkAnswerForceInbox() {
 }
 checkAnswerForceInbox();
 setInterval(checkAnswerForceInbox, 60_000);
+
+// --- Periodic check: subcontractor compliance documents (insurance, license, ...) nearing or
+// past expiry — emails the office, never the subcontractor (that's a manual one-click send from
+// the Subcontractors page). Expiry doesn't move minute to minute, so this runs far less often
+// than the leads checks above; its own re-notify throttle (subcontractorCompliance.js) keeps a
+// still-expired document from re-emailing on every tick regardless.
+async function checkSubcontractorDocs() {
+  try { await subcontractorCompliance.checkExpiringDocuments(); } catch (err) { console.error('[subcontractorCompliance] check failed:', err.message); }
+}
+checkSubcontractorDocs();
+setInterval(checkSubcontractorDocs, 6 * 60 * 60_000);
 
 // Serve the built React client in production
 const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');

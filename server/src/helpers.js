@@ -109,6 +109,7 @@ function redactJobMoney(job) {
     },
     estimates: (job.estimates || []).map(redactEstimateMoney),
     invoices: (job.invoices || []).map(redactInvoiceMoney),
+    attendance: (job.attendance || []).map((a) => ({ ...a, daily_rate: null })),
   };
 }
 
@@ -215,6 +216,15 @@ function getJobFull(id) {
   const photos = db.prepare(`SELECT * FROM job_photos WHERE job_id = ? ORDER BY created_at DESC`).all(id);
   const costing = getJobCosting(id, { estimates, invoices });
   const billing = getJobBilling(job, costing, invoices);
+  // Crew attendance: who worked this job on which days. Each row already created its own
+  // Labor-category job_expenses entry (see jobs.js's attendance routes), so this list is purely
+  // the people-and-dates view — the dollar subtotal lives in costing.laborCost, same as any other
+  // expense category, never itemized per employee anywhere a customer would see it.
+  const attendance = db.prepare(`
+    SELECT a.*, e.first_name AS employee_first_name, e.last_name AS employee_last_name
+    FROM attendance a JOIN employees e ON e.id = a.employee_id
+    WHERE a.job_id = ? ORDER BY a.work_date DESC, a.id DESC
+  `).all(id);
 
   // Account/Opportunity context, pulled from the linked contact/company/deal rather than
   // duplicated onto the job — a project inherits its lead source and service type from the
@@ -226,7 +236,7 @@ function getJobFull(id) {
   const leadSource = (deal && deal.source) || (contact && contact.source) || null;
   const owner = job.owner_user_id ? db.prepare(`SELECT username FROM users WHERE id = ?`).get(job.owner_user_id) : null;
 
-  return { ...job, estimates, invoices, photos, costing, billing, account, opportunity: deal, lead_source: leadSource, owner_username: owner ? owner.username : null };
+  return { ...job, estimates, invoices, photos, costing, billing, attendance, account, opportunity: deal, lead_source: leadSource, owner_username: owner ? owner.username : null };
 }
 
 function logActivity(related_type, related_id, type, note) {
