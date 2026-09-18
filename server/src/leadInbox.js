@@ -47,7 +47,9 @@ function messageIdFromHeaderText(headerText) {
 // Maps a parsed AnswerForce email into the shape leadIntake.ingestLead expects, filling in a
 // synthetic name when the call captured no identity at all (a caller with no name, phone, or
 // email is rare but shouldn't be silently dropped — better a record a rep can look at and delete).
-function leadPayloadFromParsed(parsed) {
+// `receivedAt` (the email's own Date header, as an ISO string) is passed through as entry_date so
+// a backfilled lead is dated by when the call actually happened, not whenever the backfill ran.
+function leadPayloadFromParsed(parsed, receivedAt) {
   const hasIdentity = Boolean(parsed.first_name || parsed.phone || parsed.email);
   const noteLines = [];
   if (parsed.needs_review) noteLines.push('Low-confidence parse of an AnswerForce email — please double check these details against the original email.');
@@ -76,6 +78,7 @@ function leadPayloadFromParsed(parsed) {
     preferred_callback_time: parsed.preferred_callback || null,
     preferred_consult_time: parsed.preferred_consult || null,
     lead_notes: noteLines.length ? noteLines.join(' · ') : null,
+    entry_date: receivedAt || null,
   };
 }
 
@@ -193,7 +196,7 @@ async function pollAnswerForceInbox(opts = {}) {
           );
           if (claim.changes === 0) { skipped++; continue; }
 
-          const payload = leadPayloadFromParsed(parsedLead);
+          const payload = leadPayloadFromParsed(parsedLead, parsedMail.date ? parsedMail.date.toISOString() : null);
           // Required at the very top of index.js — required here too, lazily, to avoid a
           // require cycle at module-load time (leadIntake requires automationEngine, which is
           // fine, but keeping this require local makes the dependency direction obvious).

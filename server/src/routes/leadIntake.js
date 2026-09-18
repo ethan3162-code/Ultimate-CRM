@@ -60,6 +60,11 @@ function ingestLead(body) {
   const projectDescription = body.project_description || null;
   const preferredCallbackTime = body.preferred_callback_time || null;
   const preferredConsultTime = body.preferred_consult_time || null;
+  // When the source knows the real date this lead came in — an AnswerForce call is dated by the
+  // email's own received time, not whenever a backfill happens to run it — use that instead of
+  // "now" for a brand-new contact/deal's created_at, so a lead imported today from three months
+  // ago still shows up dated three months ago, not today.
+  const entryDate = body.entry_date || null;
 
   if (!email && !phone && !first) {
     return { error: 'at least a name, email, or phone is required' };
@@ -97,6 +102,9 @@ function ingestLead(body) {
       INSERT INTO contacts (company_id, first_name, last_name, email, phone, mobile_phone, title, address, source, external_source, external_id)
       VALUES (?,?,?,?,?,?,?,?,?,?,?)
     `).run(companyId, first || 'New', last || 'Lead', email, phone, mobilePhone, title, address, source, externalSource, externalId);
+    if (entryDate) {
+      db.prepare(`UPDATE contacts SET created_at = ? WHERE id = ?`).run(entryDate, result.lastInsertRowid);
+    }
     contact = db.prepare(`SELECT * FROM contacts WHERE id = ?`).get(result.lastInsertRowid);
     logActivity('contact', contact.id, 'note', `Contact created from a "${source}" lead.`);
   } else {
@@ -136,6 +144,9 @@ function ingestLead(body) {
       leadOwner, jobTimeframe, leadNotes, externalSource, externalId,
       workType, leadType, customerType, projectDescription, preferredCallbackTime, preferredConsultTime
     );
+    if (entryDate) {
+      db.prepare(`UPDATE deals SET created_at = ?, updated_at = ? WHERE id = ?`).run(entryDate, entryDate, dealResult.lastInsertRowid);
+    }
     deal = db.prepare(`SELECT * FROM deals WHERE id = ?`).get(dealResult.lastInsertRowid);
 
     const noteParts = [`New lead via "${source}".`];
