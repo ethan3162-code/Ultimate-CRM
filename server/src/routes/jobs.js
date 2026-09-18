@@ -160,13 +160,15 @@ router.patch('/:id', (req, res) => {
   if (req.body.status && req.body.status !== existing.status) {
     logActivity('job', existing.id, 'status_change', `Job status changed from "${existing.status}" to "${req.body.status}".`);
     if (req.body.status === 'complete') {
-      const contact = existing.contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(existing.contact_id) : null;
+      const contact = existing.contact_id ? db.prepare(`SELECT first_name, last_name, email, phone, mobile_phone FROM contacts WHERE id = ?`).get(existing.contact_id) : null;
       const company = existing.company_id ? db.prepare(`SELECT name FROM companies WHERE id = ?`).get(existing.company_id) : null;
       fireTrigger('job_completed', {
         related_type: 'job', related_id: existing.id,
         title: updates.title, address: updates.address,
+        job_id: existing.id, deal_id: existing.deal_id || null, contact_id: existing.contact_id || null,
         contact_name: contact ? `${contact.first_name} ${contact.last_name}` : null,
         contact_email: contact ? contact.email : null,
+        contact_phone: contact ? (contact.mobile_phone || contact.phone) : null,
         company_name: company ? company.name : null,
         job_contact_id: existing.contact_id, job_company_id: existing.company_id,
       });

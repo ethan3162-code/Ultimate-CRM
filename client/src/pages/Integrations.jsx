@@ -9,10 +9,15 @@ export default function Integrations() {
   const [testTo, setTestTo] = useState('');
   const [testStatus, setTestStatus] = useState(null);
   const [sending, setSending] = useState(false);
+  const [sms, setSms] = useState(null);
+  const [testSmsTo, setTestSmsTo] = useState('');
+  const [smsTestStatus, setSmsTestStatus] = useState(null);
+  const [sendingSms, setSendingSms] = useState(false);
 
   function load() {
     api.webhookInfo().then(setWebhook);
     api.emailStatus().then(setEmail);
+    api.smsStatus().then(setSms);
   }
   useEffect(load, []);
 
@@ -40,6 +45,20 @@ export default function Integrations() {
       setTestStatus({ ok: false, message: err.message });
     }
     setSending(false);
+  }
+
+  async function sendSmsTest(e) {
+    e.preventDefault();
+    if (!testSmsTo.trim()) return;
+    setSendingSms(true);
+    setSmsTestStatus(null);
+    try {
+      await api.sendTestSms(testSmsTo.trim());
+      setSmsTestStatus({ ok: true, message: `Test text sent to ${testSmsTo.trim()}.` });
+    } catch (err) {
+      setSmsTestStatus({ ok: false, message: err.message });
+    }
+    setSendingSms(false);
   }
 
   const samplePayload = `{
@@ -169,6 +188,43 @@ export default function Integrations() {
         {testStatus && (
           <p className={testStatus.ok ? 'sub' : 'sub'} style={{ color: testStatus.ok ? 'var(--accent)' : 'var(--red)', marginTop: 8 }}>
             {testStatus.message}
+          </p>
+        )}
+      </div>
+
+      <div className="card" style={{ marginTop: 18 }}>
+        <h2>Customer texting (Twilio)</h2>
+        <p className="sub" style={{ margin: '-4px 0 14px' }}>
+          Powers the Conversations inbox and the auto-text automations (instant lead reply, estimate follow-up, review requests, stale-lead re-engagement) with real two-way SMS. Until this is connected, those texts still get logged in each customer's thread — they just aren't actually delivered.
+        </p>
+
+        {!sms ? <div className="loading">Loading…</div> : sms.configured ? (
+          <div className="row" style={{ gap: 10, alignItems: 'center', marginBottom: 14 }}>
+            <span className="pill green">Connected · {sms.fromNumber}</span>
+          </div>
+        ) : (
+          <div className="card" style={{ background: 'var(--paper-raised)', marginBottom: 14 }}>
+            <div className="kicker" style={{ marginBottom: 6 }}>Not connected yet</div>
+            <p className="sub" style={{ margin: '0 0 6px' }}>
+              Create a Twilio account (twilio.com) and buy a phone number — this is the one piece we can't do for you, since it needs your own billing. Then, in Render, open this service's Environment settings and add:
+            </p>
+            <pre className="code-block">{`TWILIO_ACCOUNT_SID=your account SID (starts with AC…)\nTWILIO_AUTH_TOKEN=your auth token\nTWILIO_FROM_NUMBER=+15551234567 (the number you bought)`}</pre>
+            <p className="sub" style={{ margin: '8px 0 0' }}>
+              Both live under Account → API keys & tokens in the Twilio console. Redeploy after saving the variables.
+            </p>
+          </div>
+        )}
+
+        <form onSubmit={sendSmsTest} className="row" style={{ gap: 8 }}>
+          <input
+            type="tel" placeholder="Send a test text to…" value={testSmsTo}
+            onChange={(e) => setTestSmsTo(e.target.value)} style={{ flex: 1, maxWidth: 320 }}
+          />
+          <button className="btn sm" type="submit" disabled={sendingSms || !testSmsTo.trim()}>{sendingSms ? 'Sending…' : 'Send test'}</button>
+        </form>
+        {smsTestStatus && (
+          <p className="sub" style={{ color: smsTestStatus.ok ? 'var(--accent)' : 'var(--red)', marginTop: 8 }}>
+            {smsTestStatus.message}
           </p>
         )}
       </div>

@@ -320,6 +320,27 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   body TEXT NOT NULL,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+-- Customer-facing texting, Hatch-style (Sept 2026) — one thread per contact ("direction" tells
+-- outbound-from-us apart from inbound-from-customer). Outbound rows are either typed by a rep or
+-- fired by an automation (automation_name set); inbound rows are always rep-logged (the user
+-- chose "a rep logs what the customer said" over auto-pulling replies from a real inbox), never
+-- pulled automatically from anywhere. Real delivery goes through sms.js once Twilio is
+-- configured; until then rows still get created here (status 'simulated') so the thread and the
+-- automations around it work end-to-end before the user sets up billing for a phone number.
+CREATE TABLE IF NOT EXISTS customer_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  deal_id INTEGER REFERENCES deals(id) ON DELETE SET NULL,
+  job_id INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+  direction TEXT NOT NULL DEFAULT 'outbound',
+  channel TEXT NOT NULL DEFAULT 'sms',
+  body TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'logged',
+  automation_name TEXT,
+  created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
 `);
 
 // --- Lightweight migrations ---
@@ -520,5 +541,37 @@ const usersNeedingDefaults = db.prepare(`
   WHERE u.role != 'admin' AND NOT EXISTS (SELECT 1 FROM user_permissions p WHERE p.user_id = u.id)
 `).all();
 for (const { id, role } of usersNeedingDefaults) seedPagePermissions(id, role);
+
+// --- Customer texting auto-responses, Hatch-style (Sept 2026) ---
+// Seeded once, by name, so the four auto-responses the user asked for ("just like Hatch") work
+// out of the box rather than requiring a trip through the Automations builder first. Every one
+// uses the send_sms action, which is a no-op-but-logged text until Twilio is configured (see
+// sms.js) — safe to ship enabled from day one. An admin can edit the wording, disable, or delete
+// any of these from the Automations page like any other rule; this only ever runs once (a name
+// already in the table is left untouched, even if it was edited or deleted since).
+function seedAutomation(name, trigger_type, trigger_config, action_type, action_config) {
+  const exists = db.prepare(`SELECT 1 FROM automations WHERE name = ?`).get(name);
+  if (exists) return;
+  db.prepare(`
+    INSERT INTO automations (name, trigger_type, trigger_config, action_type, action_config, enabled)
+    VALUES (?, ?, ?, ?, ?, 1)
+  `).run(name, trigger_type, JSON.stringify(trigger_config), action_type, JSON.stringify(action_config));
+}
+seedAutomation(
+  'Instant reply to a new lead', 'deal_created', {}, 'send_sms',
+  { message: "Hi {{contact_name}}, thanks for reaching out to Precision Paving & Masonry about {{title}}! We got your request and someone from our team will be in touch soon. Reply here anytime with questions." }
+);
+seedAutomation(
+  'Estimate follow-up', 'estimate_stale', { days_since_sent: 3 }, 'send_sms',
+  { message: "Hi {{contact_name}}, just following up on the estimate for {{title}}. Let us know if you have any questions or you're ready to move forward!" }
+);
+seedAutomation(
+  'Review request after job completion', 'job_completed', {}, 'send_sms',
+  { message: "Hi {{contact_name}}, thank you for choosing Precision Paving & Masonry for {{title}}! We'd really appreciate it if you could leave us a quick review — just reply and we'll send the link. Thanks for your business!" }
+);
+seedAutomation(
+  'Re-engage a stale lead', 'deal_stale', { days_idle: 14 }, 'send_sms',
+  { message: "Hi {{contact_name}}, just checking in on {{title}} — still interested in moving forward? Happy to answer any questions or set up a time to chat." }
+);
 
 module.exports = db;

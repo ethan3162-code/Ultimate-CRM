@@ -17,6 +17,12 @@ const TRIGGERS = [
   { key: 'invoice_paid', label: 'Invoice is paid in full', fields: [] },
   { key: 'job_completed', label: 'Job is marked completed', fields: [] },
   { key: 'estimate_signed', label: 'Customer signs an estimate', fields: [] },
+  { key: 'estimate_stale', label: 'An estimate has gone unanswered', fields: [
+    { key: 'days_since_sent', label: 'Days since it was created, with no signature yet', type: 'number', default: 3 },
+  ] },
+  { key: 'deal_stale', label: 'A lead has gone quiet', fields: [
+    { key: 'days_idle', label: 'Days since anything happened on the deal', type: 'number', default: 14 },
+  ] },
 ];
 
 const ACTIONS = [
@@ -27,8 +33,8 @@ const ACTIONS = [
     { key: 'subject', label: 'Subject', placeholder: 'e.g. Following up on your proposal' },
     { key: 'body', label: 'Body', type: 'textarea', placeholder: 'Hi {{contact_name}}, …' },
   ] },
-  { key: 'send_sms', label: 'Send an SMS (simulated)', fields: [
-    { key: 'message', label: 'Message', type: 'textarea', placeholder: 'e.g. Reminder: invoice {{number}} is overdue.' },
+  { key: 'send_sms', label: 'Text the customer (live once Twilio is connected in Integrations)', fields: [
+    { key: 'message', label: 'Message', type: 'textarea', placeholder: 'e.g. Hi {{contact_name}}, just checking in on {{title}}.' },
   ] },
   { key: 'create_followup_job', label: 'Create a follow-up job', fields: [
     { key: 'title', label: 'Job title', placeholder: 'e.g. 30-day maintenance check-in' },
@@ -45,6 +51,8 @@ function triggerSummary(a) {
   if (a.trigger_type === 'deal_stage_changed') return `Deal moves to "${a.trigger_config.to_stage}"`;
   if (a.trigger_type === 'invoice_overdue') return `Invoice overdue ${a.trigger_config.days_overdue || 1}+ days`;
   if (a.trigger_type === 'deal_created' && a.trigger_config.stage) return `Deal created in "${a.trigger_config.stage}"`;
+  if (a.trigger_type === 'estimate_stale') return `Estimate unanswered ${a.trigger_config.days_since_sent || 3}+ days`;
+  if (a.trigger_type === 'deal_stale') return `Lead quiet ${a.trigger_config.days_idle || 14}+ days`;
   return t.label;
 }
 function actionSummary(a) {

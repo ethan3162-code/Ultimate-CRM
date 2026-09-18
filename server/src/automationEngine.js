@@ -1,6 +1,7 @@
 const db = require('./db');
 const { logActivity } = require('./helpers');
 const mailer = require('./mailer');
+const sms = require('./sms');
 
 // --- template rendering: replaces {{field}} with values from context ---
 function render(template, ctx) {
@@ -60,6 +61,19 @@ function runAction(automation, ctx) {
     }
     case 'send_sms': {
       const body = render(config.message || '', ctx);
+      // Best-effort real delivery via Twilio (see sms.js) — a row always lands in the customer's
+      // conversation thread (Messages > Conversations) so the auto-text shows up the same place a
+      // rep's own texts do, whether or not Twilio is actually configured yet. Needs a contact_id
+      // in ctx to know whose thread it belongs to; falls back to just the activity-log note
+      // (as before) for a trigger that doesn't carry one.
+      if (ctx.contact_id) {
+        sms.sendSms({ to: ctx.contact_phone, body }).then((result) => {
+          db.prepare(`
+            INSERT INTO customer_messages (contact_id, deal_id, job_id, direction, channel, body, status, automation_name)
+            VALUES (?,?,?,'outbound','sms',?,?,?)
+          `).run(ctx.contact_id, ctx.deal_id || null, ctx.job_id || null, body, result.sent ? 'sent' : (sms.isConfigured() ? 'failed' : 'simulated'), automation.name);
+        }).catch(() => {});
+      }
       note = `Auto-SMS sent${ctx.contact_name ? ` to ${ctx.contact_name}` : ''}: ${body}`;
       logActivity(relatedType, relatedId, 'sms', note);
       break;
@@ -110,6 +124,10 @@ function matchesTrigger(automation, triggerType, ctx) {
     case 'job_completed':
     case 'estimate_signed':
       return true;
+    case 'estimate_stale':
+      return (ctx.days_since_sent || 0) >= Number(config.days_since_sent ?? 3);
+    case 'deal_stale':
+      return (ctx.days_idle || 0) >= Number(config.days_idle ?? 14);
     default:
       return false;
   }

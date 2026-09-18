@@ -105,13 +105,14 @@ router.post('/', (req, res) => {
   );
   const deal = db.prepare(`SELECT * FROM deals WHERE id = ?`).get(result.lastInsertRowid);
   logActivity('deal', deal.id, 'note', `Deal "${deal.title}" created.`);
-  const dealContact = deal.contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(deal.contact_id) : null;
+  const dealContact = deal.contact_id ? db.prepare(`SELECT first_name, last_name, email, phone, mobile_phone FROM contacts WHERE id = ?`).get(deal.contact_id) : null;
   fireTrigger('deal_created', {
     related_type: 'deal', related_id: deal.id,
     title: deal.title, value: deal.value, stage: deal.stage,
-    deal_id: deal.id,
+    deal_id: deal.id, contact_id: deal.contact_id || null,
     contact_name: dealContact ? `${dealContact.first_name} ${dealContact.last_name}` : null,
     contact_email: dealContact ? dealContact.email : null,
+    contact_phone: dealContact ? (dealContact.mobile_phone || dealContact.phone) : null,
     source: deal.source || null,
   });
   res.status(201).json(deal);

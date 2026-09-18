@@ -118,6 +118,15 @@ export const api = {
   regenerateWebhook: () => request('/integrations/webhook/regenerate', { method: 'POST' }),
   emailStatus: () => request('/integrations/email'),
   sendTestEmail: (to) => request('/integrations/email/test', { method: 'POST', body: JSON.stringify({ to }) }),
+  smsStatus: () => request('/integrations/sms'),
+  sendTestSms: (to) => request('/integrations/sms/test', { method: 'POST', body: JSON.stringify({ to }) }),
+
+  // Customer texting (Hatch-style unified inbox).
+  customerConversations: () => request('/customer-messages/conversations'),
+  customerMessageableContacts: () => request('/customer-messages/contacts'),
+  customerThread: (contactId) => request(`/customer-messages/contact/${contactId}`),
+  sendCustomerMessage: (contactId, body) => request(`/customer-messages/contact/${contactId}`, { method: 'POST', body: JSON.stringify({ body }) }),
+  logInboundCustomerMessage: (contactId, body) => request(`/customer-messages/contact/${contactId}/log-inbound`, { method: 'POST', body: JSON.stringify({ body }) }),
 
   tasks: (params) => request(`/tasks${params ? `?${new URLSearchParams(params)}` : ''}`),
   createTask: (data) => request('/tasks', { method: 'POST', body: JSON.stringify(data) }),

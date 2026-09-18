@@ -54,6 +54,9 @@ app.use('/api/tasks', requireAuth, require('./routes/tasks'));
 // Internal team chat (Sept 2026) — every active login can use it regardless of their individual
 // page permissions, same reasoning as tasks/directory above.
 app.use('/api/chat', requireAuth, require('./routes/chat'));
+// Customer-facing texting (Sept 2026, Hatch-style) — gated by the Contacts permission since a
+// customer's phone thread is customer data, same as the Contacts page itself.
+app.use('/api/customer-messages', requireAuth, requirePage('contacts'), require('./routes/customerMessages'));
 // Customer-facing signed-estimate flow — no login, a customer reaches this from an emailed link.
 app.use('/api/public', require('./routes/public'));
 
@@ -106,6 +109,59 @@ function checkOverdueTickets() {
 }
 checkOverdueTickets();
 setInterval(checkOverdueTickets, 60_000);
+
+// --- Periodic check: nudge customers who haven't signed/approved an estimate after N days ---
+// ("Estimate follow-up", Hatch-style auto-response #2.) A draft estimate with no signature yet
+// is "awaiting the customer" — this app has no separate "sent" step (the rep shares the approval
+// link directly), so draft-and-unsigned is the closest proxy for "still waiting to hear back."
+function checkStaleEstimates() {
+  const candidates = db.prepare(`SELECT * FROM estimates WHERE status = 'draft' AND signed_at IS NULL`).all();
+  for (const est of candidates) {
+    const daysSince = Math.floor((Date.now() - new Date(est.created_at.replace(' ', 'T') + 'Z').getTime()) / 86400000);
+    if (daysSince < 1) continue;
+    const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(est.job_id);
+    if (!job) continue;
+    const contact = job.contact_id ? db.prepare(`SELECT first_name, last_name, email, phone, mobile_phone FROM contacts WHERE id = ?`).get(job.contact_id) : null;
+    fireTrigger('estimate_stale', {
+      related_type: 'job', related_id: job.id,
+      dedupe_id: `estimate-stale:${est.id}`,
+      job_id: job.id, deal_id: job.deal_id || null, contact_id: job.contact_id || null,
+      title: job.title, number: est.number, days_since_sent: daysSince,
+      contact_name: contact ? `${contact.first_name} ${contact.last_name}` : null,
+      contact_email: contact ? contact.email : null,
+      contact_phone: contact ? (contact.mobile_phone || contact.phone) : null,
+    });
+  }
+}
+checkStaleEstimates();
+setInterval(checkStaleEstimates, 60_000);
+
+// --- Periodic check: re-engage a lead that's gone quiet ---
+// ("Re-engage a stale/old lead", Hatch-style auto-response #4.) Unlike the checks above this is
+// allowed to fire more than once per record — a lead can go quiet again after a first nudge — so
+// the dedupe key includes the current calendar week, capping it at once per week per deal rather
+// than once ever.
+function checkStaleLeads() {
+  const candidates = db.prepare(`SELECT * FROM deals WHERE stage NOT IN ('won', 'lost')`).all();
+  const weekBucket = Math.floor(Date.now() / (7 * 86400000));
+  for (const deal of candidates) {
+    const reference = deal.updated_at || deal.created_at;
+    const daysIdle = Math.floor((Date.now() - new Date(reference.replace(' ', 'T') + 'Z').getTime()) / 86400000);
+    if (daysIdle < 1) continue;
+    const contact = deal.contact_id ? db.prepare(`SELECT first_name, last_name, email, phone, mobile_phone FROM contacts WHERE id = ?`).get(deal.contact_id) : null;
+    fireTrigger('deal_stale', {
+      related_type: 'deal', related_id: deal.id,
+      dedupe_id: `deal-stale:${deal.id}:${weekBucket}`,
+      deal_id: deal.id, contact_id: deal.contact_id || null,
+      title: deal.title, days_idle: daysIdle,
+      contact_name: contact ? `${contact.first_name} ${contact.last_name}` : null,
+      contact_email: contact ? contact.email : null,
+      contact_phone: contact ? (contact.mobile_phone || contact.phone) : null,
+    });
+  }
+}
+checkStaleLeads();
+setInterval(checkStaleLeads, 60_000);
 
 // Serve the built React client in production
 const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');

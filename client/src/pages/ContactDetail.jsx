@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { money, shortDate, timeAgo, initials, mapLinks } from '../utils';
 import { LEAD_SOURCES } from '../constants';
@@ -12,6 +12,7 @@ const TICKET_PILL = { open: 'blue', pending: 'amber', resolved: 'green', closed:
 
 export default function ContactDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { canEdit } = usePermission('contacts');
   const [contact, setContact] = useState(null);
   const [directory, setDirectory] = useState([]);
@@ -72,7 +73,12 @@ export default function ContactDetail() {
             </div>
           </div>
         </div>
-        {canEdit && <button className="btn primary" onClick={() => setScheduling(true)}>📅 Schedule appointment</button>}
+        <div className="row" style={{ gap: 8 }}>
+          {contact.phone || contact.mobile_phone ? (
+            <button className="btn sm" onClick={() => navigate(`/conversations/${contact.id}`)}>💬 Text</button>
+          ) : null}
+          {canEdit && <button className="btn primary" onClick={() => setScheduling(true)}>📅 Schedule appointment</button>}
+        </div>
       </div>
 
       <div className="grid-2">

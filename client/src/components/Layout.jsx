@@ -20,6 +20,9 @@ const NAV = [
       { to: '/pipeline', label: 'Opportunities', page: 'pipeline' },
       { to: '/companies', label: 'Companies', page: 'companies' },
       { to: '/contacts', label: 'Contacts', page: 'contacts' },
+      // Customer texting (Sept 2026, Hatch-style) — gated on the same 'contacts' permission as
+      // the Contacts page itself, since it's the same customer data.
+      { to: '/conversations', label: 'Conversations', page: 'contacts' },
     ],
   },
   {

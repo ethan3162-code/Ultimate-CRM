@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import Messages from './pages/Messages';
+import Conversations from './pages/Conversations';
 import Leads from './pages/Leads';
 import Pipeline from './pages/Pipeline';
 import DealDetail from './pages/DealDetail';
@@ -58,6 +59,8 @@ function AuthedApp() {
           <Route path="/companies/:id" element={<Protected page="companies"><CompanyDetail /></Protected>} />
           <Route path="/contacts" element={<Protected page="contacts"><Contacts /></Protected>} />
           <Route path="/contacts/:id" element={<Protected page="contacts"><ContactDetail /></Protected>} />
+          <Route path="/conversations" element={<Protected page="contacts"><Conversations /></Protected>} />
+          <Route path="/conversations/:contactId" element={<Protected page="contacts"><Conversations /></Protected>} />
           <Route path="/jobs" element={<Protected page="jobs"><Jobs /></Protected>} />
           <Route path="/jobs/:id" element={<Protected page="jobs"><JobDetail /></Protected>} />
           <Route path="/automations" element={<Protected page="automations"><Automations /></Protected>} />
