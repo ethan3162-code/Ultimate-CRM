@@ -6,6 +6,7 @@ const cookieParser = require('cookie-parser');
 const db = require('./db'); // ensures schema is created
 const { getInvoiceFull } = require('./helpers');
 const { fireTrigger } = require('./automationEngine');
+const leadInbox = require('./leadInbox');
 const { readSession, requireAuth, requirePage, requireAnyPage, requireAdmin } = require('./auth');
 
 const app = express();
@@ -162,6 +163,18 @@ function checkStaleLeads() {
 }
 checkStaleLeads();
 setInterval(checkStaleLeads, 60_000);
+
+// --- Periodic check: pull new leads out of AnswerForce's call-notification emails ---
+// (Sept 2026 — "build it into the CRM directly" over a Zapier Email Parser or a native
+// AnswerForce webhook, per the user's choice.) A no-op, silently, until GMAIL_USER/
+// GMAIL_APP_PASSWORD are set (same credentials outbound automation email already uses — see
+// mailer.js and the Integrations page's Gmail card). See leadInbox.js for the actual polling.
+async function checkAnswerForceInbox() {
+  if (!leadInbox.isConfigured()) return;
+  await leadInbox.pollAnswerForceInbox();
+}
+checkAnswerForceInbox();
+setInterval(checkAnswerForceInbox, 60_000);
 
 // Serve the built React client in production
 const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');

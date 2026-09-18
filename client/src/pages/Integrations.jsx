@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
+import { timeAgo } from '../utils';
 
 export default function Integrations() {
   const [webhook, setWebhook] = useState(null);
@@ -13,13 +15,26 @@ export default function Integrations() {
   const [testSmsTo, setTestSmsTo] = useState('');
   const [smsTestStatus, setSmsTestStatus] = useState(null);
   const [sendingSms, setSendingSms] = useState(false);
+  const [answerForce, setAnswerForce] = useState(null);
+  const [checkingNow, setCheckingNow] = useState(false);
 
   function load() {
     api.webhookInfo().then(setWebhook);
     api.emailStatus().then(setEmail);
     api.smsStatus().then(setSms);
+    api.answerForceStatus().then(setAnswerForce);
   }
   useEffect(load, []);
+
+  async function checkAnswerForceNow() {
+    setCheckingNow(true);
+    try {
+      await api.pollAnswerForceNow();
+    } finally {
+      api.answerForceStatus().then(setAnswerForce);
+      setCheckingNow(false);
+    }
+  }
 
   async function regenerate() {
     if (!confirm('Regenerate the webhook key? Any form or Zapier/Make automation already pointed at the old URL will stop working until you update it.')) return;
@@ -189,6 +204,49 @@ export default function Integrations() {
           <p className={testStatus.ok ? 'sub' : 'sub'} style={{ color: testStatus.ok ? 'var(--accent)' : 'var(--red)', marginTop: 8 }}>
             {testStatus.message}
           </p>
+        )}
+      </div>
+
+      <div className="card" style={{ marginTop: 18 }}>
+        <h2>AnswerForce calls → leads</h2>
+        <p className="sub" style={{ margin: '-4px 0 14px' }}>
+          Every call AnswerForce answers on your behalf emails a notification to this same inbox — no forwarding needed, and nothing to set up on AnswerForce's side. This checks that inbox every minute for those emails and turns each one into a Contact and a new lead automatically, using the Gmail connection above.
+        </p>
+
+        {!answerForce ? <div className="loading">Loading…</div> : !answerForce.configured ? (
+          <div className="card" style={{ background: 'var(--paper-raised)', marginBottom: 14 }}>
+            <div className="kicker" style={{ marginBottom: 6 }}>Waiting on Gmail</div>
+            <p className="sub" style={{ margin: 0 }}>Connect Gmail above first (GMAIL_USER / GMAIL_APP_PASSWORD) — this uses that same inbox, so there's nothing separate to configure here.</p>
+          </div>
+        ) : (
+          <>
+            <div className="row" style={{ gap: 10, alignItems: 'center', marginBottom: 10 }}>
+              <span className="pill green">Watching {answerForce.fromEmail}</span>
+              <button type="button" className="btn sm" onClick={checkAnswerForceNow} disabled={checkingNow}>{checkingNow ? 'Checking…' : 'Check now'}</button>
+            </div>
+            {answerForce.lastPoll && (
+              <p className="sub" style={{ margin: '0 0 14px' }}>
+                {answerForce.lastPoll.ok
+                  ? `Last checked ${new Date(answerForce.lastPoll.ran_at).toLocaleString()} — scanned ${answerForce.lastPoll.scanned}, ${answerForce.lastPoll.created} new lead${answerForce.lastPoll.created === 1 ? '' : 's'} created, ${answerForce.lastPoll.skipped} already seen${answerForce.lastPoll.failed ? `, ${answerForce.lastPoll.failed} couldn't be parsed` : ''}.`
+                  : `Last check failed: ${answerForce.lastPoll.reason}`}
+              </p>
+            )}
+            {answerForce.recent.length === 0 ? (
+              <div className="empty">No AnswerForce emails processed yet.</div>
+            ) : (
+              <div className="stack" style={{ gap: 6 }}>
+                {answerForce.recent.map((r) => (
+                  <div key={r.id} className="row between" style={{ fontSize: 13, borderBottom: '1px solid var(--line-soft)', paddingBottom: 6 }}>
+                    <span>
+                      {r.deal_id ? <Link to={`/pipeline/${r.deal_id}`}>{r.subject || 'AnswerForce email'}</Link> : (r.subject || 'AnswerForce email')}
+                      {r.template === 'forwarded' || r.template === 'unknown' ? <span className="pill amber" style={{ marginLeft: 6 }}>needs review</span> : null}
+                    </span>
+                    <span className="muted">{r.status === 'failed' ? (r.note || 'failed') : timeAgo(r.processed_at)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 

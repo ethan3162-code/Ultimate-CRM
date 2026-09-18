@@ -341,6 +341,25 @@ CREATE TABLE IF NOT EXISTS customer_messages (
   created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+-- AnswerForce call-notification emails turned into leads (Sept 2026) — the CRM polls the same
+-- Gmail inbox already connected for outbound automation email (GMAIL_USER/GMAIL_APP_PASSWORD, see
+-- mailer.js) for messages from AnswerForce (the user's call-answering service) and parses each one
+-- into a lead, instead of requiring a separate webhook/Zapier setup. One row per processed email
+-- (keyed by Gmail's message id) so a message already turned into a lead is never re-processed on
+-- the next poll, even across redeploys (this table ships committed like every other table here).
+CREATE TABLE IF NOT EXISTS answerforce_emails (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  gmail_message_id TEXT UNIQUE NOT NULL,
+  subject TEXT,
+  received_at TEXT,
+  template TEXT,
+  status TEXT NOT NULL DEFAULT 'processed',
+  contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
+  deal_id INTEGER REFERENCES deals(id) ON DELETE SET NULL,
+  note TEXT,
+  processed_at TEXT DEFAULT (datetime('now'))
+);
 `);
 
 // --- Lightweight migrations ---

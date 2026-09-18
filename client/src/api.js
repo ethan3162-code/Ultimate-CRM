@@ -120,6 +120,8 @@ export const api = {
   sendTestEmail: (to) => request('/integrations/email/test', { method: 'POST', body: JSON.stringify({ to }) }),
   smsStatus: () => request('/integrations/sms'),
   sendTestSms: (to) => request('/integrations/sms/test', { method: 'POST', body: JSON.stringify({ to }) }),
+  answerForceStatus: () => request('/integrations/answerforce'),
+  pollAnswerForceNow: () => request('/integrations/answerforce/poll', { method: 'POST' }),
 
   // Customer texting (Hatch-style unified inbox).
   customerConversations: () => request('/customer-messages/conversations'),
