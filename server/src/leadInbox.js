@@ -130,66 +130,109 @@ async function pollAnswerForceInbox(opts = {}) {
     let created = 0, skipped = headerResults.length - newUids.length, failed = 0;
 
     if (newUids.length) {
-      // Pass 2: full bodies, only for messages we haven't processed yet.
-      const fullResults = await connection.search(
-        [['UID', newUids.join(',')]],
-        { bodies: [''], markSeen: false }
-      );
-      for (const result of fullResults) {
-        const uid = result.attributes.uid;
-        const fallbackKey = uidToHeaderMsgId.get(uid) || `uid:${uid}`;
+      // Pass 2: full bodies, only for messages we haven't processed yet. Fetched in small batches
+      // rather than one giant `UID a,b,c,...` search — a wide historical backfill can mean hundreds
+      // of new UIDs in one run, and a single SEARCH command listing all of them at once was found
+      // (Sept 2026, during the first real-inbox backfill) to silently come back empty against Gmail's
+      // IMAP server rather than error, so nothing after the header pass ever got created. Batching
+      // keeps each command small and means one bad batch can't take out the whole run.
+      const BATCH_SIZE = 40;
+      for (let i = 0; i < newUids.length; i += BATCH_SIZE) {
+        const batch = newUids.slice(i, i + BATCH_SIZE);
+        let fullResults;
         try {
-          const part = result.parts.find((p) => p.which === '');
-          if (!part) { failed++; continue; }
-          const parsedMail = await simpleParser(part.body);
-          const gmailMessageId = parsedMail.messageId || fallbackKey;
-
-          // Guard against the same message being picked up twice within this one run.
-          const already = db.prepare(`SELECT 1 FROM answerforce_emails WHERE gmail_message_id = ?`).get(gmailMessageId);
-          if (already) { skipped++; continue; }
-
-          const parsedLead = parseAnswerForceEmail({ subject: parsedMail.subject, text: parsedMail.text || '' });
-          const payload = leadPayloadFromParsed(parsedLead);
-          // Required at the very top of index.js — required here too, lazily, to avoid a
-          // require cycle at module-load time (leadIntake requires automationEngine, which is
-          // fine, but keeping this require local makes the dependency direction obvious).
-          const { ingestLead } = require('./routes/leadIntake');
-          const outcome = ingestLead(payload);
-
-          db.prepare(`
-            INSERT INTO answerforce_emails (gmail_message_id, subject, received_at, template, status, contact_id, deal_id, note)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            gmailMessageId,
-            parsedMail.subject || null,
-            parsedMail.date ? parsedMail.date.toISOString() : null,
-            parsedLead.template,
-            outcome.error ? 'failed' : 'created',
-            outcome.contact ? outcome.contact.id : null,
-            outcome.deal ? outcome.deal.id : null,
-            outcome.error || (parsedLead.needs_review ? 'Low-confidence parse — please review.' : null)
+          fullResults = await connection.search(
+            [['UID', batch.join(',')]],
+            { bodies: [''], markSeen: false }
           );
-          if (outcome.error) failed++; else created++;
         } catch (err) {
+          console.error(`[leadInbox] batch fetch failed for ${batch.length} UID(s):`, err.message);
+          for (const uid of batch) {
+            const fallbackKey = uidToHeaderMsgId.get(uid) || `uid:${uid}`;
+            failed++;
+            try {
+              db.prepare(`
+                INSERT OR IGNORE INTO answerforce_emails (gmail_message_id, subject, status, note)
+                VALUES (?, NULL, 'failed', ?)
+              `).run(fallbackKey, `Batch fetch failed: ${err.message}`);
+            } catch {}
+          }
+          continue;
+        }
+
+        // A batch that comes back with fewer messages than requested (rather than throwing) is
+        // exactly the failure mode above — account for the ones that never showed up in the results.
+        const seenUids = new Set(fullResults.map((r) => r.attributes.uid));
+        for (const uid of batch) {
+          if (seenUids.has(uid)) continue;
+          const fallbackKey = uidToHeaderMsgId.get(uid) || `uid:${uid}`;
           failed++;
-          // Still record it as processed (with the error) so a message that will never parse
-          // doesn't get retried forever, spamming the log every poll cycle.
           try {
             db.prepare(`
               INSERT OR IGNORE INTO answerforce_emails (gmail_message_id, subject, status, note)
               VALUES (?, NULL, 'failed', ?)
-            `).run(fallbackKey, err.message);
+            `).run(fallbackKey, 'Message did not come back in the full-body fetch — will not be retried automatically.');
           } catch {}
+        }
+
+        for (const result of fullResults) {
+          const uid = result.attributes.uid;
+          const fallbackKey = uidToHeaderMsgId.get(uid) || `uid:${uid}`;
+          try {
+            const part = result.parts.find((p) => p.which === '');
+            if (!part) { failed++; continue; }
+            const parsedMail = await simpleParser(part.body);
+            const gmailMessageId = parsedMail.messageId || fallbackKey;
+
+            // Guard against the same message being picked up twice within this one run.
+            const already = db.prepare(`SELECT 1 FROM answerforce_emails WHERE gmail_message_id = ?`).get(gmailMessageId);
+            if (already) { skipped++; continue; }
+
+            const parsedLead = parseAnswerForceEmail({ subject: parsedMail.subject, text: parsedMail.text || '' });
+            const payload = leadPayloadFromParsed(parsedLead);
+            // Required at the very top of index.js — required here too, lazily, to avoid a
+            // require cycle at module-load time (leadIntake requires automationEngine, which is
+            // fine, but keeping this require local makes the dependency direction obvious).
+            const { ingestLead } = require('./routes/leadIntake');
+            const outcome = ingestLead(payload);
+
+            db.prepare(`
+              INSERT INTO answerforce_emails (gmail_message_id, subject, received_at, template, status, contact_id, deal_id, note)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              gmailMessageId,
+              parsedMail.subject || null,
+              parsedMail.date ? parsedMail.date.toISOString() : null,
+              parsedLead.template,
+              outcome.error ? 'failed' : 'created',
+              outcome.contact ? outcome.contact.id : null,
+              outcome.deal ? outcome.deal.id : null,
+              outcome.error || (parsedLead.needs_review ? 'Low-confidence parse — please review.' : null)
+            );
+            if (outcome.error) failed++; else created++;
+          } catch (err) {
+            failed++;
+            // Still record it as processed (with the error) so a message that will never parse
+            // doesn't get retried forever, spamming the log every poll cycle.
+            try {
+              db.prepare(`
+                INSERT OR IGNORE INTO answerforce_emails (gmail_message_id, subject, status, note)
+                VALUES (?, NULL, 'failed', ?)
+              `).run(fallbackKey, err.message);
+            } catch {}
+          }
         }
       }
     }
 
     connection.end();
     lastResult = { ok: true, scanned: headerResults.length, created, skipped, failed, since, ran_at: new Date().toISOString() };
+    console.log(`[leadInbox] poll since ${since}: scanned ${lastResult.scanned}, created ${created}, skipped ${skipped}, failed ${failed}`);
     return lastResult;
   } catch (err) {
     if (connection) { try { connection.end(); } catch {} }
     lastResult = { ok: false, reason: err.message, since, ran_at: new Date().toISOString() };
+    console.error(`[leadInbox] poll since ${since} failed:`, err.message);
     return lastResult;
   } finally {
     inProgress = false;
