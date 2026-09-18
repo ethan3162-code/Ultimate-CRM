@@ -1,7 +1,27 @@
+const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 
-const DB_PATH = path.join(__dirname, '..', 'data.sqlite');
+// On a host with no persistent disk (Render's free tier), the app only ever has the copy of
+// data.sqlite checked into the repo — every deploy starts fresh from that snapshot, wiping
+// anything written since the last commit (a known, deliberate tradeoff of free hosting; see the
+// spec doc). Once a paid plan's persistent disk is attached and DATA_DIR is set to its mount
+// path, the live database lives there instead and survives every future deploy: the committed
+// data.sqlite is read only once, to seed that disk the first time it's empty, and is never
+// touched again after that — so real data written after this point can't be overwritten by a
+// deploy. Leaving DATA_DIR unset keeps the exact previous behavior (local dev, or no disk yet).
+const SEED_DB_PATH = path.join(__dirname, '..', 'data.sqlite');
+const DATA_DIR = process.env.DATA_DIR || null;
+const DB_PATH = DATA_DIR ? path.join(DATA_DIR, 'data.sqlite') : SEED_DB_PATH;
+
+if (DATA_DIR) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(DB_PATH)) {
+    fs.copyFileSync(SEED_DB_PATH, DB_PATH);
+    console.log(`[db] persistent disk database not found yet — seeded ${DB_PATH} from the committed data.sqlite`);
+  }
+}
+
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
