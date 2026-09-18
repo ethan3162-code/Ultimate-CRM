@@ -122,6 +122,7 @@ export const api = {
   sendTestSms: (to) => request('/integrations/sms/test', { method: 'POST', body: JSON.stringify({ to }) }),
   answerForceStatus: () => request('/integrations/answerforce'),
   pollAnswerForceNow: () => request('/integrations/answerforce/poll', { method: 'POST' }),
+  backfillAnswerForce: (since) => request('/integrations/answerforce/backfill', { method: 'POST', body: JSON.stringify({ since }) }),
 
   // Customer texting (Hatch-style unified inbox).
   customerConversations: () => request('/customer-messages/conversations'),

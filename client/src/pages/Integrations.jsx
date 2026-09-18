@@ -17,6 +17,8 @@ export default function Integrations() {
   const [sendingSms, setSendingSms] = useState(false);
   const [answerForce, setAnswerForce] = useState(null);
   const [checkingNow, setCheckingNow] = useState(false);
+  const [backfillSince, setBackfillSince] = useState('2026-01-01');
+  const [backfillMsg, setBackfillMsg] = useState(null);
 
   function load() {
     api.webhookInfo().then(setWebhook);
@@ -26,6 +28,15 @@ export default function Integrations() {
   }
   useEffect(load, []);
 
+  // While a check (manual "Check now" or a backfill) is running server-side, poll for progress
+  // every few seconds so the recent-activity list and the last-poll summary fill in live, rather
+  // than only updating on the next full page load.
+  useEffect(() => {
+    if (!answerForce?.running) return;
+    const t = setInterval(() => { api.answerForceStatus().then(setAnswerForce); }, 3000);
+    return () => clearInterval(t);
+  }, [answerForce?.running]);
+
   async function checkAnswerForceNow() {
     setCheckingNow(true);
     try {
@@ -34,6 +45,19 @@ export default function Integrations() {
       api.answerForceStatus().then(setAnswerForce);
       setCheckingNow(false);
     }
+  }
+
+  async function startBackfill(e) {
+    e.preventDefault();
+    if (!backfillSince) return;
+    setBackfillMsg(null);
+    try {
+      await api.backfillAnswerForce(backfillSince);
+      setBackfillMsg({ ok: true, text: `Started — pulling in every AnswerForce email since ${backfillSince}. This can take a little while for a wide date range; the activity list below will fill in as it goes.` });
+    } catch (err) {
+      setBackfillMsg({ ok: false, text: err.message });
+    }
+    api.answerForceStatus().then(setAnswerForce);
   }
 
   async function regenerate() {
@@ -222,7 +246,8 @@ export default function Integrations() {
           <>
             <div className="row" style={{ gap: 10, alignItems: 'center', marginBottom: 10 }}>
               <span className="pill green">Watching {answerForce.fromEmail}</span>
-              <button type="button" className="btn sm" onClick={checkAnswerForceNow} disabled={checkingNow}>{checkingNow ? 'Checking…' : 'Check now'}</button>
+              <button type="button" className="btn sm" onClick={checkAnswerForceNow} disabled={checkingNow || answerForce.running}>{checkingNow ? 'Checking…' : 'Check now'}</button>
+              {answerForce.running && <span className="muted" style={{ fontSize: 13 }}>Working…</span>}
             </div>
             {answerForce.lastPoll && (
               <p className="sub" style={{ margin: '0 0 14px' }}>
@@ -231,6 +256,21 @@ export default function Integrations() {
                   : `Last check failed: ${answerForce.lastPoll.reason}`}
               </p>
             )}
+
+            <div className="card" style={{ background: 'var(--paper-raised)', marginBottom: 14 }}>
+              <div className="kicker" style={{ marginBottom: 6 }}>Backfill older calls</div>
+              <p className="sub" style={{ margin: '0 0 10px' }}>
+                The regular check above only looks back 14 days. To pull in everything further back — e.g. every AnswerForce call since the start of the year — set a date and run it once here.
+              </p>
+              <form onSubmit={startBackfill} className="row" style={{ gap: 8 }}>
+                <input type="date" value={backfillSince} onChange={(e) => setBackfillSince(e.target.value)} />
+                <button className="btn sm" type="submit" disabled={answerForce.running || !backfillSince}>{answerForce.running ? 'Running…' : 'Backfill from this date'}</button>
+              </form>
+              {backfillMsg && (
+                <p className="sub" style={{ color: backfillMsg.ok ? 'var(--accent)' : 'var(--red)', marginTop: 8 }}>{backfillMsg.text}</p>
+              )}
+            </div>
+
             {answerForce.recent.length === 0 ? (
               <div className="empty">No AnswerForce emails processed yet.</div>
             ) : (

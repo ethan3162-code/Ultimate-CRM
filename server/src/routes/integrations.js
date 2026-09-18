@@ -51,11 +51,12 @@ router.post('/sms/test', async (req, res) => {
 router.get('/answerforce', (req, res) => {
   const recent = db.prepare(`
     SELECT id, subject, template, status, contact_id, deal_id, note, processed_at
-    FROM answerforce_emails ORDER BY id DESC LIMIT 20
+    FROM answerforce_emails ORDER BY id DESC LIMIT 30
   `).all();
   res.json({
     configured: leadInbox.isConfigured(),
     fromEmail: process.env.GMAIL_USER || null,
+    running: leadInbox.isRunning(),
     lastPoll: leadInbox.getLastResult(),
     recent,
   });
@@ -65,6 +66,23 @@ router.post('/answerforce/poll', async (req, res) => {
   if (!leadInbox.isConfigured()) return res.status(400).json({ error: 'Gmail is not configured yet — set GMAIL_USER and GMAIL_APP_PASSWORD.' });
   const result = await leadInbox.pollAnswerForceInbox();
   res.json(result);
+});
+
+// One-off historical backfill (e.g. "pull in everything since Jan 1") — separate from the
+// standing 60-second poll's rolling window, which stays untouched. A wide date range can mean a
+// lot of messages to fetch and parse, so this kicks the run off in the background and returns
+// immediately rather than holding the request open; the Integrations page polls GET /answerforce
+// (above) to watch it progress via `running` and the growing `recent` list.
+router.post('/answerforce/backfill', (req, res) => {
+  if (!leadInbox.isConfigured()) return res.status(400).json({ error: 'Gmail is not configured yet — set GMAIL_USER and GMAIL_APP_PASSWORD.' });
+  if (leadInbox.isRunning()) return res.status(409).json({ error: 'A check is already in progress — wait for it to finish first.' });
+  const { since } = req.body || {};
+  const sinceDate = since ? new Date(since) : null;
+  if (!sinceDate || Number.isNaN(sinceDate.getTime())) return res.status(400).json({ error: 'A valid "since" date is required.' });
+  if (sinceDate.getTime() > Date.now()) return res.status(400).json({ error: '"since" can\'t be in the future.' });
+
+  leadInbox.pollAnswerForceInbox({ sinceDate }).catch(() => {});
+  res.status(202).json({ started: true, since: sinceDate.toISOString().slice(0, 10) });
 });
 
 module.exports = router;

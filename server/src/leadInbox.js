@@ -78,11 +78,22 @@ function getLastResult() {
   return lastResult;
 }
 
-/** Runs one poll cycle. Never throws — resolves to a small result summary for logging/the
-    Integrations page. Requires GMAIL_USER/GMAIL_APP_PASSWORD (same as outbound mail) to be set. */
-async function pollAnswerForceInbox() {
-  if (!isConfigured()) return { ok: false, reason: 'not configured' };
+let inProgress = false;
+function isRunning() {
+  return inProgress;
+}
 
+/** Runs one poll cycle. Never throws — resolves to a small result summary for logging/the
+    Integrations page. Requires GMAIL_USER/GMAIL_APP_PASSWORD (same as outbound mail) to be set.
+    Pass `{ sinceDate: aJsDate }` to widen the search window for a one-off historical backfill
+    (e.g. "pull in everything since Jan 1") without changing the standing 14-day rolling window
+    the periodic 60-second check uses. */
+async function pollAnswerForceInbox(opts = {}) {
+  if (!isConfigured()) return { ok: false, reason: 'not configured' };
+  if (inProgress) return { ok: false, reason: 'a check is already in progress — try again in a moment' };
+  inProgress = true;
+
+  const since = imapDate(opts.sinceDate instanceof Date ? opts.sinceDate : new Date(Date.now() - BACKFILL_DAYS * 86400000));
   let connection;
   try {
     connection = await imaps.connect({
@@ -98,7 +109,6 @@ async function pollAnswerForceInbox() {
     });
     await connection.openBox('INBOX');
 
-    const since = imapDate(new Date(Date.now() - BACKFILL_DAYS * 86400000));
     // Pass 1: headers only, to find which messages are new without paying for a full-body fetch.
     const headerResults = await connection.search(
       [['FROM', SENDER], ['SINCE', since]],
@@ -175,13 +185,15 @@ async function pollAnswerForceInbox() {
     }
 
     connection.end();
-    lastResult = { ok: true, scanned: headerResults.length, created, skipped, failed, ran_at: new Date().toISOString() };
+    lastResult = { ok: true, scanned: headerResults.length, created, skipped, failed, since, ran_at: new Date().toISOString() };
     return lastResult;
   } catch (err) {
     if (connection) { try { connection.end(); } catch {} }
-    lastResult = { ok: false, reason: err.message, ran_at: new Date().toISOString() };
+    lastResult = { ok: false, reason: err.message, since, ran_at: new Date().toISOString() };
     return lastResult;
+  } finally {
+    inProgress = false;
   }
 }
 
-module.exports = { isConfigured, pollAnswerForceInbox, getLastResult };
+module.exports = { isConfigured, pollAnswerForceInbox, getLastResult, isRunning };
