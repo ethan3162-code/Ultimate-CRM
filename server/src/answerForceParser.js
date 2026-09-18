@@ -92,6 +92,19 @@ function normalizePhone(raw) {
   return raw.trim();
 }
 
+// Every one of these emails comes from (or references, in the footer/subject) AnswerForce's own
+// call-routing number — a toll-free line like (866) 764-4682 — and that number sometimes shows up
+// in the "Phone" or "Call from" value instead of the actual caller's own number. A toll-free area
+// code is never a personal cell/home number, so a value in this set is never a real caller phone —
+// treating it as one would merge unrelated callers onto one shared bogus "contact" number.
+const TOLL_FREE_AREA_CODES = new Set(['800', '833', '844', '855', '866', '877', '888']);
+
+function isTollFreeNumber(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  const tenDigit = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+  return tenDigit.length === 10 && TOLL_FREE_AREA_CODES.has(tenDigit.slice(0, 3));
+}
+
 // Splits body text into blank-line-delimited "chunks" (paragraphs), each collapsed to one line.
 function toChunks(text) {
   return String(text || '')
@@ -161,7 +174,10 @@ function parsePrimaryTemplate(rawText) {
   const addressParts = [fields.address1, fields.city, fields.state, fields.zip].filter(Boolean);
   const address = addressParts.length ? [fields.address1, fields.city, [fields.state, fields.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ') : null;
 
-  const phone = normalizePhone(fields.phone || fields.call_from_phone || null);
+  // Prefer the "Phone" field over the "Call from" line, same as before — but skip either one if
+  // it's actually AnswerForce's own toll-free number rather than the caller's.
+  const rawPhone = [fields.phone, fields.call_from_phone].find((p) => p && !isTollFreeNumber(p)) || null;
+  const phone = normalizePhone(rawPhone);
   const description = fields.description || fields.message || null;
 
   // The caller's actual marketing/referral channel (Google, Yelp, "drove by", a repeat-customer
@@ -214,8 +230,9 @@ function parseForwardedTemplate(rawText) {
   }
 
   // Prefer a phone that appears near "From"; fall back to the first phone-shaped match anywhere
-  // in the body that isn't the business's own AnswerForce line.
-  const phone = extractPhone(afterMarker) || extractPhone(cleaned);
+  // in the body — skipping AnswerForce's own toll-free number if that's what matched instead of
+  // the caller's.
+  const phone = [extractPhone(afterMarker), extractPhone(cleaned)].find((p) => p && !isTollFreeNumber(p)) || null;
 
   const messageText = preamble || null;
 
@@ -250,4 +267,4 @@ function parseAnswerForceEmail({ subject, text }) {
   return { ...parseForwardedTemplate(text), template: 'unknown' };
 }
 
-module.exports = { parseAnswerForceEmail, isBlankValue, normalizePhone, extractPhone };
+module.exports = { parseAnswerForceEmail, isBlankValue, normalizePhone, extractPhone, isTollFreeNumber };

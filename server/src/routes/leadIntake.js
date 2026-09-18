@@ -72,6 +72,15 @@ function ingestLead(body) {
   if (externalId) contact = db.prepare(`SELECT * FROM contacts WHERE external_id = ? AND external_source = ?`).get(externalId, externalSource);
   if (!contact && email) contact = db.prepare(`SELECT * FROM contacts WHERE email = ?`).get(email);
   if (!contact && phone) contact = db.prepare(`SELECT * FROM contacts WHERE phone = ?`).get(phone);
+  // Last resort: no email and no usable phone at all (common for an AnswerForce call once its
+  // own toll-free routing number is filtered out of the phone field — see answerForceParser's
+  // isTollFreeNumber). Rather than spin up a brand-new contact for every such call, match an
+  // existing one by name so the same repeat caller doesn't pile up duplicate contact records.
+  // (first_name/last_name are never actually NULL below — a missing one is stored as 'New'/'Lead',
+  // so the fallback compares against those same defaults.)
+  if (!contact && !email && !phone && first) {
+    contact = db.prepare(`SELECT * FROM contacts WHERE first_name = ? AND last_name = ? COLLATE NOCASE`).get(first, last || 'Lead');
+  }
 
   let companyId = null;
   if (companyName) {
