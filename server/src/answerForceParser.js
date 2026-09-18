@@ -164,10 +164,18 @@ function parsePrimaryTemplate(rawText) {
   const phone = normalizePhone(fields.phone || fields.call_from_phone || null);
   const description = fields.description || fields.message || null;
 
+  // The caller's actual marketing/referral channel (Google, Yelp, "drove by", a repeat-customer
+  // mention, etc.) as AnswerForce's agent typed it — this is what should drive the CRM's lead
+  // "source" field (see leadInbox.js's leadPayloadFromParsed), not just a note. Kept as free text,
+  // same as the rest of this parser's fields — no attempt to force it into the CRM's dropdown
+  // vocabulary, since AnswerForce agents type this by hand and it doesn't line up 1:1 with those
+  // options anyway (better a true value the user can see/relabel than a mis-mapped guess).
+  const referralSource = fields.referral_source && !isBlankValue(fields.referral_source) ? fields.referral_source : null;
+
   const extraNotes = [];
   if (fields.business_unit) extraNotes.push(`Business unit: ${fields.business_unit}`);
   if (fields.query_type) extraNotes.push(`Query type: ${fields.query_type}`);
-  if (fields.referral_source) extraNotes.push(`Referral source (AnswerForce): ${fields.referral_source}`);
+  if (referralSource) extraNotes.push(`Referral source (AnswerForce): ${referralSource}`);
   if (fields.call_area && !address) extraNotes.push(`Call area: ${fields.call_area}`);
   if (fields.if_other && !isBlankValue(fields.if_other)) extraNotes.push(`Other: ${fields.if_other}`);
   extraNotes.push(...notes);
@@ -187,6 +195,7 @@ function parsePrimaryTemplate(rawText) {
     preferred_callback: fields.preferred_callback || null,
     preferred_consult: fields.preferred_consult || null,
     method_of_entry_detail: fields.method_of_entry || null,
+    referral_source: referralSource,
     notes: extraNotes,
   };
 }
@@ -225,6 +234,7 @@ function parseForwardedTemplate(rawText) {
     preferred_callback: null,
     preferred_consult: null,
     method_of_entry_detail: null,
+    referral_source: null,
     notes: [],
   };
 }

@@ -61,7 +61,13 @@ function leadPayloadFromParsed(parsed) {
     email: parsed.email || null,
     address: parsed.address || null,
     message: parsed.description || null,
-    source: 'AnswerForce',
+    // Lead-source reporting wants the caller's actual marketing/referral channel (Google, Yelp,
+    // "drove by", a repeat customer, etc.) when AnswerForce's agent captured one. "AnswerForce"
+    // itself is never a lead source — it's only how the lead entered the CRM, which is what
+    // method_of_entry below is for. When no referral source was captured on the call, fall back
+    // to 'Other' (already one of the CRM's lead-source dropdown options) rather than mislabeling
+    // the source as the answering service.
+    source: parsed.referral_source || 'Other',
     method_of_entry: parsed.needs_review ? 'AnswerForce (needs review)' : 'AnswerForce',
     work_type: parsed.type_of_work || null,
     lead_type: parsed.call_type || null,
@@ -162,12 +168,31 @@ async function pollAnswerForceInbox(opts = {}) {
           if (!part) { failed++; continue; }
           const parsedMail = await simpleParser(part.body);
           const gmailMessageId = parsedMail.messageId || fallbackKey;
-
-          // Guard against the same message being picked up twice within this one run.
-          const already = db.prepare(`SELECT 1 FROM answerforce_emails WHERE gmail_message_id = ?`).get(gmailMessageId);
-          if (already) { skipped++; continue; }
-
           const parsedLead = parseAnswerForceEmail({ subject: parsedMail.subject, text: parsedMail.text || '' });
+
+          // Claim this message atomically, before creating anything, instead of a plain "SELECT to
+          // check, INSERT the real row later" — gmail_message_id is UNIQUE, so this INSERT either
+          // succeeds (we're the only run that will ever turn this exact email into a lead) or hits
+          // the constraint and inserts nothing (changes === 0), meaning an earlier run already
+          // claimed it, and we skip without touching contacts/deals at all. That matters because a
+          // check-then-insert-later pattern leaves a gap between "not yet processed" and the final
+          // write — with ingestLead's own contact/deal INSERTs happening in between — so re-running
+          // a backfill over emails a previous run (or the periodic 60s check) already turned into
+          // leads could double-create them if that gap were ever hit. Claiming first, on the same
+          // column that's the actual source of truth for "already a lead", closes that for good:
+          // rerunning the same backfill, or the periodic check overlapping a backfill's date range,
+          // can never create a duplicate lead for the same email.
+          const claim = db.prepare(`
+            INSERT OR IGNORE INTO answerforce_emails (gmail_message_id, subject, received_at, template, status)
+            VALUES (?, ?, ?, ?, 'processing')
+          `).run(
+            gmailMessageId,
+            parsedMail.subject || null,
+            parsedMail.date ? parsedMail.date.toISOString() : null,
+            parsedLead.template
+          );
+          if (claim.changes === 0) { skipped++; continue; }
+
           const payload = leadPayloadFromParsed(parsedLead);
           // Required at the very top of index.js — required here too, lazily, to avoid a
           // require cycle at module-load time (leadIntake requires automationEngine, which is
@@ -176,17 +201,15 @@ async function pollAnswerForceInbox(opts = {}) {
           const outcome = ingestLead(payload);
 
           db.prepare(`
-            INSERT INTO answerforce_emails (gmail_message_id, subject, received_at, template, status, contact_id, deal_id, note)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            UPDATE answerforce_emails
+            SET status = ?, contact_id = ?, deal_id = ?, note = ?
+            WHERE gmail_message_id = ?
           `).run(
-            gmailMessageId,
-            parsedMail.subject || null,
-            parsedMail.date ? parsedMail.date.toISOString() : null,
-            parsedLead.template,
             outcome.error ? 'failed' : 'created',
             outcome.contact ? outcome.contact.id : null,
             outcome.deal ? outcome.deal.id : null,
-            outcome.error || (parsedLead.needs_review ? 'Low-confidence parse — please review.' : null)
+            outcome.error || (parsedLead.needs_review ? 'Low-confidence parse — please review.' : null),
+            gmailMessageId
           );
           if (outcome.error) failed++; else created++;
         } catch (err) {

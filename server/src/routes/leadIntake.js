@@ -112,7 +112,9 @@ function ingestLead(body) {
   if (deal) {
     logActivity('deal', deal.id, 'note', `Updated via "${source}" re-sync.${message ? ` Message: ${message}` : ''}`);
   } else {
-    const dealTitle = `${first || contact.first_name} ${last || contact.last_name}`.trim() + ` — ${source}`;
+    // Just the person's name — the source is already its own column (and shown elsewhere in the
+    // UI), so it doesn't need to be baked into the deal title/lead name too.
+    const dealTitle = `${first || contact.first_name} ${last || contact.last_name}`.trim();
     const dealResult = db.prepare(`
       INSERT INTO deals (
         contact_id, company_id, title, value, stage, probability, source, method_of_entry,
