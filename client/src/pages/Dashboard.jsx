@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { money, timeAgo } from '../utils';
 import { TrendChart, ColumnChart, BarList, DonutChart } from '../components/charts';
+import FilterBar from '../components/FilterBar';
 
 const STAGE_LABELS = { new: 'New', qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
 const AGING_COLORS = ['var(--accent)', 'var(--amber)', 'var(--amber)', 'var(--red)'];
@@ -20,6 +21,7 @@ export default function Dashboard() {
   const [reports, setReports] = useState(null);
   const [tasks, setTasks] = useState(null);
   const [customReports, setCustomReports] = useState(null);
+  const [attentionFilter, setAttentionFilter] = useState('');
 
   useEffect(() => {
     api.dashboard().then(setData);
@@ -33,6 +35,18 @@ export default function Dashboard() {
 
   const maxStageValue = Math.max(...OPP_STAGES.map((s) => data.stageCounts[s].v), 1);
   const newLeadsCount = data.stageCounts.new.c;
+
+  // Each attention rule surfaces a different record type, so "filter by type" here means
+  // narrowing to one rule's group rather than a shared field — same instant, clear-in-one-click
+  // pattern as the record-list filter bars, just scoped to this one card.
+  const attentionTypeDefs = insights ? [
+    { key: 'type', label: 'Type', options: [
+      insights.stalledDeals.length > 0 && { value: 'stalled', label: 'Stalled deals' },
+      insights.overdueInvoices.length > 0 && { value: 'invoices', label: 'Overdue invoices' },
+      insights.overdueTickets.length > 0 && { value: 'tickets', label: 'SLA breached' },
+      insights.staleJobs.length > 0 && { value: 'jobs', label: 'Jobs past scheduled date' },
+    ].filter(Boolean) },
+  ].filter((f) => f.options.length > 1) : [];
 
   return (
     <>
@@ -99,8 +113,15 @@ export default function Dashboard() {
         <div className="card" style={{ marginBottom: 18 }}>
           <h2>Needs attention <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}>({attentionCount(insights)})</span></h2>
           <p className="sub" style={{ margin: '-4px 0 12px' }}>Deterministic rules over your own data — no model call, nothing hidden: stalled deals, overdue invoices, SLA-breached tickets, and jobs past their scheduled date.</p>
+          {attentionTypeDefs.length > 0 && (
+            <FilterBar
+              filters={attentionTypeDefs} values={{ type: attentionFilter }}
+              onChange={(_key, value) => setAttentionFilter(value)}
+              onClear={() => setAttentionFilter('')}
+            />
+          )}
           <div className="attention-grid">
-            {insights.stalledDeals.length > 0 && (
+            {(!attentionFilter || attentionFilter === 'stalled') && insights.stalledDeals.length > 0 && (
               <div>
                 <div className="kicker">Stalled deals</div>
                 {insights.stalledDeals.map((d) => (
@@ -111,7 +132,7 @@ export default function Dashboard() {
                 ))}
               </div>
             )}
-            {insights.overdueInvoices.length > 0 && (
+            {(!attentionFilter || attentionFilter === 'invoices') && insights.overdueInvoices.length > 0 && (
               <div>
                 <div className="kicker">Overdue invoices</div>
                 {insights.overdueInvoices.map((inv) => (
@@ -122,7 +143,7 @@ export default function Dashboard() {
                 ))}
               </div>
             )}
-            {insights.overdueTickets.length > 0 && (
+            {(!attentionFilter || attentionFilter === 'tickets') && insights.overdueTickets.length > 0 && (
               <div>
                 <div className="kicker">SLA breached</div>
                 {insights.overdueTickets.map((t) => (
@@ -133,7 +154,7 @@ export default function Dashboard() {
                 ))}
               </div>
             )}
-            {insights.staleJobs.length > 0 && (
+            {(!attentionFilter || attentionFilter === 'jobs') && insights.staleJobs.length > 0 && (
               <div>
                 <div className="kicker">Jobs past scheduled date</div>
                 {insights.staleJobs.map((j) => (
