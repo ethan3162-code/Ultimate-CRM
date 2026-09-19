@@ -237,9 +237,12 @@ export default function Estimates() {
 
   // Three buckets matching the Joist tabs — Declined is a customer's explicit decline
   // (declined_at), never the separate internal-approval reject, which still shows inside Pending
-  // as a status pill since it hasn't reached the customer at all.
-  const pending = (estimates || []).filter((est) => !est.signed_at && !est.declined_at);
-  const approved = (estimates || []).filter((est) => !!est.signed_at);
+  // as a status pill since it hasn't reached the customer at all. An estimate that's already been
+  // converted to an invoice (has_invoice) counts as Approved even if it was never e-signed by the
+  // customer — e.g. a manually-converted job-anchored estimate — since by that point it's a done
+  // deal, not something still awaiting a decision, and it has no business sitting in Pending.
+  const pending = (estimates || []).filter((est) => !est.signed_at && !est.declined_at && !est.has_invoice);
+  const approved = (estimates || []).filter((est) => !est.declined_at && (!!est.signed_at || !!est.has_invoice));
   const declined = (estimates || []).filter((est) => !!est.declined_at);
   const buckets = { pending, approved, declined };
   const activeList = buckets[tab] || [];
@@ -346,6 +349,8 @@ export default function Estimates() {
           <div className="sub" style={{ margin: '6px 0 0', color: 'var(--red)' }}>
             ✗ Declined by the customer — {dateTime(est.declined_at)}{est.decline_reason ? `: ${est.decline_reason}` : '.'}
           </div>
+        ) : est.has_invoice ? (
+          <div className="sub" style={{ margin: '6px 0 0', color: 'var(--accent-ink)' }}>✓ Invoiced.</div>
         ) : (
           <div className="sub" style={{ margin: '6px 0 0' }}>Not signed by the customer yet.</div>
         )}
@@ -530,7 +535,7 @@ export default function Estimates() {
           {groups.length === 0 ? (
             <div className="empty">
               {q ? 'No estimates match your search.' : (
-                tab === 'pending' ? 'Nothing pending.' : tab === 'approved' ? 'Nothing signed yet.' : 'Nothing declined.'
+                tab === 'pending' ? 'Nothing pending.' : tab === 'approved' ? 'Nothing approved yet.' : 'Nothing declined.'
               )}
             </div>
           ) : (
