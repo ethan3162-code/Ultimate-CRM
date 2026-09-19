@@ -1,8 +1,52 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { money } from '../utils';
 
+/** A searchable "Items" picker modal (Joist-style) — replaces the old plain <select> dropdown.
+    `catalog` is already filtered by the caller to sales items only (no material_key — see
+    PriceBook.jsx / JobDetail.jsx's `!c.material_key` filter), so whatever list lands here is
+    exactly the "Items" catalog, never Price Book calculator materials. */
+function ItemPickerModal({ catalog, onPick, onClose }) {
+  const [query, setQuery] = useState('');
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return catalog;
+    return catalog.filter((c) => (
+      (c.name || '').toLowerCase().includes(q) || (c.description || '').toLowerCase().includes(q)
+    ));
+  }, [catalog, query]);
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal-card wide">
+        <h3>Add an item</h3>
+        <p className="sub">Search your Items catalog and add it as a line.</p>
+        <input
+          className="item-picker-search" autoFocus placeholder="Search items…"
+          value={query} onChange={(e) => setQuery(e.target.value)}
+        />
+        <div className="item-picker-list">
+          {results.length === 0 && <div className="item-picker-empty">No items match "{query}".</div>}
+          {results.map((c) => (
+            <button type="button" key={c.id} className="item-picker-row" onClick={() => onPick(c)}>
+              <span>
+                <span className="name">{c.name}</span>
+                {c.description && <span className="desc">{c.description}</span>}
+              </span>
+              <span className="price">{money(c.unit_price)}{c.unit ? ` / ${c.unit}` : ''}</span>
+            </button>
+          ))}
+        </div>
+        <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
+          <button type="button" className="btn subtle" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LineItemEditor({ items, setItems, taxRate, setTaxRate, catalog }) {
-  const [presetId, setPresetId] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   function updateItem(i, field, value) {
     const next = items.slice();
@@ -15,12 +59,9 @@ export default function LineItemEditor({ items, setItems, taxRate, setTaxRate, c
   function removeRow(i) {
     setItems(items.filter((_, idx) => idx !== i));
   }
-  function addPreset() {
-    if (!presetId) return;
-    const item = (catalog || []).find((c) => String(c.id) === String(presetId));
-    if (!item) return;
+  function pickFromCatalog(item) {
     setItems([...items, { description: item.name, qty: 1, unit_price: item.unit_price }]);
-    setPresetId('');
+    setPickerOpen(false);
   }
 
   const subtotal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.unit_price) || 0), 0);
@@ -29,14 +70,8 @@ export default function LineItemEditor({ items, setItems, taxRate, setTaxRate, c
   return (
     <div>
       {catalog && catalog.length > 0 && (
-        <div className="row" style={{ marginBottom: 10, gap: 8 }}>
-          <select value={presetId} onChange={(e) => setPresetId(e.target.value)} style={{ flex: 1 }}>
-            <option value="">Add a saved item…</option>
-            {catalog.map((c) => (
-              <option key={c.id} value={c.id}>{c.name} — {money(c.unit_price)}{c.unit ? ` / ${c.unit}` : ''}</option>
-            ))}
-          </select>
-          <button type="button" className="btn sm" onClick={addPreset} disabled={!presetId}>+ Add</button>
+        <div style={{ marginBottom: 10 }}>
+          <button type="button" className="btn sm" onClick={() => setPickerOpen(true)}>+ Add from Items…</button>
         </div>
       )}
       <table className="line-items">
@@ -65,6 +100,10 @@ export default function LineItemEditor({ items, setItems, taxRate, setTaxRate, c
       <div className="totals-row"><span className="lbl">Subtotal</span><span className="amt">{money(subtotal)}</span></div>
       <div className="totals-row"><span className="lbl">Tax</span><span className="amt">{money(tax)}</span></div>
       <div className="totals-row"><span className="lbl">Total</span><span className="amt">{money(subtotal + tax)}</span></div>
+
+      {pickerOpen && (
+        <ItemPickerModal catalog={catalog} onPick={pickFromCatalog} onClose={() => setPickerOpen(false)} />
+      )}
     </div>
   );
 }
