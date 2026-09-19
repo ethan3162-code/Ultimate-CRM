@@ -189,15 +189,18 @@ router.patch('/:id', (req, res) => {
 router.post('/:id/estimates', (req, res) => {
   const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(req.params.id);
   if (!job) return res.status(404).json({ error: 'job not found' });
-  const { number, tax_rate, items, deposit_percent, contract_id, payment_schedule } = req.body;
+  const { number, tax_rate, markup_percent, discount_type, discount_value, items, deposit_percent, contract_id, payment_schedule } = req.body;
   if (!items || !items.length) return res.status(400).json({ error: 'at least one line item is required' });
   const count = db.prepare(`SELECT COUNT(*) c FROM estimates`).get().c;
   const signToken = crypto.randomBytes(12).toString('hex');
   const flags = readDisplayFlags(req.body);
   const result = db.prepare(`
-    INSERT INTO estimates (job_id, number, status, tax_rate, deposit_percent, sign_token, created_by_user_id, show_rate, show_qty, show_item_total, contract_id)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)
-  `).run(job.id, number || `EST-${1000 + count + 1}`, 'draft', tax_rate || 0, deposit_percent || 0, signToken, req.user ? req.user.id : null, flags.show_rate, flags.show_qty, flags.show_item_total, contract_id || null);
+    INSERT INTO estimates (job_id, number, status, tax_rate, markup_percent, discount_type, discount_value, deposit_percent, sign_token, created_by_user_id, show_rate, show_qty, show_item_total, contract_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    job.id, number || `EST-${1000 + count + 1}`, 'draft', tax_rate || 0, markup_percent || 0, discount_type || null, discount_value || 0,
+    deposit_percent || 0, signToken, req.user ? req.user.id : null, flags.show_rate, flags.show_qty, flags.show_item_total, contract_id || null
+  );
   const estimateId = result.lastInsertRowid;
   for (const it of items) {
     db.prepare(`INSERT INTO estimate_items (estimate_id, description, notes, qty, unit_price) VALUES (?,?,?,?,?)`)
@@ -217,7 +220,10 @@ router.patch('/estimates/:estimateId', (req, res) => {
   // routes/jobs.js's /invoices/:invoiceId/change-orders), which keeps a clear record of exactly
   // what was added after the original signed agreement rather than silently editing it.
   if (existing.signed_at) return res.status(400).json({ error: "this estimate has been signed and can't be edited — use a change order on the invoice instead" });
-  const { status, tax_rate, show_rate, show_qty, show_item_total, contract_id, items, deposit_percent, number, payment_schedule } = req.body;
+  const {
+    status, tax_rate, markup_percent, discount_type, discount_value, show_rate, show_qty, show_item_total, contract_id, items,
+    deposit_percent, number, payment_schedule,
+  } = req.body;
 
   // Editing line items (or anything that changes the total — tax/deposit) is a substantive edit,
   // not the lightweight status-only patch this route also serves (e.g. nothing currently sends a
@@ -241,12 +247,20 @@ router.patch('/estimates/:estimateId', (req, res) => {
 
   db.prepare(`
     UPDATE estimates SET
-      status = ?, tax_rate = ?, deposit_percent = ?, number = ?, show_rate = ?, show_qty = ?, show_item_total = ?, contract_id = ?,
+      status = ?, tax_rate = ?, markup_percent = ?, discount_type = ?, discount_value = ?, deposit_percent = ?, number = ?,
+      show_rate = ?, show_qty = ?, show_item_total = ?, contract_id = ?,
       approval_status = ?, approval_requested_at = ?, approved_by_user_id = ?, approved_at = ?, rejection_reason = ?
     WHERE id = ?
   `).run(
     status ?? existing.status,
     tax_rate ?? existing.tax_rate,
+    markup_percent === undefined ? existing.markup_percent : (Number(markup_percent) || 0),
+    // discount_type is meaningfully nullable (no discount set at all) — an explicit null in the
+    // request means "clear the discount", so this checks for undefined specifically rather than
+    // using `??`, which would treat that explicit null the same as "field not sent" and never let
+    // a saved discount be removed.
+    discount_type === undefined ? existing.discount_type : (discount_type || null),
+    discount_value === undefined ? existing.discount_value : (Number(discount_value) || 0),
     deposit_percent === undefined ? existing.deposit_percent : (Number(deposit_percent) || 0),
     number || existing.number,
     show_rate === undefined ? existing.show_rate : (show_rate ? 1 : 0),
@@ -282,10 +296,11 @@ router.post('/estimates/:estimateId/duplicate', (req, res) => {
   const count = db.prepare(`SELECT COUNT(*) c FROM estimates`).get().c;
   const signToken = crypto.randomBytes(12).toString('hex');
   const result = db.prepare(`
-    INSERT INTO estimates (job_id, deal_id, number, status, tax_rate, deposit_percent, sign_token, created_by_user_id, show_rate, show_qty, show_item_total, contract_id)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    INSERT INTO estimates (job_id, deal_id, number, status, tax_rate, markup_percent, discount_type, discount_value, deposit_percent, sign_token, created_by_user_id, show_rate, show_qty, show_item_total, contract_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
-    existing.job_id, existing.deal_id, `EST-${1000 + count + 1}`, 'draft', existing.tax_rate, existing.deposit_percent,
+    existing.job_id, existing.deal_id, `EST-${1000 + count + 1}`, 'draft', existing.tax_rate,
+    existing.markup_percent, existing.discount_type, existing.discount_value, existing.deposit_percent,
     signToken, req.user ? req.user.id : null, existing.show_rate, existing.show_qty, existing.show_item_total, existing.contract_id
   );
   const newId = result.lastInsertRowid;
