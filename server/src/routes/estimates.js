@@ -11,7 +11,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const db = require('../db');
-const { getEstimateFull, redactEstimateMoney, logActivity, readDisplayFlags } = require('../helpers');
+const { getEstimateFull, redactEstimateMoney, logActivity, readDisplayFlags, saveEstimateScheduleRows } = require('../helpers');
 const { canSeePrices } = require('../auth');
 
 const router = express.Router();
@@ -76,7 +76,7 @@ router.get('/', (req, res) => {
 // routes/public.js's /estimates/:token/sign, which creates the Project + first invoice at that
 // point) or someone later converts it manually.
 router.post('/', (req, res) => {
-  const { deal_id, number, tax_rate, deposit_percent, items, contract_id } = req.body;
+  const { deal_id, number, tax_rate, deposit_percent, items, contract_id, payment_schedule } = req.body;
   if (!deal_id) return res.status(400).json({ error: 'an opportunity is required' });
   const deal = db.prepare(`SELECT id, title FROM deals WHERE id = ?`).get(deal_id);
   if (!deal) return res.status(404).json({ error: 'opportunity not found' });
@@ -94,9 +94,10 @@ router.post('/', (req, res) => {
   );
   const estimateId = result.lastInsertRowid;
   for (const it of items) {
-    db.prepare(`INSERT INTO estimate_items (estimate_id, description, qty, unit_price) VALUES (?,?,?,?)`)
-      .run(estimateId, it.description, it.qty, it.unit_price);
+    db.prepare(`INSERT INTO estimate_items (estimate_id, description, notes, qty, unit_price) VALUES (?,?,?,?,?)`)
+      .run(estimateId, it.description, it.notes || null, it.qty, it.unit_price);
   }
+  saveEstimateScheduleRows(estimateId, payment_schedule);
   logActivity('deal', deal.id, 'estimate', `Estimate ${number || ''} created for "${deal.title}".`);
 
   // getEstimateFull already resolves requires_internal_approval from created_by_user_id (see
@@ -106,4 +107,3 @@ router.post('/', (req, res) => {
 });
 
 module.exports = router;
-
