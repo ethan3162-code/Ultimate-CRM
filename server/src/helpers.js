@@ -46,6 +46,29 @@ function resolveEstimateParty(estimate) {
   return { title: null, address: null, contact: null, company: null, customerType: 'Residential' };
 }
 
+// The raw, editable payment-schedule rows for an estimate — {id, name, percent}, in the order
+// they were saved. This is what the estimate builder UI reads back into its editor; it's a plain
+// name+percent, no computed dollar amount (the amount depends on the estimate's current total, so
+// the client derives it live as line items/tax change — see PaymentScheduleEditor.jsx).
+function getEstimateScheduleRows(estimateId) {
+  return db.prepare(`SELECT id, name, percent FROM estimate_payment_schedule WHERE estimate_id = ? ORDER BY sort_order, id`).all(estimateId);
+}
+
+// Replaces an estimate's whole payment schedule with `rows` ([{name, percent}], already validated
+// by the caller to have a non-empty name). Same full-replace pattern estimate_items uses — the
+// builder always sends its complete current list, so delete-then-reinsert keeps this in sync
+// without having to diff old vs. new rows.
+function saveEstimateScheduleRows(estimateId, rows) {
+  db.prepare(`DELETE FROM estimate_payment_schedule WHERE estimate_id = ?`).run(estimateId);
+  if (!Array.isArray(rows) || !rows.length) return;
+  const insert = db.prepare(`INSERT INTO estimate_payment_schedule (estimate_id, name, percent, sort_order) VALUES (?,?,?,?)`);
+  rows.forEach((row, i) => {
+    const name = (row.name || '').trim();
+    if (!name) return;
+    insert.run(estimateId, name, Number(row.percent) || 0, i);
+  });
+}
+
 function getEstimateFull(id) {
   const est = db.prepare(`SELECT * FROM estimates WHERE id = ?`).get(id);
   if (!est) return null;
@@ -63,6 +86,7 @@ function getEstimateFull(id) {
   const requires_internal_approval = !!(creator && requiresEstimateApproval(creator) && est.approval_status !== 'approved');
   return {
     ...est, items, ...withTotals(est, items, est.tax_rate),
+    payment_schedule: getEstimateScheduleRows(id),
     created_by_username: creator ? creator.username : null,
     approved_by_username: approver ? approver.username : null,
     requires_internal_approval,
@@ -295,12 +319,22 @@ function getJobCustomerType(job) {
   return job.company_id ? 'Commercial' : 'Residential';
 }
 
-// A simple 2-row payment schedule derived from the estimate's deposit_percent — "Deposit X% due at
-// signing" / "Balance due upon completion". Estimates only carry a single deposit_percent field
-// (no multi-milestone schedule table), so this is what the Joist-style payment-schedule box on the
-// customer-facing estimate can show without new schema. Returns a single "due upon completion" row
-// when no deposit is set.
+// The Joist-style payment-schedule box on the customer-facing estimate (and its PDF) — a list of
+// {label, note, amount} rows that always add up to the estimate's total. Prefers a custom,
+// named multi-milestone schedule if the builder saved one (estimate_payment_schedule — "1st
+// payment due on start date", "2nd payment due after demo", etc, each with its own %); falls back
+// to the older single deposit_percent field's simple 2-row "Deposit X% due at signing" / "Balance
+// due upon completion" for estimates that predate the custom schedule and never got one. Returns
+// a single "due upon completion" row when there's no schedule and no deposit set at all.
 function getEstimatePaymentSchedule(estimate) {
+  const custom = getEstimateScheduleRows(estimate.id);
+  if (custom.length) {
+    return custom.map((row) => ({
+      label: `${row.name} (${row.percent}%)`,
+      note: '',
+      amount: +(estimate.total * (row.percent / 100)).toFixed(2),
+    }));
+  }
   const percent = Number(estimate.deposit_percent) || 0;
   if (percent <= 0) {
     return [{ label: 'Balance', note: 'Due upon completion', amount: estimate.total }];
@@ -364,8 +398,8 @@ function createInvoiceFromEstimate(estimate, jobId, { dueDate } = {}) {
   );
   const invoiceId = result.lastInsertRowid;
   for (const it of estimate.items) {
-    db.prepare(`INSERT INTO invoice_items (invoice_id, description, qty, unit_price) VALUES (?,?,?,?)`)
-      .run(invoiceId, it.description, it.qty, it.unit_price);
+    db.prepare(`INSERT INTO invoice_items (invoice_id, description, notes, qty, unit_price) VALUES (?,?,?,?,?)`)
+      .run(invoiceId, it.description, it.notes || null, it.qty, it.unit_price);
   }
   db.prepare(`UPDATE estimates SET status = 'approved' WHERE id = ?`).run(estimate.id);
   logActivity('job', jobId, 'invoice', `Invoice ${number} generated from estimate ${estimate.number}.`);
@@ -457,7 +491,7 @@ function getJobMilestones(job) {
 module.exports = {
   computeItemsTotal, withTotals, getEstimateFull, getInvoiceFull, getJobFull, getJobCosting, getJobBilling, logActivity,
   getJobCustomerType, getEstimatePaymentSchedule, createInvoiceFromEstimate, createProjectFromDeal, resolveEstimateParty,
-  readDisplayFlags,
+  readDisplayFlags, getEstimateScheduleRows, saveEstimateScheduleRows,
   STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, stageDays, totalDays, computeProgress, addDays, computeEndDate, getJobMilestones,
   redactEstimateMoney, redactInvoiceMoney, redactJobMoney, getPendingEstimateApprovals,
   getContractForEstimate,
