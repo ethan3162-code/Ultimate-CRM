@@ -215,6 +215,8 @@ function buildInvoicePdf({ invoice, job, customer, sourceEstimate }) {
       doc.moveDown(0.35);
     };
     totalsRow('Subtotal', invoice.subtotal);
+    if (invoice.markup_amount > 0) totalsRow(`Markup${invoice.markup_percent ? ` (${invoice.markup_percent}%)` : ''}`, invoice.markup_amount);
+    if (invoice.discount_amount > 0) totalsRow('Discount', -invoice.discount_amount);
     totalsRow('Tax', invoice.tax);
     totalsRow('Total', invoice.total, { bold: true });
     if (invoice.amount_paid > 0) totalsRow('Paid so far', invoice.amount_paid);
@@ -365,6 +367,8 @@ function buildEstimatePdf({ estimate, party }) {
       doc.moveDown(0.35);
     };
     totalsRow('Subtotal', estimate.subtotal);
+    if (estimate.markup_amount > 0) totalsRow(`Markup${estimate.markup_percent ? ` (${estimate.markup_percent}%)` : ''}`, estimate.markup_amount);
+    if (estimate.discount_amount > 0) totalsRow('Discount', -estimate.discount_amount);
     totalsRow('Tax', estimate.tax);
     totalsRow('Total', estimate.total, { bold: true });
 
@@ -436,4 +440,3 @@ function buildEstimatePdf({ estimate, party }) {
 }
 
 module.exports = { buildInvoicePdf, buildEstimatePdf };
-
