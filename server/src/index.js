@@ -81,6 +81,10 @@ app.use('/api/chat', requireAuth, require('./routes/chat'));
 app.use('/api/customer-messages', requireAuth, requirePage('contacts'), require('./routes/customerMessages'));
 // Customer-facing signed-estimate flow — no login, a customer reaches this from an emailed link.
 app.use('/api/public', require('./routes/public'));
+// Salesman commission payout report — not gated by requirePage; visibility is the personal
+// canSeeCommissions capability (or being the salesperson on a job), same as commission figures
+// on the Project page itself, checked inside the route.
+app.use('/api/commissions', requireAuth, require('./routes/commissions'));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
