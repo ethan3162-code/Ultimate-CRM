@@ -76,7 +76,7 @@ router.get('/', (req, res) => {
 // routes/public.js's /estimates/:token/sign, which creates the Project + first invoice at that
 // point) or someone later converts it manually.
 router.post('/', (req, res) => {
-  const { deal_id, number, tax_rate, deposit_percent, items, contract_id, payment_schedule } = req.body;
+  const { deal_id, number, tax_rate, markup_percent, discount_type, discount_value, deposit_percent, items, contract_id, payment_schedule } = req.body;
   if (!deal_id) return res.status(400).json({ error: 'an opportunity is required' });
   const deal = db.prepare(`SELECT id, title FROM deals WHERE id = ?`).get(deal_id);
   if (!deal) return res.status(404).json({ error: 'opportunity not found' });
@@ -86,10 +86,11 @@ router.post('/', (req, res) => {
   const signToken = crypto.randomBytes(12).toString('hex');
   const flags = readDisplayFlags(req.body);
   const result = db.prepare(`
-    INSERT INTO estimates (job_id, deal_id, number, status, tax_rate, deposit_percent, sign_token, created_by_user_id, show_rate, show_qty, show_item_total, contract_id)
-    VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?)
+    INSERT INTO estimates (job_id, deal_id, number, status, tax_rate, markup_percent, discount_type, discount_value, deposit_percent, sign_token, created_by_user_id, show_rate, show_qty, show_item_total, contract_id)
+    VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
-    deal.id, number || `EST-${1000 + count + 1}`, 'draft', tax_rate || 0, deposit_percent || 0, signToken, req.user ? req.user.id : null,
+    deal.id, number || `EST-${1000 + count + 1}`, 'draft', tax_rate || 0, markup_percent || 0, discount_type || null, discount_value || 0,
+    deposit_percent || 0, signToken, req.user ? req.user.id : null,
     flags.show_rate, flags.show_qty, flags.show_item_total, contract_id || null
   );
   const estimateId = result.lastInsertRowid;
