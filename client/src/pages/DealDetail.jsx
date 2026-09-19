@@ -11,6 +11,12 @@ import TaskList from '../components/TaskList';
 import { usePermission, useSection, usePriceVisibility } from '../auth';
 
 const STAGES = ['new', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
+// Same idea as Estimates.jsx's own status pills, collapsed to the four states that matter here:
+// a project is created automatically the moment "signed" happens, so this card never needs to
+// distinguish "signed" further — that state is fleeting, replaced by an actual project a moment
+// later — but it's included for the rare stale-render case.
+const ESTIMATE_STATUS_LABEL = { draft: 'Drafted — not yet sent', sent: 'Sent — awaiting signature', signed: 'Signed', declined: 'Declined' };
+const ESTIMATE_STATUS_PILL = { draft: '', sent: 'amber', signed: 'green', declined: 'red' };
 
 export default function DealDetail() {
   const { id } = useParams();
@@ -122,14 +128,6 @@ export default function DealDetail() {
     load();
   }
 
-  async function createProject() {
-    const job = await api.createJob({
-      contact_id: deal.contact_id || null, company_id: deal.company_id || null, deal_id: deal.id,
-      title: deal.title, status: 'accepted', address: deal.customer_address || null,
-    });
-    navigate(`/jobs/${job.id}`);
-  }
-
   async function addNote(e) {
     e.preventDefault();
     if (!note.trim()) return;
@@ -159,6 +157,13 @@ export default function DealDetail() {
   if (!deal) return <div className="loading">Loading…</div>;
 
   const links = deal.customer_address ? mapLinks(deal.customer_address) : null;
+  // A project is only ever created once a customer signs an estimate (see routes/public.js) —
+  // never at estimate creation — so while there's no project yet, show the most recent estimate's
+  // own status instead of any way to jump straight to a project.
+  const latestEstimate = deal.estimates && deal.estimates.length > 0 ? deal.estimates[0] : null;
+  const estimateStatusKey = latestEstimate
+    ? (latestEstimate.declined_at ? 'declined' : latestEstimate.signed_at ? 'signed' : latestEstimate.status === 'sent' ? 'sent' : 'draft')
+    : null;
 
   return (
     <>
@@ -479,13 +484,28 @@ export default function DealDetail() {
                   </Link>
                 ))}
               </div>
+            ) : latestEstimate ? (
+              <>
+                <div className="attention-row" style={{ padding: '2px 0' }}>
+                  <span>Estimate {latestEstimate.number}</span>
+                  <span className={'pill' + (ESTIMATE_STATUS_PILL[estimateStatusKey] ? ` ${ESTIMATE_STATUS_PILL[estimateStatusKey]}` : '')}>
+                    {ESTIMATE_STATUS_LABEL[estimateStatusKey]}
+                  </span>
+                </div>
+                <p className="sub" style={{ margin: '8px 0 10px' }}>
+                  {estimateStatusKey === 'declined'
+                    ? 'The customer declined this estimate — send a new one to move this opportunity forward.'
+                    : 'A project is created automatically as soon as the customer signs this estimate — there’s nothing else to do here until then.'}
+                </p>
+                <Link to="/estimates" className="btn sm">View estimates &rarr;</Link>
+              </>
             ) : deal.stage === 'won' && canEdit ? (
               <>
-                <p className="sub" style={{ margin: '-4px 0 10px' }}>This opportunity is won — turn it into a project to start scheduling field work, estimates, and billing.</p>
-                <button className="btn primary sm" onClick={createProject}>+ Create project</button>
+                <p className="sub" style={{ margin: '-4px 0 10px' }}>This opportunity is won — send the customer an estimate. A project is created automatically once they sign it.</p>
+                <Link to="/estimates" className="btn primary sm">+ Create estimate</Link>
               </>
             ) : (
-              <div className="empty">Projects start once this opportunity is won.</div>
+              <div className="empty">Projects start once this opportunity is won and the customer signs an estimate.</div>
             )}
           </div>
         </div>
