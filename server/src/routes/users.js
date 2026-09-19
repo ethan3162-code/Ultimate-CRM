@@ -3,7 +3,7 @@ const express = require('express');
 const db = require('../db');
 const {
   ROLES, ROLE_LABEL, PAGES, SECTIONS, hashPassword, publicUser, getPermissions, getSectionLevels, canSeePrices,
-  setUserPermissions, seedPagePermissions, listCustomRoles, setUserCustomRoles, getUserCustomRoleIds,
+  canSeeCommissions, setUserPermissions, seedPagePermissions, listCustomRoles, setUserCustomRoles, getUserCustomRoleIds,
   getUserDirectPermissions, getUserDirectSections,
 } = require('../auth');
 
@@ -19,6 +19,10 @@ function safeUser(u) {
     // regular login, same convention as can_see_prices/permissions above.
     requires_estimate_approval: u.role === 'admin' ? false : !!u.requires_estimate_approval,
     can_approve_estimates: u.role === 'admin' ? true : !!u.can_approve_estimates,
+    // Commission rate this login earns on projects they own, and whether they can see anyone
+    // else's commission figures (admins always can, and always see everyone's — see auth.js).
+    commission_percent: Number(u.commission_percent) || 0,
+    can_see_commissions: canSeeCommissions(u),
     custom_role_ids: u.role === 'admin' ? [] : getUserCustomRoleIds(u.id),
     // The person's own baseline, with no role's contribution mixed in — what the Users &
     // permissions admin editor seeds its draft from (see startEditPerms in Users.jsx). `permissions`/
@@ -54,8 +58,15 @@ router.post('/', (req, res) => {
 router.patch('/:id', (req, res) => {
   const existing = db.prepare(`SELECT * FROM users WHERE id = ?`).get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'not found' });
-  const { role, active, password, can_see_prices, email, requires_estimate_approval, can_approve_estimates } = req.body;
+  const {
+    role, active, password, can_see_prices, email, requires_estimate_approval, can_approve_estimates,
+    commission_percent, can_see_commissions,
+  } = req.body;
   if (role !== undefined && !ROLES.includes(role)) return res.status(400).json({ error: `role must be one of: ${ROLES.join(', ')}` });
+  if (commission_percent !== undefined && commission_percent !== null && commission_percent !== '') {
+    const pct = Number(commission_percent);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) return res.status(400).json({ error: 'commission percent must be a number between 0 and 100' });
+  }
   if (existing.role === 'admin' && role && role !== 'admin') {
     const otherAdmins = db.prepare(`SELECT COUNT(*) c FROM users WHERE role = 'admin' AND id != ?`).get(existing.id).c;
     if (otherAdmins === 0) return res.status(400).json({ error: 'at least one admin account must remain' });
@@ -71,12 +82,20 @@ router.patch('/:id', (req, res) => {
   const nextEmail = email !== undefined ? ((email || '').trim() || null) : existing.email;
   const nextRequiresApproval = requires_estimate_approval !== undefined ? (requires_estimate_approval ? 1 : 0) : existing.requires_estimate_approval;
   const nextCanApprove = can_approve_estimates !== undefined ? (can_approve_estimates ? 1 : 0) : existing.can_approve_estimates;
+  const nextCommissionPercent = (commission_percent !== undefined && commission_percent !== null && commission_percent !== '')
+    ? Number(commission_percent) : existing.commission_percent;
+  const nextCanSeeCommissions = can_see_commissions !== undefined ? (can_see_commissions ? 1 : 0) : existing.can_see_commissions;
   if (password && password.length < 6) return res.status(400).json({ error: 'password must be at least 6 characters' });
   db.prepare(`
     UPDATE users SET role = ?, active = ?, password_hash = ?, can_see_prices = ?, email = ?,
-      requires_estimate_approval = ?, can_approve_estimates = ?, updated_at = datetime('now')
+      requires_estimate_approval = ?, can_approve_estimates = ?, commission_percent = ?, can_see_commissions = ?,
+      updated_at = datetime('now')
     WHERE id = ?
-  `).run(nextRole, nextActive, nextHash, nextCanSeePrices, nextEmail, nextRequiresApproval, nextCanApprove, req.params.id);
+  `).run(
+    nextRole, nextActive, nextHash, nextCanSeePrices, nextEmail,
+    nextRequiresApproval, nextCanApprove, nextCommissionPercent, nextCanSeeCommissions,
+    req.params.id
+  );
   // Changing role resets that person's page permissions to the new role's defaults — their old
   // custom permissions were set for the old role and may not make sense for the new one. The
   // admin can re-customize any page for them afterward, same as any other login.
@@ -86,7 +105,7 @@ router.patch('/:id', (req, res) => {
   res.json(safeUser(db.prepare(`SELECT * FROM users WHERE id = ?`).get(req.params.id)));
 });
 
-// Which custom roles (permission templates) this login holds — replaces the full set at once.
+// Which custom roles ((permission templates) this login holds — replaces the full set at once.
 // Not available for admin logins, which always have full access regardless of any role.
 router.patch('/:id/roles', (req, res) => {
   const existing = db.prepare(`SELECT * FROM users WHERE id = ?`).get(req.params.id);
