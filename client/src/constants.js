@@ -65,8 +65,13 @@ export const HA_MATCH_TYPES = ['Exact match', 'Similar match', 'N/A'];
 // tool's Project Status field. Distinct from the construction-phase "stage" bar (Demo/Site
 // prep/Installation/Final walkthrough, see Schedule.jsx) — this is the project's overall
 // lifecycle, that's the day-by-day build-out progress within it.
-export const PROJECT_STATUSES = ['accepted', 'scheduled', 'in_progress', 'complete', 'on_hold', 'cancelled'];
+// 'pending_schedule' (Sept 2026) is the landing status for a Project created automatically the
+// moment a customer signs an estimate written against an Opportunity (see routes/public.js's
+// /estimates/:token/sign) — it exists, but nobody's put it on the calendar yet. The manual
+// "+ Create project" button on a won Opportunity (DealDetail.jsx) still defaults to 'accepted'.
+export const PROJECT_STATUSES = ['pending_schedule', 'accepted', 'scheduled', 'in_progress', 'complete', 'on_hold', 'cancelled'];
 export const PROJECT_STATUS_LABEL = {
+  pending_schedule: 'Pending Schedule',
   accepted: 'Project Accepted',
   scheduled: 'Project Scheduled',
   in_progress: 'Project In Progress',
