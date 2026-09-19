@@ -90,6 +90,12 @@ export default function InvoiceView() {
           </tbody>
         </table>
         <div className="totals-row"><span className="lbl">Subtotal</span><span className="amt">{money(invoice.subtotal)}</span></div>
+        {invoice.markup_amount > 0 && (
+          <div className="totals-row"><span className="lbl">Markup{invoice.markup_percent ? ` (${invoice.markup_percent}%)` : ''}</span><span className="amt">{money(invoice.markup_amount)}</span></div>
+        )}
+        {invoice.discount_amount > 0 && (
+          <div className="totals-row"><span className="lbl">Discount</span><span className="amt">-{money(invoice.discount_amount)}</span></div>
+        )}
         <div className="totals-row"><span className="lbl">Tax</span><span className="amt">{money(invoice.tax)}</span></div>
         <div className="totals-row"><span className="lbl">Total</span><span className="amt">{money(invoice.total)}</span></div>
         {invoice.amount_paid > 0 && (
