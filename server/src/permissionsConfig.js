@@ -45,6 +45,8 @@ const PAGES = {
   dashboard: 'Dashboard',
   leads: 'Leads',
   pipeline: 'Opportunities',
+  estimates: 'Estimates',
+  contracts: 'Contracts',
   companies: 'Companies',
   contacts: 'Contacts',
   jobs: 'Projects',
