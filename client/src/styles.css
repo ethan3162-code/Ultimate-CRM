@@ -726,3 +726,16 @@ table.list tbody tr.row-hot:hover td, table.list tbody tr.row-warm:hover td { ba
 .location-caption { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
 .fleet-map-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
 .fleet-map-legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+
+/* Custom "detail" report builder (ReportDetail.jsx, Sept 2026) — Salesforce-style column
+   checklist, ad-hoc filter rows, and a nested grouped/subtotaled table. */
+.report-columns-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 12px; }
+.report-columns-grid label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 400; }
+.report-columns-grid input { width: auto; }
+.report-filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+.report-filter-row:last-child { border-bottom: none; }
+.report-filter-row select, .report-filter-row input { min-width: 0; }
+.report-group-row td { background: var(--accent-soft); font-weight: 600; border-bottom: 1px solid var(--accent-soft-line); }
+.report-subgroup-row td { background: var(--line-soft); font-weight: 600; }
+.report-subtotal-row td { font-style: italic; color: var(--muted); border-bottom: 1px solid var(--line-soft); }
+.report-grandtotal-row td { font-weight: 700; border-top: 2px solid var(--ink); }

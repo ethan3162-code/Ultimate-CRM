@@ -72,6 +72,7 @@ export const api = {
   updateDeal: (id, data) => request(`/deals/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   jobs: () => request('/jobs'),
+  transactions: () => request('/transactions'),
   job: (id) => request(`/jobs/${id}`),
   createJob: (data) => request('/jobs', { method: 'POST', body: JSON.stringify(data) }),
   updateJob: (id, data) => request(`/jobs/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

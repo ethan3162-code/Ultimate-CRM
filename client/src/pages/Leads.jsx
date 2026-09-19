@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { money, timeAgo, mapLinks, splitWorkTypes, joinWorkTypes } from '../utils';
+import { money, shortDate, dateTime, accountName, mapLinks, splitWorkTypes, joinWorkTypes } from '../utils';
 import { usePermission } from '../auth';
 import {
   LEAD_SOURCES, LEAD_STATUSES, LEAD_TYPES, JOB_TIMEFRAMES, METHOD_OF_ENTRY,
@@ -207,20 +207,20 @@ export default function Leads() {
         <div className="table-wrap">
           <table className="list deal-table">
             <thead>
-              <tr><th>Lead</th><th>Contact / company</th><th>Phone</th><th>Address</th><th>Source</th><th>Status</th><th>Score</th><th>Owner</th><th>Value</th><th>Received</th><th></th></tr>
+              <tr>
+                <th>Name</th><th>Company</th><th>Lead Status</th><th>Created Date</th><th>Owner Alias</th>
+                <th>Project Type</th><th>Service Type</th><th>Phone</th><th>Follow-up</th>
+                <th>Address</th><th>Source</th><th>Score</th><th>Value</th><th></th>
+              </tr>
             </thead>
             <tbody>
               {leads.map((deal) => {
                 const links = deal.customer_address ? mapLinks(deal.customer_address) : null;
+                const name = deal.first_name ? `${deal.first_name} ${deal.last_name}` : deal.title;
                 return (
                   <tr key={deal.id} className={SCORE_ROW_CLASS[deal.label] || ''}>
-                    <td className="title-cell"><Link to={`/pipeline/${deal.id}`} className="link-strong">{deal.title}</Link></td>
-                    <td className="muted">{deal.company_name || (deal.first_name ? `${deal.first_name} ${deal.last_name}` : '—')}</td>
-                    <td className="muted">{deal.customer_phone || '—'}</td>
-                    <td className="muted">
-                      {links ? <a href={links.view} target="_blank" rel="noreferrer" className="map-link" title="View on Google Maps (satellite)">📍 {deal.customer_address}</a> : '—'}
-                    </td>
-                    <td className="muted">{deal.source || '—'}</td>
+                    <td className="title-cell"><Link to={`/pipeline/${deal.id}`} className="link-strong">{name}</Link></td>
+                    <td className="muted">{accountName(deal, deal.title)}</td>
                     <td>
                       <select
                         value={deal.lead_status || 'New'}
@@ -231,10 +231,18 @@ export default function Leads() {
                         {LEAD_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </td>
-                    <td>{deal.label && <span className={'score-text ' + deal.label.toLowerCase()}>{deal.label} · {deal.score}</span>}</td>
+                    <td className="muted">{dateTime(deal.created_at)}</td>
                     <td className="muted">{deal.owner_username || '—'}</td>
+                    <td className="muted">{deal.customer_type || '—'}</td>
+                    <td className="muted">{splitWorkTypes(deal.work_type).join(', ') || '—'}</td>
+                    <td className="muted">{deal.customer_phone || '—'}</td>
+                    <td className="muted">{shortDate(deal.followup_date)}</td>
+                    <td className="muted">
+                      {links ? <a href={links.view} target="_blank" rel="noreferrer" className="map-link" title="View on Google Maps (satellite)">📍 {deal.customer_address}</a> : '—'}
+                    </td>
+                    <td className="muted">{deal.source || '—'}</td>
+                    <td>{deal.label && <span className={'score-text ' + deal.label.toLowerCase()}>{deal.label} · {deal.score}</span>}</td>
                     <td className="mono">{money(deal.value)}</td>
-                    <td className="muted">{timeAgo(deal.created_at)}</td>
                     <td>
                       {canEdit && (
                         <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>

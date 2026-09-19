@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, mapLinks, splitWorkTypes, joinWorkTypes } from '../utils';
+import { money, shortDate, dateTime, isoDate, accountName, mapLinks, splitWorkTypes, joinWorkTypes } from '../utils';
 import { WORK_TYPES, CUSTOMER_TYPES } from '../constants';
 import { usePermission } from '../auth';
 
@@ -225,15 +225,28 @@ export default function Pipeline() {
         <div className="table-wrap">
           <table className="list deal-table">
             <thead>
-              <tr><th>Deal</th><th>Contact / company</th><th>Phone</th><th>Address</th><th>Stage</th><th>Value</th><th>Score</th><th>Owner</th><th>Expected close</th></tr>
+              <tr>
+                <th>Opportunity Name</th><th>Account Name</th><th>Stage</th><th>Created Date</th><th>Close Date</th>
+                <th>Owner</th><th>Project Type</th><th>Amount</th>
+                <th>Score</th><th>Phone</th><th>Address</th>
+              </tr>
             </thead>
             <tbody>
               {deals.map((deal) => {
                 const links = deal.customer_address ? mapLinks(deal.customer_address) : null;
+                const account = accountName(deal, deal.title);
+                const oppName = `Opportunity - ${account} - ${isoDate(deal.created_at)}`;
                 return (
                   <tr key={deal.id} className={SCORE_ROW_CLASS[deal.label] || ''}>
-                    <td className="title-cell"><Link to={`/pipeline/${deal.id}`} className="link-strong">{deal.title}</Link></td>
-                    <td className="muted">{deal.company_name || (deal.first_name ? `${deal.first_name} ${deal.last_name}` : '—')}</td>
+                    <td className="title-cell"><Link to={`/pipeline/${deal.id}`} className="link-strong">{oppName}</Link></td>
+                    <td className="muted">{account}</td>
+                    <td><span className={'status-text ' + (STAGE_TEXT[deal.stage] || 'muted')}>{STAGE_LABELS[deal.stage]}</span></td>
+                    <td className="muted">{dateTime(deal.created_at)}</td>
+                    <td className="muted">{shortDate(deal.expected_close)}</td>
+                    <td className="muted">{deal.owner_username || '—'}</td>
+                    <td className="muted">{deal.customer_type || '—'}</td>
+                    <td className="mono">{deal.value ? money(deal.value) : '—'}</td>
+                    <td>{deal.label && <span className={'score-text ' + deal.label.toLowerCase()}>{deal.label} · {deal.score}</span>}</td>
                     <td className="muted">{deal.customer_phone || '—'}</td>
                     <td className="muted">
                       {links ? (
@@ -242,15 +255,10 @@ export default function Pipeline() {
                         </a>
                       ) : '—'}
                     </td>
-                    <td><span className={'status-text ' + (STAGE_TEXT[deal.stage] || 'muted')}>{STAGE_LABELS[deal.stage]}</span></td>
-                    <td className="mono">{money(deal.value)}</td>
-                    <td>{deal.label && <span className={'score-text ' + deal.label.toLowerCase()}>{deal.label} · {deal.score}</span>}</td>
-                    <td className="muted">{deal.owner_username || '—'}</td>
-                    <td className="muted">{shortDate(deal.expected_close)}</td>
                   </tr>
                 );
               })}
-              {deals.length === 0 && <tr><td colSpan={9}><div className="empty">No deals yet.</div></td></tr>}
+              {deals.length === 0 && <tr><td colSpan={11}><div className="empty">No deals yet.</div></td></tr>}
             </tbody>
           </table>
         </div>

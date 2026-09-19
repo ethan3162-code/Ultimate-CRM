@@ -15,6 +15,7 @@ import CompanyDetail from './pages/CompanyDetail';
 import Contacts from './pages/Contacts';
 import ContactDetail from './pages/ContactDetail';
 import Jobs from './pages/Jobs';
+import Transactions from './pages/Transactions';
 import JobDetail from './pages/JobDetail';
 import Employees from './pages/Employees';
 import EmployeeDetail from './pages/EmployeeDetail';
@@ -30,6 +31,7 @@ import Calendar from './pages/Calendar';
 import Schedule from './pages/Schedule';
 import Materials from './pages/Materials';
 import Items from './pages/Items';
+import PriceBook from './pages/PriceBook';
 import Integrations from './pages/Integrations';
 import EstimateApproval from './pages/EstimateApproval';
 import InvoiceView from './pages/InvoiceView';
@@ -74,6 +76,7 @@ function AuthedApp() {
           <Route path="/conversations/:contactId" element={<Protected page="contacts"><Conversations /></Protected>} />
           <Route path="/jobs" element={<Protected page="jobs"><Jobs /></Protected>} />
           <Route path="/jobs/:id" element={<Protected page="jobs"><JobDetail /></Protected>} />
+          <Route path="/transactions" element={<Protected page="transactions"><Transactions /></Protected>} />
           <Route path="/employees" element={<Protected page="employees"><Employees /></Protected>} />
           <Route path="/employees/:id" element={<Protected page="employees"><EmployeeDetail /></Protected>} />
           <Route path="/subcontractors" element={<Protected page="subcontractors"><Subcontractors /></Protected>} />
@@ -88,6 +91,7 @@ function AuthedApp() {
           <Route path="/schedule" element={<Protected page="schedule"><Schedule /></Protected>} />
           <Route path="/materials" element={<Protected page="materials"><Materials /></Protected>} />
           <Route path="/items" element={<Protected page="items"><Items /></Protected>} />
+          <Route path="/price-book" element={<Protected page="price_book"><PriceBook /></Protected>} />
           <Route path="/integrations" element={<Protected page="integrations"><Integrations /></Protected>} />
           <Route path="/users" element={<Protected page="users"><Users /></Protected>} />
         </Route>

@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { shortDate } from '../utils';
+import { shortDate, dateTime, isoDate, money, accountName } from '../utils';
 import { usePermission } from '../auth';
 
 const STATUS_PILL = { accepted: '', scheduled: '', in_progress: 'amber', complete: 'green', on_hold: 'amber', cancelled: 'red' };
+const STATUS_LABEL = {
+  accepted: 'Project Accepted', scheduled: 'Project Scheduled', in_progress: 'Project in Progress',
+  complete: 'Project Complete', on_hold: 'Project On Hold', cancelled: 'Project Cancelled',
+};
 
 export default function Jobs() {
   const { canEdit } = usePermission('jobs');
@@ -38,7 +42,7 @@ export default function Jobs() {
     <>
       <div className="page-head">
         <div>
-          <h1>Projects &amp; billing</h1>
+          <h1>Projects</h1>
           <p className="sub">Every won opportunity becomes a project here — field jobs, estimates, invoices, and payments in one module.</p>
         </div>
         {canEdit && <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New job</button>}
@@ -65,16 +69,27 @@ export default function Jobs() {
       {!jobs ? <div className="loading">Loading…</div> : (
         <div className="table-wrap">
           <table className="list">
-            <thead><tr><th>Job</th><th>Customer</th><th>Status</th><th>Scheduled</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Project Name</th><th>Account Name</th><th>Project Status</th><th>Created Date</th>
+                <th>Contract Amount</th><th>Scheduled</th>
+              </tr>
+            </thead>
             <tbody>
-              {jobs.map((j) => (
-                <tr key={j.id}>
-                  <td><Link to={`/jobs/${j.id}`} className="link-strong">{j.title}</Link></td>
-                  <td className="muted">{j.company_name || (j.first_name ? `${j.first_name} ${j.last_name}` : '—')}</td>
-                  <td><span className={'pill ' + (STATUS_PILL[j.status] || '')}>{j.status.replace('_', ' ')}</span></td>
-                  <td className="muted">{shortDate(j.scheduled_date)}</td>
-                </tr>
-              ))}
+              {jobs.map((j) => {
+                const account = accountName(j, j.title);
+                const projName = `Project - ${account} - ${isoDate(j.created_at)}`;
+                return (
+                  <tr key={j.id}>
+                    <td><Link to={`/jobs/${j.id}`} className="link-strong">{projName}</Link></td>
+                    <td className="muted">{account}</td>
+                    <td><span className={'pill ' + (STATUS_PILL[j.status] || '')}>{STATUS_LABEL[j.status] || j.status.replace('_', ' ')}</span></td>
+                    <td className="muted">{dateTime(j.created_at)}</td>
+                    <td className="mono">{j.contract_amount ? money(j.contract_amount) : '—'}</td>
+                    <td className="muted">{shortDate(j.scheduled_date)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

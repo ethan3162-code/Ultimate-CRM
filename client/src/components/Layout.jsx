@@ -16,10 +16,17 @@ const NAV = [
     ],
   },
   {
+    // Sept 2026 — Projects (and Transactions right after it) moved in here, right after
+    // Opportunities, so the sidebar itself reads as the sales workflow the user described: Lead
+    // -> Opportunity -> Project -> Transaction. Companies/Contacts/Conversations are supporting
+    // customer records rather than funnel stages, so they stay listed after the four stages
+    // rather than between them.
     group: 'Sales',
     items: [
       { to: '/leads', label: 'Leads', page: 'leads' },
       { to: '/pipeline', label: 'Opportunities', page: 'pipeline' },
+      { to: '/jobs', label: 'Projects', page: 'jobs' },
+      { to: '/transactions', label: 'Transactions', page: 'transactions' },
       { to: '/companies', label: 'Companies', page: 'companies' },
       { to: '/contacts', label: 'Contacts', page: 'contacts' },
       // Customer texting (Sept 2026, Hatch-style) — gated on the same 'contacts' permission as
@@ -30,9 +37,9 @@ const NAV = [
   {
     group: 'Field ops',
     items: [
-      { to: '/jobs', label: 'Projects & billing', page: 'jobs' },
       { to: '/materials', label: 'Material calculator', page: 'materials' },
-      { to: '/items', label: 'Items & price book', page: 'items' },
+      { to: '/items', label: 'Price book', page: 'items' },
+      { to: '/price-book', label: 'Items', page: 'price_book' },
       { to: '/employees', label: 'Employees', page: 'employees' },
       { to: '/subcontractors', label: 'Subcontractors', page: 'subcontractors' },
       { to: '/vehicles', label: 'Vehicles', page: 'vehicles', end: true },
