@@ -36,6 +36,14 @@ app.use('/api/contacts', requireAuth, requirePage('contacts'), require('./routes
 // role can reach.
 app.use('/api/deals', requireAuth, requireAnyPage(['leads', 'pipeline']), require('./routes/deals'));
 app.use('/api/jobs', requireAuth, requirePage('jobs'), require('./routes/jobs'));
+app.use('/api/estimates', requireAuth, requirePage('estimates'), require('./routes/estimates'));
+// Contracts library (the Terms & Conditions/Agreement text attached to estimates/invoices) plus
+// the company signature/stamp image. Not gated by requirePage here — anyone creating an estimate
+// needs to at least READ the list to pick a contract, even without edit access to the Contracts
+// page itself (the common case: a salesperson can use contracts but not manage them). Editing
+// (create/update/delete/set-default) is checked per-route inside routes/contracts.js instead,
+// against the 'contracts' permission specifically.
+app.use('/api/contracts', requireAuth, require('./routes/contracts'));
 app.use('/api/transactions', requireAuth, requirePage('transactions'), require('./routes/transactions'));
 app.use('/api/dashboard', requireAuth, requirePage('dashboard'), require('./routes/dashboard'));
 app.use('/api/automations', requireAuth, requirePage('automations'), require('./routes/automations'));
