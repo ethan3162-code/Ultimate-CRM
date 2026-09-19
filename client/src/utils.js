@@ -10,6 +10,14 @@ export function money(n) {
   return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
 }
 
+// The same subtotal/tax/total math LineItemEditor uses internally, exposed so a payment-schedule
+// editor next to it (which needs the estimate's current total to show each row's $ amount) can
+// derive it from the same in-progress items/tax-rate state, live, before the estimate is saved.
+export function estimateTotal(items, taxRate) {
+  const subtotal = (items || []).reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.unit_price) || 0), 0);
+  return subtotal + subtotal * (Number(taxRate) || 0);
+}
+
 // A deal's work_type is stored as one TEXT column — a single value for a single-service project
 // (the common case, and every pre-existing deal), or several comma-separated values for a
 // project that needs more than one (e.g. "Asphalt paving, Pavers"). No schema change needed:
@@ -189,8 +197,6 @@ export function csvToCatalogItems(text) {
     .map((r) => ({
       name: (r[nameIdx] || '').trim(),
       description: descIdx !== -1 ? (r[descIdx] || '').trim() : '',
-      // Strips a leading "$" and thousands commas ("$1,250.00" -> 1250) — common in a
-      // spreadsheet-formatted price column — while leaving the minus sign and decimal point alone.
       unit_price: priceIdx !== -1 ? Number(String(r[priceIdx] || '').replace(/[^0-9.-]/g, '')) || 0 : 0,
       unit: unitIdx !== -1 ? (r[unitIdx] || '').trim() : '',
     }))
