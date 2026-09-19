@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
 import { money, shortDate } from '../utils';
@@ -168,27 +168,40 @@ export default function EstimateApproval() {
             </tr>
           </thead>
           <tbody>
-            {estimate.items.map((it) => (
-              <tr key={it.id}>
-                <td>{it.description}</td>
-                {estimate.show_qty !== false && <td className="num">{it.qty}</td>}
-                {estimate.show_rate !== false && <td className="num">{money(it.unit_price)}</td>}
-                {estimate.show_item_total !== false && <td className="num">{money(it.qty * it.unit_price)}</td>}
-              </tr>
-            ))}
+            {estimate.items.map((it) => {
+              const colCount = 1 + (estimate.show_qty !== false ? 1 : 0) + (estimate.show_rate !== false ? 1 : 0) + (estimate.show_item_total !== false ? 1 : 0);
+              return (
+                <Fragment key={it.id}>
+                  <tr>
+                    <td style={{ fontWeight: 600 }}>{it.description}</td>
+                    {estimate.show_qty !== false && <td className="num">{it.qty}</td>}
+                    {estimate.show_rate !== false && <td className="num">{money(it.unit_price)}</td>}
+                    {estimate.show_item_total !== false && <td className="num">{money(it.qty * it.unit_price)}</td>}
+                  </tr>
+                  {it.notes && it.notes.trim() && (
+                    <tr className="item-notes-row">
+                      <td colSpan={colCount} className="item-notes">{it.notes.trim()}</td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
         <div className="totals-row"><span className="lbl">Subtotal</span><span className="amt">{money(estimate.subtotal)}</span></div>
         <div className="totals-row"><span className="lbl">Tax</span><span className="amt">{money(estimate.tax)}</span></div>
         <div className="totals-row"><span className="lbl" style={{ fontWeight: 700 }}>Total</span><span className="amt" style={{ fontWeight: 700 }}>{money(estimate.total)}</span></div>
+        {showSchedule && (
+          <div className="totals-row"><span className="lbl" style={{ fontWeight: 700 }}>Deposit Due</span><span className="amt" style={{ fontWeight: 700 }}>{money(estimate.payment_schedule[0].amount)}</span></div>
+        )}
 
         {showSchedule && (
           <table className="schedule-table">
-            <thead><tr><th>Payment schedule</th><th className="num">Amount due</th></tr></thead>
+            <thead><tr><th>Payment Schedule</th><th className="num">Amount due</th></tr></thead>
             <tbody>
-              {estimate.payment_schedule.map((row) => (
-                <tr key={row.label}>
-                  <td>{row.label}<span className="note">{row.note}</span></td>
+              {estimate.payment_schedule.map((row, i) => (
+                <tr key={`${row.label}-${i}`}>
+                  <td>{row.label}{row.note && <span className="note">{row.note}</span>}</td>
                   <td className="num">{money(row.amount)}</td>
                 </tr>
               ))}
