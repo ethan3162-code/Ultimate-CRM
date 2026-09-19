@@ -45,6 +45,36 @@ router.post('/', (req, res) => {
   res.status(201).json(db.prepare(`SELECT * FROM catalog_items WHERE id = ?`).get(result.lastInsertRowid));
 });
 
+// Bulk import (Sept 2026) — for bringing in a price list exported from Joist, QuickBooks, or a
+// spreadsheet in one shot instead of typing each product in one at a time. The CSV parsing itself
+// happens client-side (see client/src/utils.js's csvToCatalogItems); this just takes the resulting
+// {name, description, unit, unit_price} rows and inserts them. Every row in one import is the same
+// kind (sales item vs. calculator material) — whichever the caller says via `material_key` — so
+// this only needs one permission check up front rather than one per row.
+router.post('/bulk', (req, res) => {
+  const { items, material_key } = req.body;
+  if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: 'at least one item is required' });
+  const perms = getPermissions(req.user);
+  const targetKey = itemPageKey({ material_key });
+  if (perms[targetKey] !== 'edit') {
+    return res.status(403).json({ error: `your account doesn't have edit access to ${targetKey === 'items' ? 'Price book' : 'Items'}` });
+  }
+  const insert = db.prepare(`INSERT INTO catalog_items (name, description, unit, unit_price, material_key) VALUES (?,?,?,?,?)`);
+  const insertMany = db.transaction((rows) => {
+    let inserted = 0;
+    for (const it of rows) {
+      const name = (it.name || '').trim();
+      if (!name) continue;
+      insert.run(name, it.description || null, it.unit || null, Number(it.unit_price) || 0, material_key || null);
+      inserted++;
+    }
+    return inserted;
+  });
+  const inserted = insertMany(items);
+  if (!inserted) return res.status(400).json({ error: 'none of the rows had a name — nothing was imported' });
+  res.status(201).json({ inserted, items: db.prepare(`SELECT * FROM catalog_items ORDER BY name`).all() });
+});
+
 router.patch('/:id', (req, res) => {
   const existing = db.prepare(`SELECT * FROM catalog_items WHERE id = ?`).get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'not found' });
