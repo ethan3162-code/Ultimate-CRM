@@ -828,3 +828,19 @@ table.list tbody tr.row-hot:hover td, table.list tbody tr.row-warm:hover td { ba
 .est-row-chevron.open { transform: rotate(90deg); }
 .est-detail-wrap { padding: 0 16px 16px; }
 .est-detail-wrap .card { border: none; box-shadow: none; padding: 0; background: none; }
+
+/* --- Instant filter bar (Sept 2026, FilterBar.jsx) — a row of scoped dropdowns above a list/
+   table/board, reused across Leads, Opportunities, and similar record pages. Each dropdown is
+   styled like a compact pill-select rather than a plain form field, so a whole row of them reads
+   as "filters" at a glance instead of "a form"; one gets an accent border once it's actually
+   narrowing the view, and a "Clear filters" button only appears once something is set. */
+.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }
+.filter-bar-field { display: flex; }
+.filter-select {
+  font-size: 12.5px; font-weight: 600; padding: 6px 26px 6px 10px; border-radius: 20px;
+  background: var(--paper-raised) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none'/%3E%3C/svg%3E") no-repeat right 10px center;
+  color: var(--ink-soft); border: 1px solid var(--line); appearance: none; -webkit-appearance: none;
+  cursor: pointer; max-width: 220px;
+}
+.filter-select:focus { border-color: var(--accent); outline: none; }
+.filter-select.active { background-color: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent-soft-line); }
