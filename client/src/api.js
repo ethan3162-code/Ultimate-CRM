@@ -157,6 +157,7 @@ export const api = {
 
   insights: () => request('/insights'),
   reports: () => request('/reports'),
+  commissionPayouts: (period, anchor) => request(`/commissions?period=${period}&anchor=${anchor}`),
   aiDraft: (kind, id) => request('/ai/draft', { method: 'POST', body: JSON.stringify({ kind, id }) }),
 
   appointments: () => request('/appointments'),
