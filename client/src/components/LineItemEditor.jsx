@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react';
-import { money } from '../utils';
+import { money, estimateBreakdown } from '../utils';
 
 /** A searchable "Items" picker modal (Joist-style) — replaces the old plain <select> dropdown.
     `catalog` is already filtered by the caller to sales items only (no material_key — see
@@ -45,7 +45,7 @@ function ItemPickerModal({ catalog, onPick, onClose }) {
   );
 }
 
-export default function LineItemEditor({ items, setItems, taxRate, setTaxRate, catalog }) {
+export default function LineItemEditor({ items, setItems, taxRate, setTaxRate, catalog, markupPercent, discountType, discountValue }) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   function updateItem(i, field, value) {
@@ -68,8 +68,11 @@ export default function LineItemEditor({ items, setItems, taxRate, setTaxRate, c
     setPickerOpen(false);
   }
 
-  const subtotal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.unit_price) || 0), 0);
-  const tax = subtotal * (Number(taxRate) || 0);
+  // Markup/discount are set in PricingAdjustments (a separate component next to the payment
+  // schedule, since like it they apply to the estimate as a whole rather than any one line) —
+  // read-only here, just folded into the same totals breakdown so there's only ever one "Total"
+  // on screen instead of two that could disagree.
+  const { subtotal, markupAmount, discountAmount, tax, total } = estimateBreakdown(items, taxRate, markupPercent, discountType, discountValue);
 
   return (
     <div>
@@ -113,8 +116,14 @@ export default function LineItemEditor({ items, setItems, taxRate, setTaxRate, c
         />
       </div>
       <div className="totals-row"><span className="lbl">Subtotal</span><span className="amt">{money(subtotal)}</span></div>
+      {markupAmount > 0 && (
+        <div className="totals-row"><span className="lbl">Markup{markupPercent ? ` (${markupPercent}%)` : ''}</span><span className="amt">{money(markupAmount)}</span></div>
+      )}
+      {discountAmount > 0 && (
+        <div className="totals-row"><span className="lbl">Discount</span><span className="amt">-{money(discountAmount)}</span></div>
+      )}
       <div className="totals-row"><span className="lbl">Tax</span><span className="amt">{money(tax)}</span></div>
-      <div className="totals-row"><span className="lbl">Total</span><span className="amt">{money(subtotal + tax)}</span></div>
+      <div className="totals-row"><span className="lbl">Total</span><span className="amt">{money(total)}</span></div>
 
       {pickerOpen && (
         <ItemPickerModal catalog={catalog} onPick={pickFromCatalog} onClose={() => setPickerOpen(false)} />
