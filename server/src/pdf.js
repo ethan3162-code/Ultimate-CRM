@@ -117,13 +117,24 @@ function drawItemsTable(doc, items, doc_) {
   for (const it of items) {
     const rowY = doc.y;
     x = doc.page.margins.left;
-    doc.font('Helvetica').fontSize(9.5).fillColor(INK);
+    doc.font('Helvetica-Bold').fontSize(9.5).fillColor(INK);
     doc.text(it.description, x, rowY, { width: cols.desc }); const descBottom = doc.y;
     x += cols.desc;
+    doc.font('Helvetica').fontSize(9.5).fillColor(INK);
     if (showQty) { doc.text(String(it.qty), x, rowY, { width: cols.qty, align: 'right' }); x += cols.qty; }
     if (showRate) { doc.text(money(it.unit_price), x, rowY, { width: cols.price, align: 'right' }); x += cols.price; }
     if (showAmt) doc.text(money(it.qty * it.unit_price), x, rowY, { width: cols.amt, align: 'right' });
-    doc.y = Math.max(descBottom, doc.y) + 4;
+    doc.y = Math.max(descBottom, doc.y);
+    // The item's own longer scope-of-work text (see db.js's estimate_items.notes) — a separate
+    // block under the name/price row, not squeezed into the same line, so a multi-paragraph
+    // writeup (blank-line-separated, from a Joist-style catalog import) reads the way it was
+    // written. pdfkit's .text() already renders embedded \n / \n\n as line breaks / paragraph
+    // gaps, so the stored text doesn't need any reformatting here.
+    if (it.notes && it.notes.trim()) {
+      doc.moveDown(0.15);
+      doc.font('Helvetica').fontSize(8.5).fillColor(MUTED).text(it.notes.trim(), doc.page.margins.left, doc.y, { width: fullWidth });
+    }
+    doc.y += 4;
     if (doc.y > doc.page.height - doc.page.margins.bottom - 160) doc.addPage();
   }
 }
@@ -360,12 +371,16 @@ function buildEstimatePdf({ estimate, party }) {
     // --- Payment schedule (only worth a table when there's more than just "balance on completion") ---
     const schedule = getEstimatePaymentSchedule(estimate);
     if (schedule.length > 1) {
+      // A bold summary line right under the total — the amount due right now (the schedule's
+      // first row: a straight deposit, or a custom schedule's first milestone), before the full
+      // itemized breakdown below.
+      totalsRow('Deposit Due', schedule[0].amount, { bold: true });
       doc.moveDown(0.6);
-      doc.font('Helvetica-Bold').fontSize(10).fillColor(INK).text('Payment schedule', doc.page.margins.left);
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(INK).text('Payment Schedule', doc.page.margins.left);
       doc.moveDown(0.3);
       for (const s of schedule) {
         doc.font('Helvetica').fontSize(9).fillColor(MUTED)
-          .text(`${s.label} — ${s.note}`, doc.page.margins.left, doc.y, { continued: true, width: fullWidth - 90 })
+          .text(s.note ? `${s.label} — ${s.note}` : s.label, doc.page.margins.left, doc.y, { continued: true, width: fullWidth - 90 })
           .text(money(s.amount), { align: 'right' });
         doc.moveDown(0.25);
       }
