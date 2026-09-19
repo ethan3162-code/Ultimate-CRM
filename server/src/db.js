@@ -617,6 +617,14 @@ ensureColumn('jobs', 'labor_paid', 'labor_paid REAL NOT NULL DEFAULT 0');
 ensureColumn('jobs', 'updated_at', 'updated_at TEXT');
 db.prepare(`UPDATE jobs SET updated_at = created_at WHERE updated_at IS NULL`).run();
 ensureColumn('job_expenses', 'billable', 'billable INTEGER NOT NULL DEFAULT 1');
+// A line item's own longer scope-of-work text (Sept 2026) — separate from `description`, which
+// stays the short line title/name. Populated automatically when a line is added from the Items
+// catalog (see LineItemEditor.jsx's pickFromCatalog, which carries the catalog item's own
+// description here rather than squashing it into the same field as the name) so a multi-
+// paragraph writeup renders as its own block under the line on the estimate/invoice/PDF instead
+// of disappearing. Nullable and blank by default — a manually-typed line just has no notes.
+ensureColumn('estimate_items', 'notes', 'notes TEXT');
+ensureColumn('invoice_items', 'notes', 'notes TEXT');
 ensureColumn('catalog_items', 'name', "name TEXT NOT NULL DEFAULT ''");
 ensureColumn('catalog_items', 'brand', 'brand TEXT');
 ensureColumn('catalog_items', 'sf_per_pallet', 'sf_per_pallet REAL');
