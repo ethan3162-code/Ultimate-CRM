@@ -4,11 +4,11 @@ const db = require('../db');
 const {
   getJobFull, getEstimateFull, getInvoiceFull, logActivity, createInvoiceFromEstimate,
   STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, computeProgress, computeEndDate, getJobMilestones,
-  redactJobMoney, redactEstimateMoney, redactInvoiceMoney, resolveEstimateParty, readDisplayFlags,
+  redactJobMoney, redactJobCommission, redactEstimateMoney, redactInvoiceMoney, resolveEstimateParty, readDisplayFlags,
   getEstimateScheduleRows, saveEstimateScheduleRows,
 } = require('../helpers');
 const { fireTrigger } = require('../automationEngine');
-const { canSeePrices, checkSectionEdit, getPermissions, canApproveEstimates } = require('../auth');
+const { canSeePrices, canSeeJobCommission, checkSectionEdit, getPermissions, canApproveEstimates } = require('../auth');
 const mailer = require('../mailer');
 const sms = require('../sms');
 const notify = require('../notify');
@@ -20,7 +20,9 @@ function appBaseUrl(req) {
 }
 
 function sendJob(req, res, job, status) {
-  res.status(status || 200).json(canSeePrices(req.user) ? job : redactJobMoney(job));
+  const priced = canSeePrices(req.user) ? job : redactJobMoney(job);
+  const withCommission = canSeeJobCommission(req.user, job) ? priced : redactJobCommission(priced);
+  res.status(status || 200).json(withCommission);
 }
 function sendEstimate(req, res, estimate, status) {
   res.status(status || 200).json(canSeePrices(req.user) ? estimate : redactEstimateMoney(estimate));
@@ -114,7 +116,8 @@ router.get('/:id', (req, res) => {
   const job = getJobFull(req.params.id);
   if (!job) return res.status(404).json({ error: 'not found' });
   const activities = db.prepare(`SELECT * FROM activities WHERE related_type = 'job' AND related_id = ? ORDER BY created_at DESC`).all(req.params.id);
-  const full = canSeePrices(req.user) ? job : redactJobMoney(job);
+  const priced = canSeePrices(req.user) ? job : redactJobMoney(job);
+  const full = canSeeJobCommission(req.user, job) ? priced : redactJobCommission(priced);
   res.json({ ...full, activities });
 });
 
@@ -137,6 +140,7 @@ router.patch('/:id', (req, res) => {
   updates.contract_amount = req.body.contract_amount !== undefined ? (Number(req.body.contract_amount) || 0) : existing.contract_amount;
   updates.capital_improvement = req.body.capital_improvement !== undefined ? (req.body.capital_improvement ? 1 : 0) : existing.capital_improvement;
   updates.owner_user_id = req.body.owner_user_id !== undefined ? (req.body.owner_user_id || null) : existing.owner_user_id;
+  updates.salesperson_user_id = req.body.salesperson_user_id !== undefined ? (req.body.salesperson_user_id || null) : existing.salesperson_user_id;
 
   db.prepare(`
     UPDATE jobs SET
@@ -144,6 +148,7 @@ router.patch('/:id', (req, res) => {
       demo_days=?, site_prep_days=?, installation_days=?, final_walkthrough_days=?,
       labor_crew=?, desired_start_date=?, unqualified_reason=?, job_notes=?, insurance_requests=?, request_review=?,
       contract_amount=?, change_order_amount=?, sales_tax_amount=?, capital_improvement=?, labor_paid=?, owner_user_id=?,
+      salesperson_user_id=?,
       updated_at=datetime('now')
     WHERE id=?
   `).run(
@@ -151,6 +156,7 @@ router.patch('/:id', (req, res) => {
     updates.progress_percent, updates.stage, days.demo_days, days.site_prep_days, days.installation_days, days.final_walkthrough_days,
     updates.labor_crew, updates.desired_start_date, updates.unqualified_reason, updates.job_notes, updates.insurance_requests, updates.request_review,
     updates.contract_amount, updates.change_order_amount, updates.sales_tax_amount, updates.capital_improvement, updates.labor_paid, updates.owner_user_id,
+    updates.salesperson_user_id,
     req.params.id
   );
   // Re-notify the project's owner if the schedule itself (or who owns it) changed — a billing
