@@ -116,3 +116,83 @@ export function mapLinksForCoords(lat, lng) {
   if (lat === null || lat === undefined || lng === null || lng === undefined) return null;
   return { view: `https://www.google.com/maps?q=${lat},${lng}&t=k` };
 }
+
+// Minimal RFC4180-ish CSV parser (Sept 2026) — handles quoted fields (escaped "" and embedded
+// commas/newlines) and both \n and \r\n line endings. Good enough for a price-list export from
+// Joist, QuickBooks, or a spreadsheet's "Save as CSV" — not a full CSV-spec implementation, but
+// this app has no server round-trip for a file this small, so parsing happens right in the
+// browser. Returns an array of row arrays (strings); row[0] is assumed to be the header by callers.
+export function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  const pushField = () => { row.push(field); field = ''; };
+  const pushRow = () => { pushField(); rows.push(row); row = []; };
+  const s = String(text || '').replace(/^﻿/, ''); // strip a UTF-8 BOM (Excel loves adding these)
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (s[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      pushField();
+    } else if (c === '\n') {
+      pushRow();
+    } else if (c === '\r') {
+      // swallow — a following \n (if any) is what actually triggers the row push
+    } else {
+      field += c;
+    }
+  }
+  if (field.length || row.length) pushRow();
+  // Drop wholly-blank trailing lines (a trailing newline in the file otherwise becomes an
+  // empty row of one blank field).
+  return rows.filter((r) => r.length > 1 || (r[0] || '').trim() !== '');
+}
+
+// Column names a price-list export might use for each field, checked case-insensitively against
+// the CSV's header row — flexible enough to take Joist's own "Items" export, a QuickBooks
+// products/services export, or a hand-built spreadsheet without asking the user to rename columns
+// first.
+const CSV_NAME_COLS = ['name', 'item name', 'product name', 'item', 'product', 'title'];
+const CSV_DESC_COLS = ['description', 'desc', 'notes', 'details'];
+const CSV_PRICE_COLS = ['unit cost', 'unit price', 'price', 'cost', 'rate', 'sales price', 'unit_cost', 'unit_price'];
+const CSV_UNIT_COLS = ['unit', 'uom', 'unit of measure', 'units'];
+
+function findCsvColumn(header, candidates) {
+  const lower = header.map((h) => (h || '').trim().toLowerCase());
+  for (const name of candidates) {
+    const idx = lower.indexOf(name);
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
+
+// Turns raw CSV text into catalog-item-shaped objects ({name, description, unit, unit_price}),
+// or `null` if the header row doesn't have anything recognizable as a name/product column at all
+// (the caller then tells the person to check the file rather than silently importing garbage).
+export function csvToCatalogItems(text) {
+  const rows = parseCsv(text);
+  if (!rows.length) return [];
+  const [header, ...body] = rows;
+  const nameIdx = findCsvColumn(header, CSV_NAME_COLS);
+  if (nameIdx === -1) return null;
+  const descIdx = findCsvColumn(header, CSV_DESC_COLS);
+  const priceIdx = findCsvColumn(header, CSV_PRICE_COLS);
+  const unitIdx = findCsvColumn(header, CSV_UNIT_COLS);
+  return body
+    .map((r) => ({
+      name: (r[nameIdx] || '').trim(),
+      description: descIdx !== -1 ? (r[descIdx] || '').trim() : '',
+      // Strips a leading "$" and thousands commas ("$1,250.00" -> 1250) — common in a
+      // spreadsheet-formatted price column — while leaving the minus sign and decimal point alone.
+      unit_price: priceIdx !== -1 ? Number(String(r[priceIdx] || '').replace(/[^0-9.-]/g, '')) || 0 : 0,
+      unit: unitIdx !== -1 ? (r[unitIdx] || '').trim() : '',
+    }))
+    .filter((it) => it.name);
+}
