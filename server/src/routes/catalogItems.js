@@ -41,7 +41,9 @@ router.post('/', (req, res) => {
     return res.status(403).json({ error: `your account doesn't have edit access to ${targetKey === 'items' ? 'Price book' : 'Items'}` });
   }
   const result = db.prepare(`INSERT INTO catalog_items (name, description, unit, unit_price, material_key, brand, sf_per_pallet) VALUES (?,?,?,?,?,?,?)`)
-    .run(name.trim(), description || null, unit || null, Number(unit_price) || 0, material_key || null, brand || null, sf_per_pallet === '' || sf_per_pallet == null ? null : Number(sf_per_pallet));
+    // description is stored as '' rather than null when blank — the live table predates this
+    // route and still enforces NOT NULL on that column, so null here throws a constraint error.
+    .run(name.trim(), description || '', unit || null, Number(unit_price) || 0, material_key || null, brand || null, sf_per_pallet === '' || sf_per_pallet == null ? null : Number(sf_per_pallet));
   res.status(201).json(db.prepare(`SELECT * FROM catalog_items WHERE id = ?`).get(result.lastInsertRowid));
 });
 
@@ -65,12 +67,20 @@ router.post('/bulk', (req, res) => {
     for (const it of rows) {
       const name = (it.name || '').trim();
       if (!name) continue;
-      insert.run(name, it.description || null, it.unit || null, Number(it.unit_price) || 0, material_key || null);
+      // '' rather than null when blank — a Joist/QuickBooks export routinely has rows with an
+      // empty description/notes column, and the live table enforces NOT NULL on it (predates
+      // this route), so a null here was rolling back the *entire* batch with a raw 500.
+      insert.run(name, it.description || '', it.unit || null, Number(it.unit_price) || 0, material_key || null);
       inserted++;
     }
     return inserted;
   });
-  const inserted = insertMany(items);
+  let inserted;
+  try {
+    inserted = insertMany(items);
+  } catch (err) {
+    return res.status(500).json({ error: `import failed: ${err.message}` });
+  }
   if (!inserted) return res.status(400).json({ error: 'none of the rows had a name — nothing was imported' });
   res.status(201).json({ inserted, items: db.prepare(`SELECT * FROM catalog_items ORDER BY name`).all() });
 });
@@ -90,7 +100,7 @@ router.patch('/:id', (req, res) => {
   }
   const sfPerPallet = updates.sf_per_pallet === '' || updates.sf_per_pallet == null ? null : Number(updates.sf_per_pallet);
   db.prepare(`UPDATE catalog_items SET name=?, description=?, unit=?, unit_price=?, material_key=?, brand=?, sf_per_pallet=?, updated_at=datetime('now') WHERE id=?`)
-    .run(updates.name, updates.description || null, updates.unit || null, Number(updates.unit_price) || 0, updates.material_key || null, updates.brand || null, sfPerPallet, req.params.id);
+    .run(updates.name, updates.description || '', updates.unit || null, Number(updates.unit_price) || 0, updates.material_key || null, updates.brand || null, sfPerPallet, req.params.id);
   res.json(db.prepare(`SELECT * FROM catalog_items WHERE id = ?`).get(req.params.id));
 });
 
