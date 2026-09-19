@@ -2,14 +2,21 @@ const crypto = require('crypto');
 const express = require('express');
 const db = require('../db');
 const {
-  getJobFull, getEstimateFull, getInvoiceFull, logActivity,
+  getJobFull, getEstimateFull, getInvoiceFull, logActivity, createInvoiceFromEstimate,
   STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, computeProgress, computeEndDate, getJobMilestones,
-  redactJobMoney, redactEstimateMoney, redactInvoiceMoney,
+  redactJobMoney, redactEstimateMoney, redactInvoiceMoney, resolveEstimateParty, readDisplayFlags,
 } = require('../helpers');
 const { fireTrigger } = require('../automationEngine');
 const { canSeePrices, checkSectionEdit, getPermissions, canApproveEstimates } = require('../auth');
 const mailer = require('../mailer');
+const sms = require('../sms');
 const notify = require('../notify');
+const { getCompanyProfile } = require('../companyProfile');
+const { buildInvoicePdf, buildEstimatePdf } = require('../pdf');
+
+function appBaseUrl(req) {
+  return process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`;
+}
 
 function sendJob(req, res, job, status) {
   res.status(status || 200).json(canSeePrices(req.user) ? job : redactJobMoney(job));
@@ -181,12 +188,15 @@ router.patch('/:id', (req, res) => {
 router.post('/:id/estimates', (req, res) => {
   const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(req.params.id);
   if (!job) return res.status(404).json({ error: 'job not found' });
-  const { number, tax_rate, items, deposit_percent } = req.body;
+  const { number, tax_rate, items, deposit_percent, contract_id } = req.body;
   if (!items || !items.length) return res.status(400).json({ error: 'at least one line item is required' });
   const count = db.prepare(`SELECT COUNT(*) c FROM estimates`).get().c;
   const signToken = crypto.randomBytes(12).toString('hex');
-  const result = db.prepare(`INSERT INTO estimates (job_id, number, status, tax_rate, deposit_percent, sign_token, created_by_user_id) VALUES (?,?,?,?,?,?,?)`)
-    .run(job.id, number || `EST-${1000 + count + 1}`, 'draft', tax_rate || 0, deposit_percent || 0, signToken, req.user ? req.user.id : null);
+  const flags = readDisplayFlags(req.body);
+  const result = db.prepare(`
+    INSERT INTO estimates (job_id, number, status, tax_rate, deposit_percent, sign_token, created_by_user_id, show_rate, show_qty, show_item_total, contract_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+  `).run(job.id, number || `EST-${1000 + count + 1}`, 'draft', tax_rate || 0, deposit_percent || 0, signToken, req.user ? req.user.id : null, flags.show_rate, flags.show_qty, flags.show_item_total, contract_id || null);
   const estimateId = result.lastInsertRowid;
   for (const it of items) {
     db.prepare(`INSERT INTO estimate_items (estimate_id, description, qty, unit_price) VALUES (?,?,?,?)`)
@@ -199,31 +209,89 @@ router.post('/:id/estimates', (req, res) => {
 router.patch('/estimates/:estimateId', (req, res) => {
   const existing = db.prepare(`SELECT * FROM estimates WHERE id = ?`).get(req.params.estimateId);
   if (!existing) return res.status(404).json({ error: 'not found' });
-  const { status, tax_rate } = req.body;
-  db.prepare(`UPDATE estimates SET status = ?, tax_rate = ? WHERE id = ?`)
-    .run(status ?? existing.status, tax_rate ?? existing.tax_rate, req.params.estimateId);
+  // Once the customer has signed, this is an executed contract — nothing about it (price, tax,
+  // display options, which contract's terms it carries) can change any more. Any adjustment to
+  // scope or price after that point goes through a change order on the invoice instead (see
+  // routes/jobs.js's /invoices/:invoiceId/change-orders), which keeps a clear record of exactly
+  // what was added after the original signed agreement rather than silently editing it.
+  if (existing.signed_at) return res.status(400).json({ error: "this estimate has been signed and can't be edited — use a change order on the invoice instead" });
+  const { status, tax_rate, show_rate, show_qty, show_item_total, contract_id } = req.body;
+  db.prepare(`UPDATE estimates SET status = ?, tax_rate = ?, show_rate = ?, show_qty = ?, show_item_total = ?, contract_id = ? WHERE id = ?`)
+    .run(
+      status ?? existing.status, tax_rate ?? existing.tax_rate,
+      show_rate === undefined ? existing.show_rate : (show_rate ? 1 : 0),
+      show_qty === undefined ? existing.show_qty : (show_qty ? 1 : 0),
+      show_item_total === undefined ? existing.show_item_total : (show_item_total ? 1 : 0),
+      contract_id === undefined ? existing.contract_id : (contract_id || null),
+      req.params.estimateId
+    );
   if (status && status !== existing.status) {
     logActivity('job', existing.job_id, 'estimate', `Estimate ${existing.number} marked ${status}.`);
   }
   sendEstimate(req, res, getEstimateFull(req.params.estimateId));
 });
 
+// Duplicate — a fresh draft copy of this estimate's line items/tax/deposit/display settings, with
+// its own new number and sign token (never the signed/approval state, which is specific to the
+// original). Same anchor (job or deal) as the one it's copied from.
+router.post('/estimates/:estimateId/duplicate', (req, res) => {
+  const existing = db.prepare(`SELECT * FROM estimates WHERE id = ?`).get(req.params.estimateId);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  const items = db.prepare(`SELECT * FROM estimate_items WHERE estimate_id = ? ORDER BY id`).all(existing.id);
+  const count = db.prepare(`SELECT COUNT(*) c FROM estimates`).get().c;
+  const signToken = crypto.randomBytes(12).toString('hex');
+  const result = db.prepare(`
+    INSERT INTO estimates (job_id, deal_id, number, status, tax_rate, deposit_percent, sign_token, created_by_user_id, show_rate, show_qty, show_item_total, contract_id)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    existing.job_id, existing.deal_id, `EST-${1000 + count + 1}`, 'draft', existing.tax_rate, existing.deposit_percent,
+    signToken, req.user ? req.user.id : null, existing.show_rate, existing.show_qty, existing.show_item_total, existing.contract_id
+  );
+  const newId = result.lastInsertRowid;
+  for (const it of items) {
+    db.prepare(`INSERT INTO estimate_items (estimate_id, description, qty, unit_price) VALUES (?,?,?,?)`)
+      .run(newId, it.description, it.qty, it.unit_price);
+  }
+  logActivity(existing.job_id ? 'job' : 'deal', existing.job_id || existing.deal_id, 'estimate', `Estimate ${existing.number} duplicated as a new draft.`);
+  sendEstimate(req, res, getEstimateFull(newId), 201);
+});
+
+// Delete — only while still an unsent, unsigned draft with no invoice generated from it yet, so
+// this can't be used to quietly erase a document a customer has already seen or acted on.
+router.delete('/estimates/:estimateId', (req, res) => {
+  const existing = db.prepare(`SELECT * FROM estimates WHERE id = ?`).get(req.params.estimateId);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  if (existing.signed_at) return res.status(400).json({ error: 'this estimate has already been signed and can\'t be deleted' });
+  const linkedInvoice = db.prepare(`SELECT 1 FROM invoices WHERE estimate_id = ? LIMIT 1`).get(existing.id);
+  if (linkedInvoice) return res.status(400).json({ error: 'an invoice has already been generated from this estimate' });
+  db.prepare(`DELETE FROM estimates WHERE id = ?`).run(existing.id);
+  logActivity(existing.job_id ? 'job' : 'deal', existing.job_id || existing.deal_id, 'estimate', `Estimate ${existing.number} deleted.`);
+  res.status(204).end();
+});
+
+// Download the estimate as a PDF — same document the customer-facing /approve/:token page shows
+// (header + logo, Prepared For, line items honoring the Display Options toggles, payment
+// schedule, Terms & Conditions, signature status), whether it's still against an Opportunity or
+// already has a Project.
+router.get('/estimates/:estimateId/pdf', async (req, res) => {
+  const estimate = getEstimateFull(req.params.estimateId);
+  if (!estimate) return res.status(404).json({ error: 'not found' });
+  const party = resolveEstimateParty(estimate);
+  try {
+    const buffer = await buildEstimatePdf({ estimate, party });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${estimate.number}.pdf"`);
+    res.send(buffer);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/estimates/:estimateId/convert', (req, res) => {
   const estimate = getEstimateFull(req.params.estimateId);
   if (!estimate) return res.status(404).json({ error: 'not found' });
-  const count = db.prepare(`SELECT COUNT(*) c FROM invoices`).get().c;
-  const number = `INV-${2000 + count + 1}`;
-  const dueDate = req.body.due_date || null;
-  const publicToken = crypto.randomBytes(12).toString('hex');
-  const result = db.prepare(`INSERT INTO invoices (job_id, estimate_id, number, status, tax_rate, due_date, public_token) VALUES (?,?,?,?,?,?,?)`)
-    .run(estimate.job_id, estimate.id, number, 'sent', estimate.tax_rate, dueDate, publicToken);
-  const invoiceId = result.lastInsertRowid;
-  for (const it of estimate.items) {
-    db.prepare(`INSERT INTO invoice_items (invoice_id, description, qty, unit_price) VALUES (?,?,?,?)`)
-      .run(invoiceId, it.description, it.qty, it.unit_price);
-  }
-  db.prepare(`UPDATE estimates SET status = 'approved' WHERE id = ?`).run(estimate.id);
-  logActivity('job', estimate.job_id, 'invoice', `Invoice ${number} generated from estimate ${estimate.number}.`);
+  if (!estimate.job_id) return res.status(400).json({ error: "this estimate doesn't have a project yet" });
+  const invoiceId = createInvoiceFromEstimate(estimate, estimate.job_id, { dueDate: req.body.due_date });
   sendInvoice(req, res, getInvoiceFull(invoiceId), 201);
 });
 
@@ -259,23 +327,30 @@ router.post('/estimates/:estimateId/deposit', (req, res) => {
 router.post('/estimates/:estimateId/request-approval', (req, res) => {
   const existing = db.prepare(`SELECT * FROM estimates WHERE id = ?`).get(req.params.estimateId);
   if (!existing) return res.status(404).json({ error: 'not found' });
+  if (existing.signed_at) return res.status(400).json({ error: 'this estimate has already been signed' });
   if (existing.approval_status === 'approved') return res.status(400).json({ error: 'this estimate is already approved' });
   db.prepare(`
     UPDATE estimates SET approval_status = 'pending', approval_requested_at = datetime('now'),
       rejection_reason = NULL, approved_by_user_id = NULL, approved_at = NULL
     WHERE id = ?
   `).run(existing.id);
-  logActivity('job', existing.job_id, 'estimate', `Estimate ${existing.number} sent for approval.`);
+  // Log against whichever side this estimate is anchored to right now — job once it exists,
+  // otherwise the opportunity it was written against (see estimates.js's own logActivity call
+  // for the same job_id-or-deal_id pattern). A deal-anchored estimate has a null job_id, and
+  // activities.related_id is NOT NULL, so this used to throw for exactly the estimates this
+  // approval workflow is often used for (drafted straight off an Opportunity, before a Project
+  // exists).
+  logActivity(existing.job_id ? 'job' : 'deal', existing.job_id || existing.deal_id, 'estimate', `Estimate ${existing.number} sent for approval.`);
 
   // Best-effort email to whoever can approve — never blocks the response, and silently does
   // nothing for anyone without a notification email on file or if Gmail isn't connected yet.
-  const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(existing.job_id);
+  const party = resolveEstimateParty(existing);
   const approvers = db.prepare(`SELECT * FROM users WHERE active = 1 AND (role = 'admin' OR can_approve_estimates = 1) AND email IS NOT NULL AND email != ''`).all();
   for (const approver of approvers) {
     mailer.sendEmail({
       to: approver.email,
       subject: `Estimate ${existing.number} needs your approval`,
-      text: `${req.user.username} asked for approval to send estimate ${existing.number}${job ? ` for "${job.title}"` : ''} to the customer.\n\nReview it in Ultimate CRM: Dashboard → Pending estimate approvals.`,
+      text: `${req.user.username} asked for approval to send estimate ${existing.number}${party.title ? ` for "${party.title}"` : ''} to the customer.\n\nReview it in Ultimate CRM: Dashboard → Pending estimate approvals.`,
     }).catch(() => {});
   }
   sendEstimate(req, res, getEstimateFull(existing.id));
@@ -288,7 +363,7 @@ router.post('/estimates/:estimateId/approve', (req, res) => {
   if (existing.approval_status !== 'pending') return res.status(400).json({ error: "this estimate isn't waiting on approval" });
   db.prepare(`UPDATE estimates SET approval_status = 'approved', approved_by_user_id = ?, approved_at = datetime('now'), rejection_reason = NULL WHERE id = ?`)
     .run(req.user.id, existing.id);
-  logActivity('job', existing.job_id, 'estimate', `Estimate ${existing.number} approved by ${req.user.username} — ready to send.`);
+  logActivity(existing.job_id ? 'job' : 'deal', existing.job_id || existing.deal_id, 'estimate', `Estimate ${existing.number} approved by ${req.user.username} — ready to send.`);
   sendEstimate(req, res, getEstimateFull(existing.id));
 });
 
@@ -300,8 +375,49 @@ router.post('/estimates/:estimateId/reject', (req, res) => {
   const reason = (req.body.reason || '').trim();
   db.prepare(`UPDATE estimates SET approval_status = 'rejected', rejection_reason = ?, approved_by_user_id = ?, approved_at = datetime('now') WHERE id = ?`)
     .run(reason || null, req.user.id, existing.id);
-  logActivity('job', existing.job_id, 'estimate', `Estimate ${existing.number}'s approval was rejected by ${req.user.username}${reason ? `: ${reason}` : '.'}`);
+  logActivity(existing.job_id ? 'job' : 'deal', existing.job_id || existing.deal_id, 'estimate', `Estimate ${existing.number}'s approval was rejected by ${req.user.username}${reason ? `: ${reason}` : '.'}`);
   sendEstimate(req, res, getEstimateFull(existing.id));
+});
+
+// Email or text the customer their estimate link directly from the app (Sept 2026) — the same
+// /approve/:token URL "Copy approval link" copies, just delivered instead. Blocked while the
+// estimate still needs internal sign-off, same as the token-gated public view itself refuses it.
+// Gracefully reports { sent: false, reason } when Gmail/Twilio aren't configured yet, or when the
+// contact has no email/phone on file — never a 500 for a missing integration.
+router.post('/estimates/:estimateId/send', async (req, res) => {
+  const estimate = getEstimateFull(req.params.estimateId);
+  if (!estimate) return res.status(404).json({ error: 'not found' });
+  if (estimate.requires_internal_approval) return res.status(403).json({ error: 'this estimate is still awaiting internal approval' });
+  const method = req.body.method === 'sms' ? 'sms' : 'email';
+  const party = resolveEstimateParty(estimate);
+  const contact = party.contact;
+  const company = getCompanyProfile();
+  const link = `${appBaseUrl(req)}/approve/${estimate.sign_token}`;
+  const greeting = contact?.first_name ? ` ${contact.first_name}` : '';
+
+  let result;
+  if (method === 'sms') {
+    result = await sms.sendSms({
+      to: contact?.phone,
+      body: `Hi${greeting}, your estimate ${estimate.number} from ${company.name} is ready to review and sign: ${link}`,
+    });
+  } else {
+    let attachments;
+    try {
+      const buffer = await buildEstimatePdf({ estimate, party });
+      attachments = [{ filename: `${estimate.number}.pdf`, content: buffer, contentType: 'application/pdf' }];
+    } catch {
+      attachments = undefined; // still send the email with the link even if the PDF build fails
+    }
+    result = await mailer.sendEmail({
+      to: contact?.email,
+      subject: `Your estimate ${estimate.number} from ${company.name}`,
+      text: `Hi${greeting},\n\nAttached is your estimate ${estimate.number}${party.title ? ` for "${party.title}"` : ''} — you can also review and sign it online:\n${link}\n\nThanks,\n${company.name}`,
+      attachments,
+    });
+  }
+  if (result.sent) logActivity(estimate.job_id ? 'job' : 'deal', estimate.job_id || estimate.deal_id, 'estimate', `Estimate ${estimate.number} ${method === 'sms' ? 'texted' : 'emailed'} to the customer.`);
+  res.json(result);
 });
 
 // --- Invoices ---
@@ -358,6 +474,73 @@ router.post('/invoices/:invoiceId/payments', (req, res) => {
   sendInvoice(req, res, getInvoiceFull(invoice.id), 201);
 });
 
+function invoiceCustomer(job) {
+  if (!job) return null;
+  const contact = job.contact_id ? db.prepare(`SELECT first_name, last_name, email, phone, address FROM contacts WHERE id = ?`).get(job.contact_id) : null;
+  if (contact) return { name: `${contact.first_name} ${contact.last_name}`, email: contact.email, phone: contact.phone, address: contact.address, first_name: contact.first_name };
+  const company = job.company_id ? db.prepare(`SELECT name FROM companies WHERE id = ?`).get(job.company_id) : null;
+  return company ? { name: company.name } : null;
+}
+
+// Download the invoice as a PDF — reflects whatever payment status the invoice is at right now
+// (subtotal/tax/total, amount paid, balance, and full payment history), same numbers the
+// customer-facing web view shows.
+router.get('/invoices/:invoiceId/pdf', async (req, res) => {
+  const invoice = getInvoiceFull(req.params.invoiceId);
+  if (!invoice) return res.status(404).json({ error: 'not found' });
+  const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(invoice.job_id);
+  const sourceEstimate = invoice.estimate_id ? db.prepare(`SELECT * FROM estimates WHERE id = ?`).get(invoice.estimate_id) : null;
+  try {
+    const buffer = await buildInvoicePdf({ invoice, job, customer: invoiceCustomer(job), sourceEstimate });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${invoice.number}.pdf"`);
+    res.send(buffer);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Email or text the customer their invoice. Email attaches the generated PDF (see pdf.js) plus
+// the same /invoice/:token link "Copy invoice link" copies; SMS carries the link only (no
+// attachment support). Gracefully reports { sent: false, reason } when Gmail/Twilio aren't
+// configured yet, or when the contact has no email/phone on file.
+router.post('/invoices/:invoiceId/send', async (req, res) => {
+  const invoice = getInvoiceFull(req.params.invoiceId);
+  if (!invoice) return res.status(404).json({ error: 'not found' });
+  const method = req.body.method === 'sms' ? 'sms' : 'email';
+  const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(invoice.job_id);
+  const sourceEstimate = invoice.estimate_id ? db.prepare(`SELECT * FROM estimates WHERE id = ?`).get(invoice.estimate_id) : null;
+  const customer = invoiceCustomer(job);
+  const company = getCompanyProfile();
+  const link = `${appBaseUrl(req)}/invoice/${invoice.public_token}`;
+  const greeting = customer?.first_name ? ` ${customer.first_name}` : '';
+  const balanceStr = `$${invoice.balance.toFixed(2)}`;
+
+  let result;
+  if (method === 'sms') {
+    result = await sms.sendSms({
+      to: customer?.phone,
+      body: `Hi${greeting}, your invoice ${invoice.number} from ${company.name} — balance due ${balanceStr}: ${link}`,
+    });
+  } else {
+    let attachments;
+    try {
+      const buffer = await buildInvoicePdf({ invoice, job, customer, sourceEstimate });
+      attachments = [{ filename: `${invoice.number}.pdf`, content: buffer, contentType: 'application/pdf' }];
+    } catch {
+      attachments = undefined; // still send the email with the link even if the PDF build fails
+    }
+    result = await mailer.sendEmail({
+      to: customer?.email,
+      subject: `Invoice ${invoice.number} from ${company.name}`,
+      text: `Hi${greeting},\n\nAttached is invoice ${invoice.number}${job?.title ? ` for "${job.title}"` : ''}. Balance due: ${balanceStr}.\n\nYou can also view it online any time:\n${link}\n\nThanks,\n${company.name}`,
+      attachments,
+    });
+  }
+  if (result.sent) logActivity('job', invoice.job_id, 'invoice', `Invoice ${invoice.number} ${method === 'sms' ? 'texted' : 'emailed'} to the customer.`);
+  res.json(result);
+});
+
 // --- Job photos (before/progress/after) ---
 router.post('/:id/photos', (req, res) => {
   const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(req.params.id);
@@ -409,20 +592,24 @@ router.post('/:id/attendance', (req, res) => {
   const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(req.params.id);
   if (!job) return res.status(404).json({ error: 'job not found' });
   const { employee_id, work_date } = req.body;
+  const dayType = req.body.day_type === 'half' ? 'half' : 'full';
   if (!employee_id || !work_date) return res.status(400).json({ error: 'employee_id and work_date are required' });
   const employee = db.prepare(`SELECT * FROM employees WHERE id = ?`).get(employee_id);
   if (!employee) return res.status(404).json({ error: 'employee not found' });
   const already = db.prepare(`SELECT 1 FROM attendance WHERE job_id = ? AND employee_id = ? AND work_date = ?`).get(job.id, employee_id, work_date);
   if (already) return res.status(409).json({ error: `${employee.first_name} ${employee.last_name} is already logged on this job for ${work_date}.` });
 
+  // Half day charges (and costs) half the employee's daily rate — the amount actually billed to
+  // this job that day, snapshotted at logging time same as a full day always has been.
+  const amount = dayType === 'half' ? +(Number(employee.daily_rate) / 2).toFixed(2) : Number(employee.daily_rate);
   const expenseResult = db.prepare(`
     INSERT INTO job_expenses (job_id, category, description, qty, unit_cost, incurred_on, billable)
     VALUES (?, 'Labor', ?, 1, ?, ?, 1)
-  `).run(job.id, `${employee.first_name} ${employee.last_name} — ${work_date}`, employee.daily_rate, work_date);
+  `).run(job.id, `${employee.first_name} ${employee.last_name} — ${work_date}${dayType === 'half' ? ' (half day)' : ''}`, amount, work_date);
   db.prepare(`
-    INSERT INTO attendance (job_id, employee_id, work_date, daily_rate, job_expense_id) VALUES (?,?,?,?,?)
-  `).run(job.id, employee_id, work_date, employee.daily_rate, expenseResult.lastInsertRowid);
-  logActivity('job', job.id, 'expense', `${employee.first_name} ${employee.last_name} logged for ${work_date} ($${Number(employee.daily_rate).toFixed(2)}/day).`);
+    INSERT INTO attendance (job_id, employee_id, work_date, daily_rate, job_expense_id, day_type) VALUES (?,?,?,?,?,?)
+  `).run(job.id, employee_id, work_date, amount, expenseResult.lastInsertRowid, dayType);
+  logActivity('job', job.id, 'expense', `${employee.first_name} ${employee.last_name} logged for ${work_date} (${dayType === 'half' ? 'half day, ' : ''}$${amount.toFixed(2)}).`);
   sendJob(req, res, getJobFull(job.id), 201);
 });
 
