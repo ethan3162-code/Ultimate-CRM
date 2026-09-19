@@ -56,6 +56,16 @@ export default function Estimates() {
   const [rejectingFor, setRejectingFor] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
 
+  // Editing an existing draft (Sept 2026) — a separate bit of form state from the "new estimate"
+  // form above so the two can never clobber each other if a click lands on the wrong button.
+  const [editingId, setEditingId] = useState(null);
+  const [editItems, setEditItems] = useState([{ ...BLANK_ITEM }]);
+  const [editTaxRate, setEditTaxRate] = useState('0');
+  const [editDepositPercent, setEditDepositPercent] = useState('');
+  const [editContractId, setEditContractId] = useState('');
+  const [editDisplayOptions, setEditDisplayOptions] = useState({ show_rate: true, show_qty: true, show_item_total: true });
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const [tab, setTab] = useState('pending');
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState(() => new Set());
@@ -130,6 +140,43 @@ export default function Estimates() {
     load();
   }
 
+  function startEdit(est) {
+    setEditingId(est.id);
+    setEditItems(est.items.map((it) => ({ description: it.description, qty: it.qty, unit_price: it.unit_price })));
+    setEditTaxRate(String(est.tax_rate ?? 0));
+    setEditDepositPercent(est.deposit_percent ? String(est.deposit_percent) : '');
+    setEditContractId(est.contract_id ? String(est.contract_id) : '');
+    setEditDisplayOptions({
+      show_rate: est.show_rate !== 0, show_qty: est.show_qty !== 0, show_item_total: est.show_item_total !== 0,
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  async function saveEdit(e, estimateId) {
+    e.preventDefault();
+    const cleanItems = editItems.filter((it) => it.description.trim());
+    if (!cleanItems.length) return;
+    setSavingEdit(true);
+    try {
+      await api.updateEstimate(estimateId, {
+        items: cleanItems.map((it) => ({ description: it.description, qty: Number(it.qty) || 0, unit_price: Number(it.unit_price) || 0 })),
+        tax_rate: Number(editTaxRate) || 0,
+        deposit_percent: Number(editDepositPercent) || 0,
+        contract_id: editContractId ? Number(editContractId) : null,
+        ...editDisplayOptions,
+      });
+      setEditingId(null);
+      load();
+    } catch (err) {
+      window.alert(err.message);
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
   async function deleteEstimateRow(estimateId) {
     if (!window.confirm('Delete this draft estimate? This can\'t be undone.')) return;
     await api.deleteEstimate(estimateId).catch((err) => window.alert(err.message));
@@ -200,6 +247,36 @@ export default function Estimates() {
   }
 
   function renderDetail(est) {
+    if (editingId === est.id) {
+      return (
+        <div className="card">
+          <p className="sub" style={{ margin: '0 0 10px' }}>
+            Editing {est.number}{est.approval_status && est.approval_status !== 'pending' ? ' — saving will clear its approval status, since the numbers are changing' : ''}.
+          </p>
+          <form onSubmit={(e) => saveEdit(e, est.id)}>
+            <LineItemEditor items={editItems} setItems={setEditItems} taxRate={editTaxRate} setTaxRate={setEditTaxRate} catalog={salesItems} />
+            <div className="field" style={{ margin: '10px 0', maxWidth: 200 }}>
+              <label>Deposit required upfront (%)</label>
+              <input type="number" min="0" max="100" placeholder="e.g. 30" value={editDepositPercent} onChange={(e) => setEditDepositPercent(e.target.value)} />
+            </div>
+            <div className="field" style={{ margin: '10px 0', maxWidth: 320 }}>
+              <label>Contract <span className="muted" style={{ fontWeight: 400 }}>— terms &amp; conditions this estimate carries</span></label>
+              <select value={editContractId} onChange={(e) => setEditContractId(e.target.value)}>
+                <option value="">— default for customer type —</option>
+                {contracts.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <DisplayOptions value={editDisplayOptions} onChange={setEditDisplayOptions} />
+            <div className="row" style={{ gap: 8, marginTop: 10 }}>
+              <button className="btn primary sm" type="submit" disabled={savingEdit}>{savingEdit ? 'Saving…' : 'Save changes'}</button>
+              <button className="btn subtle sm" type="button" onClick={cancelEdit}>Cancel</button>
+            </div>
+          </form>
+        </div>
+      );
+    }
     return (
       <div className="card">
         <p className="sub" style={{ margin: '0 0 10px' }}>
@@ -277,6 +354,7 @@ export default function Estimates() {
 
         {canEdit && (
           <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: 'wrap' }}>
+            {!est.signed_at && !est.has_invoice && <button className="btn sm" onClick={() => startEdit(est)}>Edit</button>}
             {est.job_id && !est.has_invoice && <button className="btn sm" onClick={() => convert(est.id)}>Convert to invoice →</button>}
             <a className="btn sm" href={api.estimatePdfUrl(est.id)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>View/Print PDF</a>
             <button className="btn sm" onClick={() => duplicateEstimate(est.id)}>Duplicate</button>
@@ -416,4 +494,3 @@ export default function Estimates() {
     </>
   );
 }
-
