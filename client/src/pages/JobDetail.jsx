@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, timeAgo, splitWorkTypes, estimateTotal } from '../utils';
+import { money, shortDate, timeAgo, splitWorkTypes, estimateTotal, estimateSubtotal } from '../utils';
 import { EXPENSE_CATEGORIES, PROJECT_STATUSES, PROJECT_STATUS_LABEL } from '../constants';
 import LineItemEditor from '../components/LineItemEditor';
+import PricingAdjustments from '../components/PricingAdjustments';
 import PaymentScheduleEditor from '../components/PaymentScheduleEditor';
 import DisplayOptions from '../components/DisplayOptions';
 import PaymentModal from '../components/PaymentModal';
@@ -95,6 +96,9 @@ export default function JobDetail() {
   const [showEstimateForm, setShowEstimateForm] = useState(false);
   const [items, setItems] = useState([{ description: '', notes: '', qty: 1, unit_price: 0 }]);
   const [taxRate, setTaxRate] = useState('0');
+  const [markupPercent, setMarkupPercent] = useState('');
+  const [discountType, setDiscountType] = useState(null);
+  const [discountValue, setDiscountValue] = useState('');
   const [depositPercent, setDepositPercent] = useState('');
   const [paymentSchedule, setPaymentSchedule] = useState([]);
   const [contractId, setContractId] = useState('');
@@ -128,6 +132,9 @@ export default function JobDetail() {
   const [editingEstimateId, setEditingEstimateId] = useState(null);
   const [editItems, setEditItems] = useState([{ description: '', notes: '', qty: 1, unit_price: 0 }]);
   const [editTaxRate, setEditTaxRate] = useState('0');
+  const [editMarkupPercent, setEditMarkupPercent] = useState('');
+  const [editDiscountType, setEditDiscountType] = useState(null);
+  const [editDiscountValue, setEditDiscountValue] = useState('');
   const [editDepositPercent, setEditDepositPercent] = useState('');
   const [editPaymentSchedule, setEditPaymentSchedule] = useState([]);
   const [editContractId, setEditContractId] = useState('');
@@ -242,6 +249,9 @@ export default function JobDetail() {
     if (!cleanItems.length) return;
     await api.createEstimate(id, {
       tax_rate: Number(taxRate) || 0,
+      markup_percent: Number(markupPercent) || 0,
+      discount_type: discountType,
+      discount_value: Number(discountValue) || 0,
       deposit_percent: Number(depositPercent) || 0,
       items: cleanItems.map((it) => ({ description: it.description, notes: it.notes || '', qty: Number(it.qty) || 0, unit_price: Number(it.unit_price) || 0 })),
       payment_schedule: paymentSchedule.filter((r) => r.name.trim()).map((r) => ({ name: r.name.trim(), percent: Number(r.percent) || 0 })),
@@ -250,6 +260,9 @@ export default function JobDetail() {
     });
     setItems([{ description: '', notes: '', qty: 1, unit_price: 0 }]);
     setTaxRate('0');
+    setMarkupPercent('');
+    setDiscountType(null);
+    setDiscountValue('');
     setDepositPercent('');
     setPaymentSchedule([]);
     setContractId('');
@@ -267,6 +280,9 @@ export default function JobDetail() {
     setEditingEstimateId(est.id);
     setEditItems(est.items.map((it) => ({ description: it.description, notes: it.notes || '', qty: it.qty, unit_price: it.unit_price })));
     setEditTaxRate(String(est.tax_rate ?? 0));
+    setEditMarkupPercent(est.markup_percent ? String(est.markup_percent) : '');
+    setEditDiscountType(est.discount_type || null);
+    setEditDiscountValue(est.discount_value ? String(est.discount_value) : '');
     setEditDepositPercent(est.deposit_percent ? String(est.deposit_percent) : '');
     setEditPaymentSchedule((est.payment_schedule || []).map((r) => ({ name: r.name, percent: r.percent })));
     setEditContractId(est.contract_id ? String(est.contract_id) : '');
@@ -288,6 +304,9 @@ export default function JobDetail() {
       await api.updateEstimate(estimateId, {
         items: cleanItems.map((it) => ({ description: it.description, notes: it.notes || '', qty: Number(it.qty) || 0, unit_price: Number(it.unit_price) || 0 })),
         tax_rate: Number(editTaxRate) || 0,
+        markup_percent: Number(editMarkupPercent) || 0,
+        discount_type: editDiscountType,
+        discount_value: Number(editDiscountValue) || 0,
         deposit_percent: Number(editDepositPercent) || 0,
         payment_schedule: editPaymentSchedule.filter((r) => r.name.trim()).map((r) => ({ name: r.name.trim(), percent: Number(r.percent) || 0 })),
         contract_id: editContractId ? Number(editContractId) : null,
@@ -637,12 +656,24 @@ export default function JobDetail() {
 
             {showEstimateForm && canEdit && (
               <form onSubmit={submitEstimate} style={{ marginTop: 12, marginBottom: 12, borderTop: '1px solid var(--line-soft)', paddingTop: 12 }}>
-                <LineItemEditor items={items} setItems={setItems} taxRate={taxRate} setTaxRate={setTaxRate} catalog={(catalog || []).filter((c) => !c.material_key)} />
+                <LineItemEditor
+                  items={items} setItems={setItems} taxRate={taxRate} setTaxRate={setTaxRate} catalog={(catalog || []).filter((c) => !c.material_key)}
+                  markupPercent={markupPercent} discountType={discountType} discountValue={discountValue}
+                />
+                <PricingAdjustments
+                  subtotal={estimateSubtotal(items)}
+                  markupPercent={markupPercent} setMarkupPercent={setMarkupPercent}
+                  discountType={discountType} setDiscountType={setDiscountType}
+                  discountValue={discountValue} setDiscountValue={setDiscountValue}
+                />
                 <div className="field" style={{ marginTop: 10, maxWidth: 220 }}>
                   <label>Deposit required upfront (%)</label>
                   <input type="number" min="0" max="100" placeholder="e.g. 30" value={depositPercent} onChange={(e) => setDepositPercent(e.target.value)} />
                 </div>
-                <PaymentScheduleEditor rows={paymentSchedule} setRows={setPaymentSchedule} total={estimateTotal(items, taxRate)} />
+                <PaymentScheduleEditor
+                  rows={paymentSchedule} setRows={setPaymentSchedule}
+                  total={estimateTotal(items, taxRate, markupPercent, discountType, discountValue)}
+                />
                 <div className="field" style={{ marginTop: 10, maxWidth: 320 }}>
                   <label>Contract <span className="muted" style={{ fontWeight: 400 }}>— terms &amp; conditions this estimate carries</span></label>
                   <select value={contractId} onChange={(e) => setContractId(e.target.value)}>
@@ -668,12 +699,24 @@ export default function JobDetail() {
                           Editing {est.number}{est.approval_status && est.approval_status !== 'pending' ? ' — saving will clear its approval status, since the numbers are changing' : ''}.
                         </p>
                         <form onSubmit={(e) => saveEditEstimate(e, est.id)}>
-                          <LineItemEditor items={editItems} setItems={setEditItems} taxRate={editTaxRate} setTaxRate={setEditTaxRate} catalog={(catalog || []).filter((c) => !c.material_key)} />
+                          <LineItemEditor
+                            items={editItems} setItems={setEditItems} taxRate={editTaxRate} setTaxRate={setEditTaxRate} catalog={(catalog || []).filter((c) => !c.material_key)}
+                            markupPercent={editMarkupPercent} discountType={editDiscountType} discountValue={editDiscountValue}
+                          />
+                          <PricingAdjustments
+                            subtotal={estimateSubtotal(editItems)}
+                            markupPercent={editMarkupPercent} setMarkupPercent={setEditMarkupPercent}
+                            discountType={editDiscountType} setDiscountType={setEditDiscountType}
+                            discountValue={editDiscountValue} setDiscountValue={setEditDiscountValue}
+                          />
                           <div className="field" style={{ marginTop: 10, maxWidth: 220 }}>
                             <label>Deposit required upfront (%)</label>
                             <input type="number" min="0" max="100" placeholder="e.g. 30" value={editDepositPercent} onChange={(e) => setEditDepositPercent(e.target.value)} />
                           </div>
-                          <PaymentScheduleEditor rows={editPaymentSchedule} setRows={setEditPaymentSchedule} total={estimateTotal(editItems, editTaxRate)} />
+                          <PaymentScheduleEditor
+                            rows={editPaymentSchedule} setRows={setEditPaymentSchedule}
+                            total={estimateTotal(editItems, editTaxRate, editMarkupPercent, editDiscountType, editDiscountValue)}
+                          />
                           <div className="field" style={{ marginTop: 10, maxWidth: 320 }}>
                             <label>Contract <span className="muted" style={{ fontWeight: 400 }}>— terms &amp; conditions this estimate carries</span></label>
                             <select value={editContractId} onChange={(e) => setEditContractId(e.target.value)}>
