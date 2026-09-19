@@ -17,10 +17,25 @@ function computeItemsTotal(items) {
   return items.reduce((sum, it) => sum + it.qty * it.unit_price, 0);
 }
 
+// subtotal -> markup -> discount -> tax -> total, in that order — markup_percent/discount_type/
+// discount_value live on `doc` itself (the estimate or invoice row — see db.js's ensureColumn
+// calls adding them to both tables), same as tax_rate, since like tax they apply to the whole
+// document rather than any one line. Mirrors client/src/utils.js's estimateBreakdown exactly, so
+// a saved estimate's total never differs from what the builder showed while creating it.
 function withTotals(doc, items, taxRate) {
   const subtotal = computeItemsTotal(items);
-  const tax = subtotal * (taxRate || 0);
-  return { subtotal, tax, total: subtotal + tax };
+  const markupPercent = Number(doc?.markup_percent) || 0;
+  const markupAmount = subtotal * (markupPercent / 100);
+  const markedUp = subtotal + markupAmount;
+  const discountType = doc?.discount_type || null;
+  const discountValue = Number(doc?.discount_value) || 0;
+  let discountAmount = 0;
+  if (discountType === 'percent') discountAmount = markedUp * (discountValue / 100);
+  else if (discountType === 'flat') discountAmount = discountValue;
+  discountAmount = Math.max(0, Math.min(discountAmount, markedUp));
+  const afterDiscount = markedUp - discountAmount;
+  const tax = afterDiscount * (taxRate || 0);
+  return { subtotal, markup_amount: markupAmount, discount_amount: discountAmount, tax, total: afterDiscount + tax };
 }
 
 // An estimate is written against either a Project (job_id) or, for the Lead -> Appointment ->
@@ -142,14 +157,15 @@ function getInvoiceFull(id) {
 function redactEstimateMoney(estimate) {
   if (!estimate) return estimate;
   return {
-    ...estimate, subtotal: null, tax: null, total: null, price_hidden: true,
+    ...estimate, subtotal: null, tax: null, total: null, markup_amount: null, discount_amount: null, discount_value: null, price_hidden: true,
     items: estimate.items.map((it) => ({ ...it, unit_price: null })),
   };
 }
 function redactInvoiceMoney(invoice) {
   if (!invoice) return invoice;
   return {
-    ...invoice, subtotal: null, tax: null, total: null, amount_paid: null, balance: null, price_hidden: true,
+    ...invoice, subtotal: null, tax: null, total: null, amount_paid: null, balance: null,
+    markup_amount: null, discount_amount: null, discount_value: null, price_hidden: true,
     items: invoice.items.map((it) => ({ ...it, unit_price: null })),
     payments: invoice.payments.map((p) => ({ ...p, amount: null })),
   };
@@ -390,11 +406,11 @@ function createInvoiceFromEstimate(estimate, jobId, { dueDate } = {}) {
   const number = `INV-${2000 + count + 1}`;
   const publicToken = crypto.randomBytes(12).toString('hex');
   const result = db.prepare(`
-    INSERT INTO invoices (job_id, estimate_id, number, status, tax_rate, due_date, public_token, show_rate, show_qty, show_item_total)
-    VALUES (?,?,?,?,?,?,?,?,?,?)
+    INSERT INTO invoices (job_id, estimate_id, number, status, tax_rate, markup_percent, discount_type, discount_value, due_date, public_token, show_rate, show_qty, show_item_total)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
-    jobId, estimate.id, number, 'sent', estimate.tax_rate, dueDate || null, publicToken,
-    estimate.show_rate, estimate.show_qty, estimate.show_item_total
+    jobId, estimate.id, number, 'sent', estimate.tax_rate, estimate.markup_percent || 0, estimate.discount_type || null, estimate.discount_value || 0,
+    dueDate || null, publicToken, estimate.show_rate, estimate.show_qty, estimate.show_item_total
   );
   const invoiceId = result.lastInsertRowid;
   for (const it of estimate.items) {
