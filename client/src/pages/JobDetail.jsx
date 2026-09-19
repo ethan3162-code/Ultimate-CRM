@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, timeAgo, splitWorkTypes } from '../utils';
+import { money, shortDate, timeAgo, splitWorkTypes, estimateTotal } from '../utils';
 import { EXPENSE_CATEGORIES, PROJECT_STATUSES, PROJECT_STATUS_LABEL } from '../constants';
 import LineItemEditor from '../components/LineItemEditor';
+import PaymentScheduleEditor from '../components/PaymentScheduleEditor';
 import DisplayOptions from '../components/DisplayOptions';
 import PaymentModal from '../components/PaymentModal';
 import TaskList from '../components/TaskList';
@@ -92,9 +93,10 @@ export default function JobDetail() {
   const [job, setJob] = useState(null);
   const [catalog, setCatalog] = useState(null);
   const [showEstimateForm, setShowEstimateForm] = useState(false);
-  const [items, setItems] = useState([{ description: '', qty: 1, unit_price: 0 }]);
+  const [items, setItems] = useState([{ description: '', notes: '', qty: 1, unit_price: 0 }]);
   const [taxRate, setTaxRate] = useState('0');
   const [depositPercent, setDepositPercent] = useState('');
+  const [paymentSchedule, setPaymentSchedule] = useState([]);
   const [contractId, setContractId] = useState('');
   const [contracts, setContracts] = useState([]);
   const [displayOptions, setDisplayOptions] = useState({ show_rate: true, show_qty: true, show_item_total: true });
@@ -124,9 +126,10 @@ export default function JobDetail() {
   // Editing an existing estimate (Sept 2026) — kept separate from the "+ New estimate" form's
   // state above so opening one never clobbers the other.
   const [editingEstimateId, setEditingEstimateId] = useState(null);
-  const [editItems, setEditItems] = useState([{ description: '', qty: 1, unit_price: 0 }]);
+  const [editItems, setEditItems] = useState([{ description: '', notes: '', qty: 1, unit_price: 0 }]);
   const [editTaxRate, setEditTaxRate] = useState('0');
   const [editDepositPercent, setEditDepositPercent] = useState('');
+  const [editPaymentSchedule, setEditPaymentSchedule] = useState([]);
   const [editContractId, setEditContractId] = useState('');
   const [editDisplayOptions, setEditDisplayOptions] = useState({ show_rate: true, show_qty: true, show_item_total: true });
   const [savingEdit, setSavingEdit] = useState(false);
@@ -240,13 +243,15 @@ export default function JobDetail() {
     await api.createEstimate(id, {
       tax_rate: Number(taxRate) || 0,
       deposit_percent: Number(depositPercent) || 0,
-      items: cleanItems.map((it) => ({ description: it.description, qty: Number(it.qty) || 0, unit_price: Number(it.unit_price) || 0 })),
+      items: cleanItems.map((it) => ({ description: it.description, notes: it.notes || '', qty: Number(it.qty) || 0, unit_price: Number(it.unit_price) || 0 })),
+      payment_schedule: paymentSchedule.filter((r) => r.name.trim()).map((r) => ({ name: r.name.trim(), percent: Number(r.percent) || 0 })),
       contract_id: contractId ? Number(contractId) : null,
       ...displayOptions,
     });
-    setItems([{ description: '', qty: 1, unit_price: 0 }]);
+    setItems([{ description: '', notes: '', qty: 1, unit_price: 0 }]);
     setTaxRate('0');
     setDepositPercent('');
+    setPaymentSchedule([]);
     setContractId('');
     setDisplayOptions({ show_rate: true, show_qty: true, show_item_total: true });
     setShowEstimateForm(false);
@@ -260,9 +265,10 @@ export default function JobDetail() {
 
   function startEditEstimate(est) {
     setEditingEstimateId(est.id);
-    setEditItems(est.items.map((it) => ({ description: it.description, qty: it.qty, unit_price: it.unit_price })));
+    setEditItems(est.items.map((it) => ({ description: it.description, notes: it.notes || '', qty: it.qty, unit_price: it.unit_price })));
     setEditTaxRate(String(est.tax_rate ?? 0));
     setEditDepositPercent(est.deposit_percent ? String(est.deposit_percent) : '');
+    setEditPaymentSchedule((est.payment_schedule || []).map((r) => ({ name: r.name, percent: r.percent })));
     setEditContractId(est.contract_id ? String(est.contract_id) : '');
     setEditDisplayOptions({
       show_rate: est.show_rate !== 0, show_qty: est.show_qty !== 0, show_item_total: est.show_item_total !== 0,
@@ -280,9 +286,10 @@ export default function JobDetail() {
     setSavingEdit(true);
     try {
       await api.updateEstimate(estimateId, {
-        items: cleanItems.map((it) => ({ description: it.description, qty: Number(it.qty) || 0, unit_price: Number(it.unit_price) || 0 })),
+        items: cleanItems.map((it) => ({ description: it.description, notes: it.notes || '', qty: Number(it.qty) || 0, unit_price: Number(it.unit_price) || 0 })),
         tax_rate: Number(editTaxRate) || 0,
         deposit_percent: Number(editDepositPercent) || 0,
+        payment_schedule: editPaymentSchedule.filter((r) => r.name.trim()).map((r) => ({ name: r.name.trim(), percent: Number(r.percent) || 0 })),
         contract_id: editContractId ? Number(editContractId) : null,
         ...editDisplayOptions,
       });
@@ -635,6 +642,7 @@ export default function JobDetail() {
                   <label>Deposit required upfront (%)</label>
                   <input type="number" min="0" max="100" placeholder="e.g. 30" value={depositPercent} onChange={(e) => setDepositPercent(e.target.value)} />
                 </div>
+                <PaymentScheduleEditor rows={paymentSchedule} setRows={setPaymentSchedule} total={estimateTotal(items, taxRate)} />
                 <div className="field" style={{ marginTop: 10, maxWidth: 320 }}>
                   <label>Contract <span className="muted" style={{ fontWeight: 400 }}>— terms &amp; conditions this estimate carries</span></label>
                   <select value={contractId} onChange={(e) => setContractId(e.target.value)}>
@@ -665,6 +673,7 @@ export default function JobDetail() {
                             <label>Deposit required upfront (%)</label>
                             <input type="number" min="0" max="100" placeholder="e.g. 30" value={editDepositPercent} onChange={(e) => setEditDepositPercent(e.target.value)} />
                           </div>
+                          <PaymentScheduleEditor rows={editPaymentSchedule} setRows={setEditPaymentSchedule} total={estimateTotal(editItems, editTaxRate)} />
                           <div className="field" style={{ marginTop: 10, maxWidth: 320 }}>
                             <label>Contract <span className="muted" style={{ fontWeight: 400 }}>— terms &amp; conditions this estimate carries</span></label>
                             <select value={editContractId} onChange={(e) => setEditContractId(e.target.value)}>
