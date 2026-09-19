@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { money, shortDate, timeAgo } from '../utils';
 import { BarList } from '../components/charts';
+import FilterBar from '../components/FilterBar';
 
 const LEAD_STATUS_ORDER = ['New', 'Follow Up', 'Unresponsive', 'Restart', 'Converted', 'Lost'];
 const OPP_STAGE_LABEL = { qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation' };
@@ -30,6 +31,7 @@ export default function Home() {
   const [tasks, setTasks] = useState(null);
   const [contacts, setContacts] = useState(null);
   const [pendingApprovals, setPendingApprovals] = useState([]);
+  const [recentFilter, setRecentFilter] = useState('');
 
   useEffect(() => {
     api.deals().then(setDeals);
@@ -65,13 +67,21 @@ export default function Home() {
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 5);
 
-  const recentRecords = [
-    ...leads.slice(0, 3).map((d) => ({ type: 'Lead', label: d.title, to: `/pipeline/${d.id}`, at: d.created_at })),
-    ...openOpps.slice(0, 3).map((d) => ({ type: 'Opportunity', label: d.title, to: `/pipeline/${d.id}`, at: d.created_at })),
-    ...jobs.slice(0, 3).map((j) => ({ type: 'Project', label: j.title, to: `/jobs/${j.id}`, at: j.created_at })),
-  ]
-    .sort((a, b) => new Date(b.at) - new Date(a.at))
-    .slice(0, 5);
+  // Pool is wider than what's actually shown so filtering by type still has something to narrow —
+  // the mixed top-5 view only needs a handful of each, but "just Projects" should surface more
+  // than the one or two that happened to land in that unfiltered top 5.
+  const recentRecordsAll = [
+    ...leads.map((d) => ({ type: 'Lead', label: d.title, to: `/pipeline/${d.id}`, at: d.created_at })),
+    ...openOpps.map((d) => ({ type: 'Opportunity', label: d.title, to: `/pipeline/${d.id}`, at: d.created_at })),
+    ...jobs.map((j) => ({ type: 'Project', label: j.title, to: `/jobs/${j.id}`, at: j.created_at })),
+  ].sort((a, b) => new Date(b.at) - new Date(a.at));
+
+  const recentTypeDefs = [
+    { key: 'type', label: 'Type', options: [...new Set(recentRecordsAll.map((r) => r.type))].map((t) => ({ value: t, label: t })) },
+  ].filter((f) => f.options.length > 1);
+
+  const recentRecords = (recentFilter ? recentRecordsAll.filter((r) => r.type === recentFilter) : recentRecordsAll)
+    .slice(0, recentFilter ? 8 : 5);
 
   return (
     <>
@@ -143,7 +153,16 @@ export default function Home() {
       <div className="grid-2" style={{ marginTop: 18 }}>
         <div className="card">
           <h2>Recent records</h2>
-          {recentRecords.length === 0 ? <div className="empty">Nothing yet.</div> : (
+          {recentTypeDefs.length > 0 && (
+            <FilterBar
+              filters={recentTypeDefs} values={{ type: recentFilter }}
+              onChange={(_key, value) => setRecentFilter(value)}
+              onClear={() => setRecentFilter('')}
+            />
+          )}
+          {recentRecords.length === 0 ? (
+            <div className="empty">{recentFilter ? `No recent ${recentFilter.toLowerCase()}s.` : 'Nothing yet.'}</div>
+          ) : (
             <div className="stack" style={{ gap: 2 }}>
               {recentRecords.map((r, i) => (
                 <Link key={i} to={r.to} className="attention-row">
