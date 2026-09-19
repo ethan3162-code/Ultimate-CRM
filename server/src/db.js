@@ -81,9 +81,16 @@ CREATE TABLE IF NOT EXISTS jobs (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- job_id is nullable (Sept 2026) — an estimate used to always belong to a project, but the real
+-- sales flow is Lead -> Appointment -> Opportunity -> Estimate -> (customer signs) -> Invoice +
+-- Project created automatically, so an estimate now gets written against an Opportunity (deal_id)
+-- before any project exists, and only gains a job_id once it's signed (see routes/public.js's
+-- /estimates/:token/sign, and migrateEstimatesJobOptional() below for the upgrade path on an
+-- existing committed database that still has job_id NOT NULL).
 CREATE TABLE IF NOT EXISTS estimates (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
+  deal_id INTEGER REFERENCES deals(id) ON DELETE CASCADE,
   number TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'draft',
   tax_rate REAL NOT NULL DEFAULT 0,
@@ -686,6 +693,132 @@ ensureColumn('estimates', 'approval_requested_at', 'approval_requested_at TEXT')
 ensureColumn('estimates', 'approved_by_user_id', 'approved_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 ensureColumn('estimates', 'approved_at', 'approved_at TEXT');
 ensureColumn('estimates', 'rejection_reason', 'rejection_reason TEXT');
+
+// Relaxes estimates.job_id from NOT NULL to nullable and adds deal_id, for a committed database
+// created before the Lead -> Opportunity -> Estimate -> (signed) -> Invoice + Project flow existed
+// (see the CREATE TABLE comment above). SQLite can't ALTER a column's NOT NULL constraint in
+// place, so this rebuilds the table once — every existing estimate keeps its id and its job_id
+// unchanged, it just gets a (null) deal_id alongside it. Runs after all the ensureColumn calls
+// above so every one of those columns already exists on the live table before it's copied across.
+// A no-op once migrated (or on a table created fresh by the CREATE TABLE above, which already has
+// the new shape).
+function migrateEstimatesJobOptional() {
+  const jobIdCol = db.prepare(`PRAGMA table_info(estimates)`).all().find((c) => c.name === 'job_id');
+  if (!jobIdCol || jobIdCol.notnull === 0) return;
+  const cols = db.prepare(`PRAGMA table_info(estimates)`).all().map((c) => c.name);
+  const colList = cols.join(', ');
+  // estimate_items (ON DELETE CASCADE) and invoices (ON DELETE SET NULL) both reference
+  // estimates.id — with foreign_keys ON, SQLite applies those actions the moment the old table is
+  // DROPped, which would wipe every estimate's line items and orphan its invoices before the new
+  // table is even renamed into place. Turning enforcement off for just this rebuild (back on
+  // immediately after) avoids that — the id values are copied across unchanged, so every existing
+  // reference is valid again the instant the rename completes.
+  db.pragma('foreign_keys = OFF');
+  db.exec(`
+    CREATE TABLE estimates_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
+      deal_id INTEGER REFERENCES deals(id) ON DELETE CASCADE,
+      number TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      tax_rate REAL NOT NULL DEFAULT 0,
+      deposit_percent REAL NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      sign_token TEXT, signed_name TEXT, signed_at TEXT, signature_data_url TEXT,
+      created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      approval_status TEXT, approval_requested_at TEXT,
+      approved_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL, approved_at TEXT,
+      rejection_reason TEXT
+    );
+    INSERT INTO estimates_new (${colList}) SELECT ${colList} FROM estimates;
+    DROP TABLE estimates;
+    ALTER TABLE estimates_new RENAME TO estimates;
+  `);
+  db.pragma('foreign_keys = ON');
+}
+migrateEstimatesJobOptional();
+
+// Customer-view display toggles + view tracking (Sept 2026) — three independent switches (not one
+// "show pricing" flag) matching Joist's own "Display Options": whether the customer-facing
+// estimate/invoice shows a Qty column, a Rate (unit price) column, and a per-line Amount column.
+// Off just hides that column from the line-items table; the document's own Subtotal/Tax/Total
+// always show regardless, since those describe the whole document, not a line. Default to all-on
+// so every existing estimate/invoice keeps looking exactly as it does today. first_viewed_at is
+// set the first time a customer opens the public link (see routes/public.js) so we can notify the
+// business once per document rather than on every reload.
+ensureColumn('estimates', 'show_rate', 'show_rate INTEGER NOT NULL DEFAULT 1');
+ensureColumn('estimates', 'show_qty', 'show_qty INTEGER NOT NULL DEFAULT 1');
+ensureColumn('estimates', 'show_item_total', 'show_item_total INTEGER NOT NULL DEFAULT 1');
+ensureColumn('estimates', 'first_viewed_at', 'first_viewed_at TEXT');
+ensureColumn('invoices', 'show_rate', 'show_rate INTEGER NOT NULL DEFAULT 1');
+ensureColumn('invoices', 'show_qty', 'show_qty INTEGER NOT NULL DEFAULT 1');
+ensureColumn('invoices', 'show_item_total', 'show_item_total INTEGER NOT NULL DEFAULT 1');
+ensureColumn('invoices', 'first_viewed_at', 'first_viewed_at TEXT');
+
+// Attendance: Full day / Half day (Sept 2026) — attendance.daily_rate already stores the actual
+// dollar amount charged for that entry (see the CREATE TABLE comment above), so a half day just
+// means that amount was halved at the moment it was logged; day_type is purely the label so the
+// UI can show "(half day)" next to a name instead of a dollar figure per person.
+ensureColumn('attendance', 'day_type', "day_type TEXT NOT NULL DEFAULT 'full'");
+
+// Contracts library (Sept 2026) — the user asked to be able to create and edit the actual
+// Terms & Conditions / Agreement text that goes on the bottom of an estimate/invoice, instead of
+// it being fixed text in a file (see the old termsText.js, kept only as a historical reference —
+// nothing reads it any more). Each contract has a heading, an intro paragraph, and a numbered
+// list of clauses (stored as JSON — a [heading, body] pair per clause, same shape termsText.js
+// used) so the PDF/web view can render bold numbered sub-headings exactly like the user's
+// reference document. Two flags mark which single contract is the current default for each
+// customer type (Residential/Commercial) — an estimate with no contract_id of its own falls back
+// to whichever contract is flagged default for its resolved customer type (see helpers.js's
+// getContractForEstimate). At most one contract can hold each default flag at a time; enforced in
+// code (routes/contracts.js), not by a DB constraint.
+db.exec(`
+CREATE TABLE IF NOT EXISTS contracts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  heading TEXT NOT NULL DEFAULT 'AGREEMENT & LIMITED WARRANTY',
+  intro TEXT,
+  clauses TEXT NOT NULL DEFAULT '[]',
+  is_default_residential INTEGER NOT NULL DEFAULT 0,
+  is_default_commercial INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+ensureColumn('estimates', 'contract_id', 'contract_id INTEGER REFERENCES contracts(id) ON DELETE SET NULL');
+ensureColumn('estimates', 'declined_at', 'declined_at TEXT');
+ensureColumn('estimates', 'decline_reason', 'decline_reason TEXT');
+
+// Seeds the one real contract the user provided (Sept 2026) — replaces the old placeholder
+// Residential/Commercial split from termsText.js with the actual "AGREEMENT & LIMITED WARRANTY"
+// document the user sent, used as the default for both customer types until the user creates
+// separate ones from the new Contracts page. Runs once — if any contract already exists (the
+// user has since edited this one, or added others), this is skipped entirely so nothing ever
+// overwrites their edits.
+if (!db.prepare(`SELECT 1 FROM contracts LIMIT 1`).get()) {
+  const clauses = [
+    ['1. Material Selection & Approval', 'The Client shall be solely responsible for the selection and approval of all materials, including but not limited to color, texture, and finish. All selections must be submitted to PPM in writing (email) and confirmed prior to project scheduling. PPM shall not be held liable for discrepancies resulting from unapproved or incorrectly specified materials.'],
+    ['2. Mechanic’s Lien Notice', 'The Client is hereby notified that any contractor, subcontractor, laborer, or material supplier who provides services or materials to this project and remains unpaid may have the legal right to file a mechanic’s lien against the property.'],
+    ['3. Unforeseen Conditions & Change Orders', 'In the event that concealed or unforeseen conditions are encountered, PPM shall promptly notify the Client. Any additional work required shall be subject to a written change order and may result in an adjustment to the contract price and/or project timeline.'],
+    ['4. Project Schedule & Delays', 'All commencement dates, completion dates, and project durations are estimates only and are subject to reasonable adjustments due to conditions beyond PPM’s control, including but not limited to adverse weather, site conditions, labor disputes, material shortages, acts of God, or other force majeure events. PPM shall make commercially reasonable efforts to maintain progress and will notify the Client of any significant delays. Additional costs incurred as a result of such delays may be the responsibility of the Client.'],
+    ['5. Site Access & Walkthroughs', 'The Client, or an authorized representative, shall be available for both the initial project walkthrough and final inspection. In the event the Client is unavailable at project commencement, PPM shall proceed in accordance with the agreed scope of work, and shall not be held responsible for deviations arising from the Client’s absence.'],
+    ['6. Entire Agreement', 'This Agreement constitutes the entire understanding between the parties. Only those items expressly set forth in writing and executed by both parties (including signatures, initials, and written amendments) shall be deemed part of the scope of work. No verbal statements, representations, or assurances shall be binding.'],
+    ['7. Inspection & Right to Cure', 'Upon completion, PPM shall be afforded a reasonable opportunity to inspect and remedy any alleged deficiencies. The Client agrees not to undertake corrective work or initiate third-party repairs without first providing PPM the opportunity to cure.'],
+    ['8. Limitation of Liability', 'PPM shall not be liable for indirect, incidental, or consequential damages arising from the performance of this Agreement. Natural variations in materials, normal wear and tear, and damage caused by external factors are not covered under warranty.'],
+    ['9. Legal Fees & Governing Law', 'In the event of any dispute arising under this Agreement, the prevailing party shall be entitled to recover reasonable attorney’s fees and costs. This Agreement shall be governed by the laws of the State in which the project is performed.'],
+    ['10. Right of Cancellation', 'The Client shall have the right to cancel this Agreement within three (3) business days from the date of signing, without penalty or obligation, by providing written notice to PPM.\n\nAny cancellation request must be submitted in writing via email or certified mail within the three (3) business day cancellation period. If cancellation is requested after the expiration of the three (3) business days, the Client may be subject to material costs, administrative fees, design fees, permit fees, or any costs incurred by PPM prior to cancellation.\n\nOnce materials have been ordered, custom materials fabricated, permits filed, or work commenced, such costs shall be non-refundable.'],
+  ];
+  db.prepare(`
+    INSERT INTO contracts (name, heading, intro, clauses, is_default_residential, is_default_commercial)
+    VALUES (?, ?, ?, ?, 1, 1)
+  `).run(
+    'Agreement & Limited Warranty',
+    'AGREEMENT & LIMITED WARRANTY',
+    'By executing this Agreement, the Customer ("Client") acknowledges and agrees to the scope of work, terms, and conditions set forth herein. Precision Paving and Masonry LLC ("PPM") warrants that all workmanship performed under this Agreement shall be free from defects for a period of two (2) years from the date of substantial completion.',
+    JSON.stringify(clauses)
+  );
+}
+
 // Dashboard briefly went admin-only (Sept 2026), which deleted every per-user 'dashboard' row —
 // then (still Sept 2026) the user asked for it back as an individually-grantable page like any
 // other, alongside Automations and Integrations (see permissionsConfig.js's PAGES/ADMIN_ONLY_PAGES).
