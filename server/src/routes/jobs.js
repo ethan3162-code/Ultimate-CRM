@@ -5,6 +5,7 @@ const {
   getJobFull, getEstimateFull, getInvoiceFull, logActivity, createInvoiceFromEstimate,
   STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, computeProgress, computeEndDate, getJobMilestones,
   redactJobMoney, redactEstimateMoney, redactInvoiceMoney, resolveEstimateParty, readDisplayFlags,
+  getEstimateScheduleRows, saveEstimateScheduleRows,
 } = require('../helpers');
 const { fireTrigger } = require('../automationEngine');
 const { canSeePrices, checkSectionEdit, getPermissions, canApproveEstimates } = require('../auth');
@@ -188,7 +189,7 @@ router.patch('/:id', (req, res) => {
 router.post('/:id/estimates', (req, res) => {
   const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(req.params.id);
   if (!job) return res.status(404).json({ error: 'job not found' });
-  const { number, tax_rate, items, deposit_percent, contract_id } = req.body;
+  const { number, tax_rate, items, deposit_percent, contract_id, payment_schedule } = req.body;
   if (!items || !items.length) return res.status(400).json({ error: 'at least one line item is required' });
   const count = db.prepare(`SELECT COUNT(*) c FROM estimates`).get().c;
   const signToken = crypto.randomBytes(12).toString('hex');
@@ -199,9 +200,10 @@ router.post('/:id/estimates', (req, res) => {
   `).run(job.id, number || `EST-${1000 + count + 1}`, 'draft', tax_rate || 0, deposit_percent || 0, signToken, req.user ? req.user.id : null, flags.show_rate, flags.show_qty, flags.show_item_total, contract_id || null);
   const estimateId = result.lastInsertRowid;
   for (const it of items) {
-    db.prepare(`INSERT INTO estimate_items (estimate_id, description, qty, unit_price) VALUES (?,?,?,?)`)
-      .run(estimateId, it.description, it.qty, it.unit_price);
+    db.prepare(`INSERT INTO estimate_items (estimate_id, description, notes, qty, unit_price) VALUES (?,?,?,?,?)`)
+      .run(estimateId, it.description, it.notes || null, it.qty, it.unit_price);
   }
+  saveEstimateScheduleRows(estimateId, payment_schedule);
   logActivity('job', job.id, 'estimate', `Estimate ${number || ''} created.`);
   sendEstimate(req, res, getEstimateFull(estimateId), 201);
 });
@@ -215,7 +217,7 @@ router.patch('/estimates/:estimateId', (req, res) => {
   // routes/jobs.js's /invoices/:invoiceId/change-orders), which keeps a clear record of exactly
   // what was added after the original signed agreement rather than silently editing it.
   if (existing.signed_at) return res.status(400).json({ error: "this estimate has been signed and can't be edited — use a change order on the invoice instead" });
-  const { status, tax_rate, show_rate, show_qty, show_item_total, contract_id, items, deposit_percent, number } = req.body;
+  const { status, tax_rate, show_rate, show_qty, show_item_total, contract_id, items, deposit_percent, number, payment_schedule } = req.body;
 
   // Editing line items (or anything that changes the total — tax/deposit) is a substantive edit,
   // not the lightweight status-only patch this route also serves (e.g. nothing currently sends a
@@ -229,9 +231,13 @@ router.patch('/estimates/:estimateId', (req, res) => {
     const linkedInvoice = db.prepare(`SELECT 1 FROM invoices WHERE estimate_id = ? LIMIT 1`).get(existing.id);
     if (linkedInvoice) return res.status(400).json({ error: 'an invoice has already been generated from this estimate — use a change order instead' });
     db.prepare(`DELETE FROM estimate_items WHERE estimate_id = ?`).run(existing.id);
-    const insertItem = db.prepare(`INSERT INTO estimate_items (estimate_id, description, qty, unit_price) VALUES (?,?,?,?)`);
-    for (const it of items) insertItem.run(existing.id, it.description, Number(it.qty) || 0, Number(it.unit_price) || 0);
+    const insertItem = db.prepare(`INSERT INTO estimate_items (estimate_id, description, notes, qty, unit_price) VALUES (?,?,?,?,?)`);
+    for (const it of items) insertItem.run(existing.id, it.description, it.notes || null, Number(it.qty) || 0, Number(it.unit_price) || 0);
   }
+  // The payment schedule editor always sends its whole current list (like items above), so a
+  // full replace on any save that includes it — undefined (an old client, or a status-only patch)
+  // leaves whatever schedule is already saved untouched.
+  if (payment_schedule !== undefined) saveEstimateScheduleRows(existing.id, payment_schedule);
 
   db.prepare(`
     UPDATE estimates SET
@@ -284,9 +290,10 @@ router.post('/estimates/:estimateId/duplicate', (req, res) => {
   );
   const newId = result.lastInsertRowid;
   for (const it of items) {
-    db.prepare(`INSERT INTO estimate_items (estimate_id, description, qty, unit_price) VALUES (?,?,?,?)`)
-      .run(newId, it.description, it.qty, it.unit_price);
+    db.prepare(`INSERT INTO estimate_items (estimate_id, description, notes, qty, unit_price) VALUES (?,?,?,?,?)`)
+      .run(newId, it.description, it.notes, it.qty, it.unit_price);
   }
+  saveEstimateScheduleRows(newId, getEstimateScheduleRows(existing.id));
   logActivity(existing.job_id ? 'job' : 'deal', existing.job_id || existing.deal_id, 'estimate', `Estimate ${existing.number} duplicated as a new draft.`);
   sendEstimate(req, res, getEstimateFull(newId), 201);
 });
