@@ -1,5 +1,17 @@
+const crypto = require('crypto');
 const db = require('./db');
 const { requiresEstimateApproval, canApproveEstimates } = require('./auth');
+
+// The three Display Options toggles (Rate / Quantity / Item Totals) a customer-facing estimate or
+// invoice can be created or edited with — each defaults to shown (1) so a request that doesn't
+// mention them at all (every pre-existing caller) keeps behaving exactly as before.
+function readDisplayFlags(body) {
+  return {
+    show_rate: body.show_rate === undefined ? 1 : (body.show_rate ? 1 : 0),
+    show_qty: body.show_qty === undefined ? 1 : (body.show_qty ? 1 : 0),
+    show_item_total: body.show_item_total === undefined ? 1 : (body.show_item_total ? 1 : 0),
+  };
+}
 
 function computeItemsTotal(items) {
   return items.reduce((sum, it) => sum + it.qty * it.unit_price, 0);
@@ -9,6 +21,29 @@ function withTotals(doc, items, taxRate) {
   const subtotal = computeItemsTotal(items);
   const tax = subtotal * (taxRate || 0);
   return { subtotal, tax, total: subtotal + tax };
+}
+
+// An estimate is written against either a Project (job_id) or, for the Lead -> Appointment ->
+// Opportunity -> Estimate stage, an Opportunity with no project yet (deal_id) — see
+// migrateEstimatesJobOptional() in db.js. This resolves whichever one applies into one shape,
+// {title, address, contact, company, customerType}, that every place needing "who is this
+// estimate for" (the public customer-facing view, the signed-estimate auto-creation flow, the
+// estimate PDF, and the Email/Text-from-the-app actions) can share instead of re-deriving it.
+function resolveEstimateParty(estimate) {
+  if (estimate.job_id) {
+    const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(estimate.job_id);
+    const contact = job?.contact_id ? db.prepare(`SELECT first_name, last_name, email, phone, address FROM contacts WHERE id = ?`).get(job.contact_id) : null;
+    const company = job?.company_id ? db.prepare(`SELECT name, phone, email, address FROM companies WHERE id = ?`).get(job.company_id) : null;
+    return { title: job?.title || null, address: job?.address || null, contact, company, customerType: getJobCustomerType(job) };
+  }
+  if (estimate.deal_id) {
+    const deal = db.prepare(`SELECT * FROM deals WHERE id = ?`).get(estimate.deal_id);
+    const contact = deal?.contact_id ? db.prepare(`SELECT first_name, last_name, email, phone, address FROM contacts WHERE id = ?`).get(deal.contact_id) : null;
+    const company = deal?.company_id ? db.prepare(`SELECT name, phone, email, address FROM companies WHERE id = ?`).get(deal.company_id) : null;
+    const address = (contact && contact.address) || (company && company.address) || null;
+    return { title: deal?.title || null, address, contact, company, customerType: (deal && deal.customer_type) || 'Residential' };
+  }
+  return { title: null, address: null, contact: null, company: null, customerType: 'Residential' };
 }
 
 function getEstimateFull(id) {
@@ -43,11 +78,18 @@ function getPendingEstimateApprovals(user, hidePrices) {
   const rows = db.prepare(`SELECT id FROM estimates WHERE approval_status = 'pending' ORDER BY approval_requested_at ASC`).all();
   return rows.map((r) => {
     const est = getEstimateFull(r.id);
-    const job = db.prepare(`SELECT id, title, address FROM jobs WHERE id = ?`).get(est.job_id);
+    // Works whether this estimate already has a Project (job_id) or is still against an
+    // Opportunity with none yet (deal_id) — a salesperson can ask for sign-off at either stage,
+    // and this used to only look up a job, silently losing the link (and the page/dashboard
+    // link it powers) for a deal-anchored request.
+    const party = resolveEstimateParty(est);
     return {
       id: est.id, number: est.number, total: hidePrices ? null : est.total,
+      items: est.items.map((it) => (hidePrices ? { ...it, unit_price: null } : it)),
       requested_at: est.approval_requested_at, requested_by: est.created_by_username,
-      job_id: job?.id, job_title: job?.title, job_address: job?.address,
+      linked_type: est.job_id ? 'project' : (est.deal_id ? 'opportunity' : null),
+      linked_id: est.job_id || est.deal_id || null,
+      linked_title: party.title, linked_address: party.address,
     };
   });
 }
@@ -239,9 +281,120 @@ function getJobFull(id) {
   return { ...job, estimates, invoices, photos, costing, billing, attendance, account, opportunity: deal, lead_source: leadSource, owner_username: owner ? owner.username : null };
 }
 
+// Residential vs Commercial for a job — used to pick which Terms & Conditions text a customer-
+// facing estimate/invoice shows (see termsText.js). customer_type currently only lives on deals,
+// not on jobs themselves, so this prefers the linked deal's value and falls back to a simple
+// heuristic when there's no linked deal (or it hasn't been set): a job billed to a company is
+// treated as Commercial, everything else as Residential.
+function getJobCustomerType(job) {
+  if (!job) return 'Residential';
+  if (job.deal_id) {
+    const deal = db.prepare(`SELECT customer_type FROM deals WHERE id = ?`).get(job.deal_id);
+    if (deal && deal.customer_type) return deal.customer_type;
+  }
+  return job.company_id ? 'Commercial' : 'Residential';
+}
+
+// A simple 2-row payment schedule derived from the estimate's deposit_percent — "Deposit X% due at
+// signing" / "Balance due upon completion". Estimates only carry a single deposit_percent field
+// (no multi-milestone schedule table), so this is what the Joist-style payment-schedule box on the
+// customer-facing estimate can show without new schema. Returns a single "due upon completion" row
+// when no deposit is set.
+function getEstimatePaymentSchedule(estimate) {
+  const percent = Number(estimate.deposit_percent) || 0;
+  if (percent <= 0) {
+    return [{ label: 'Balance', note: 'Due upon completion', amount: estimate.total }];
+  }
+  const deposit = +(estimate.total * (percent / 100)).toFixed(2);
+  const balance = +(estimate.total - deposit).toFixed(2);
+  return [
+    { label: `Deposit (${percent}%)`, note: 'Due at signing', amount: deposit },
+    { label: 'Balance', note: 'Due upon completion', amount: balance },
+  ];
+}
+
+// Parses a contracts-table row's JSON clauses column into the shape callers actually want
+// (an array of [heading, body] pairs), tolerating any bad/legacy JSON by falling back to [].
+function parseContract(row) {
+  let clauses = [];
+  try { clauses = JSON.parse(row.clauses || '[]'); } catch { clauses = []; }
+  return { id: row.id, name: row.name, heading: row.heading, intro: row.intro, clauses };
+}
+
+// Which contract's terms apply to a given estimate (Sept 2026 — replaces the old fixed
+// Residential/Commercial termsText.js split with the user's editable Contracts library). An
+// estimate that was explicitly assigned a contract (estimate.contract_id) always uses that one —
+// even if it's later un-defaulted — so a document doesn't silently change out from under a
+// customer who already saw/signed it with a specific contract attached. Otherwise, falls back to
+// whichever contract is currently flagged default for the resolved customer type. If somehow no
+// contract exists at all (every one deleted), returns a bare empty shape rather than throwing, so
+// a document still renders without a Terms & Conditions section instead of erroring out.
+function getContractForEstimate(estimate, customerType) {
+  if (estimate.contract_id) {
+    const row = db.prepare(`SELECT * FROM contracts WHERE id = ?`).get(estimate.contract_id);
+    if (row) return parseContract(row);
+  }
+  const col = customerType === 'Commercial' ? 'is_default_commercial' : 'is_default_residential';
+  const row = db.prepare(`SELECT * FROM contracts WHERE ${col} = 1 ORDER BY id LIMIT 1`).get();
+  if (row) return parseContract(row);
+  return { id: null, name: null, heading: 'AGREEMENT & LIMITED WARRANTY', intro: '', clauses: [] };
+}
+
 function logActivity(related_type, related_id, type, note) {
   db.prepare(`INSERT INTO activities (related_type, related_id, type, note) VALUES (?,?,?,?)`)
     .run(related_type, related_id, type, note);
+}
+
+// Generates an invoice from an estimate against a specific job — the exact same INV-#### /
+// invoice_items-copy shape the "Convert to invoice" button (routes/jobs.js) already produces,
+// factored out here so the auto-generate-on-signature flow (routes/public.js, for an estimate
+// that was written against an Opportunity rather than a Project) can produce the identical shape
+// of invoice without duplicating the numbering/copy logic. Marks the estimate 'approved'. Returns
+// the new invoice's id.
+function createInvoiceFromEstimate(estimate, jobId, { dueDate } = {}) {
+  const count = db.prepare(`SELECT COUNT(*) c FROM invoices`).get().c;
+  const number = `INV-${2000 + count + 1}`;
+  const publicToken = crypto.randomBytes(12).toString('hex');
+  const result = db.prepare(`
+    INSERT INTO invoices (job_id, estimate_id, number, status, tax_rate, due_date, public_token, show_rate, show_qty, show_item_total)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    jobId, estimate.id, number, 'sent', estimate.tax_rate, dueDate || null, publicToken,
+    estimate.show_rate, estimate.show_qty, estimate.show_item_total
+  );
+  const invoiceId = result.lastInsertRowid;
+  for (const it of estimate.items) {
+    db.prepare(`INSERT INTO invoice_items (invoice_id, description, qty, unit_price) VALUES (?,?,?,?)`)
+      .run(invoiceId, it.description, it.qty, it.unit_price);
+  }
+  db.prepare(`UPDATE estimates SET status = 'approved' WHERE id = ?`).run(estimate.id);
+  logActivity('job', jobId, 'invoice', `Invoice ${number} generated from estimate ${estimate.number}.`);
+  return invoiceId;
+}
+
+// Auto-creates a Project from a won Opportunity the moment a customer signs an estimate that was
+// written against that deal with no project yet (see routes/public.js's /estimates/:token/sign).
+// Mirrors the same fields the manual "+ Create project" button on the Deal page already relies on
+// (DealDetail.jsx's createProject(), which POSTs to /api/jobs with just contact_id/company_id/
+// deal_id/title/status/address and lets that route's own defaulting fill in everything else) —
+// duplicated narrowly here rather than reused, since this runs from an unauthenticated public
+// route with no req/res to hand to that Express handler. New status is 'pending_schedule' (not
+// the manual flow's 'accepted') per the requested pipeline: signed estimate -> invoice + project,
+// landing in the schedule queue rather than already-accepted.
+function createProjectFromDeal(deal, address, status) {
+  const contractAmount = Number(deal.value) || 0;
+  const result = db.prepare(`
+    INSERT INTO jobs (
+      contact_id, company_id, deal_id, title, status, address,
+      demo_days, site_prep_days, installation_days, final_walkthrough_days, contract_amount
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+  `).run(
+    deal.contact_id || null, deal.company_id || null, deal.id, deal.title, status || 'pending_schedule',
+    address || null, 1, 2, 5, 1, contractAmount
+  );
+  const jobId = result.lastInsertRowid;
+  logActivity('job', jobId, 'note', `Project "${deal.title}" created automatically after its estimate was signed.`);
+  return jobId;
 }
 
 // --- Job finish-out stages: Demo -> Site prep -> Installation -> Final walkthrough ---
@@ -303,6 +456,9 @@ function getJobMilestones(job) {
 
 module.exports = {
   computeItemsTotal, withTotals, getEstimateFull, getInvoiceFull, getJobFull, getJobCosting, getJobBilling, logActivity,
+  getJobCustomerType, getEstimatePaymentSchedule, createInvoiceFromEstimate, createProjectFromDeal, resolveEstimateParty,
+  readDisplayFlags,
   STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, stageDays, totalDays, computeProgress, addDays, computeEndDate, getJobMilestones,
   redactEstimateMoney, redactInvoiceMoney, redactJobMoney, getPendingEstimateApprovals,
+  getContractForEstimate,
 };
