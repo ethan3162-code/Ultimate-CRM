@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
 import { money, shortDate } from '../utils';
@@ -69,14 +69,24 @@ export default function InvoiceView() {
             </tr>
           </thead>
           <tbody>
-            {invoice.items.map((it) => (
-              <tr key={it.id}>
-                <td>{it.description}</td>
-                {invoice.show_qty !== false && <td className="num">{it.qty}</td>}
-                {invoice.show_rate !== false && <td className="num">{money(it.unit_price)}</td>}
-                {invoice.show_item_total !== false && <td className="num">{money(it.qty * it.unit_price)}</td>}
-              </tr>
-            ))}
+            {invoice.items.map((it) => {
+              const colCount = 1 + (invoice.show_qty !== false ? 1 : 0) + (invoice.show_rate !== false ? 1 : 0) + (invoice.show_item_total !== false ? 1 : 0);
+              return (
+                <Fragment key={it.id}>
+                  <tr>
+                    <td style={{ fontWeight: 600 }}>{it.description}</td>
+                    {invoice.show_qty !== false && <td className="num">{it.qty}</td>}
+                    {invoice.show_rate !== false && <td className="num">{money(it.unit_price)}</td>}
+                    {invoice.show_item_total !== false && <td className="num">{money(it.qty * it.unit_price)}</td>}
+                  </tr>
+                  {it.notes && it.notes.trim() && (
+                    <tr className="item-notes-row">
+                      <td colSpan={colCount} className="item-notes">{it.notes.trim()}</td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
         <div className="totals-row"><span className="lbl">Subtotal</span><span className="amt">{money(invoice.subtotal)}</span></div>
