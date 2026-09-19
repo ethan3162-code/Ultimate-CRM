@@ -264,7 +264,7 @@ export default function Leads() {
                         onChange={(e) => setLeadStatus(deal, e.target.value)}
                         className={'status-select ' + (LEAD_STATUS_TEXT[deal.lead_status] || 'muted')}
                       >
-                        {LEAD_STATUSES.map((s) => <option key={s} value={s}>{s}�/option>)}
+                        {LEAD_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </td>
                     <td className="muted">{dateTime(deal.created_at)}</td>
