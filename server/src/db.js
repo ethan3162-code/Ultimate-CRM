@@ -106,6 +106,20 @@ CREATE TABLE IF NOT EXISTS estimate_items (
   unit_price REAL NOT NULL DEFAULT 0
 );
 
+-- A custom, named multi-milestone payment schedule (Sept 2026) — "1st payment due on start date",
+-- "2nd payment due after demo", "final payment due on completion", etc, each carrying its own
+-- share of the estimate's total. Optional: an estimate with no rows here just falls back to the
+-- older single deposit_percent field (see helpers.js's getEstimatePaymentSchedule) — this table
+-- only exists at all once someone actually builds a custom schedule, so it's a brand-new table
+-- rather than a change to the estimates row itself.
+CREATE TABLE IF NOT EXISTS estimate_payment_schedule (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  estimate_id INTEGER NOT NULL REFERENCES estimates(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  percent REAL NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS invoices (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
