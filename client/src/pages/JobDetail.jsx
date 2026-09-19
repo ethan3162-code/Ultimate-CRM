@@ -152,7 +152,7 @@ export default function JobDetail() {
     return {
       contract_amount: j?.contract_amount ?? '', change_order_amount: j?.change_order_amount ?? 0,
       sales_tax_amount: j?.sales_tax_amount ?? 0, capital_improvement: !!j?.capital_improvement,
-      labor_paid: j?.labor_paid ?? 0,
+      labor_paid: j?.labor_paid ?? 0, salesperson_user_id: j?.salesperson_user_id || '',
     };
   }
 
@@ -193,6 +193,7 @@ export default function JobDetail() {
       change_order_amount: Number(billingForm.change_order_amount) || 0,
       sales_tax_amount: Number(billingForm.sales_tax_amount) || 0,
       labor_paid: Number(billingForm.labor_paid) || 0,
+      salesperson_user_id: billingForm.salesperson_user_id ? Number(billingForm.salesperson_user_id) : null,
     });
     setSavingBilling(false);
     setEditingBilling(false);
@@ -875,6 +876,16 @@ export default function JobDetail() {
                   <input type="checkbox" id="capital_improvement" checked={billingForm.capital_improvement} onChange={(e) => setBillingForm({ ...billingForm, capital_improvement: e.target.checked })} style={{ width: 'auto' }} />
                   <label htmlFor="capital_improvement" style={{ margin: 0 }}>Capital improvement</label>
                 </div>
+                <div className="field">
+                  <label>Salesperson <span className="muted" style={{ fontWeight: 400 }}>— who earns commission on this project</span></label>
+                  <select
+                    value={billingForm.salesperson_user_id || ''}
+                    onChange={(e) => setBillingForm({ ...billingForm, salesperson_user_id: e.target.value })}
+                  >
+                    <option value="">— none —</option>
+                    {directory.map((u) => <option key={u.id} value={u.id}>{u.username}</option>)}
+                  </select>
+                </div>
                 {canSeePrices && (
                 <div className="field">
                   <label>Labor paid so far ($)</label>
@@ -915,6 +926,27 @@ export default function JobDetail() {
                   <div className="row between"><span className="muted">Labor cost %</span><span className="mono">{job.billing.laborCostPercent === null ? '—' : `${job.billing.laborCostPercent}%`}</span></div>
                   <div className="row between"><span className="muted">Last updated</span><span>{job.updated_at ? timeAgo(job.updated_at) : '—'}</span></div>
                 </div>
+                {job.commission && (
+                  <>
+                    <div className="kicker" style={{ marginTop: 14 }}>Salesman commission</div>
+                    {job.commission.hidden ? (
+                      <p className="sub" style={{ margin: '6px 0 0' }}>🔒 Hidden — your account doesn't have visibility into commission figures.</p>
+                    ) : (
+                      <div className="stack" style={{ gap: 6, marginTop: 6 }}>
+                        <div className="row between"><span className="muted">Salesperson</span><span>{job.commission.ownerUsername}</span></div>
+                        <div className="row between"><span className="muted">Commission rate</span><span className="mono">{job.commission.percent}%</span></div>
+                        <div className="row between"><span className="muted">Basis (gross profit)</span><span className="mono">{money(job.commission.grossProfitAmount)}</span></div>
+                        <div className="row between" style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 6 }}>
+                          <span className="muted" style={{ fontWeight: 600 }}>Commission earned</span>
+                          <span className="mono" style={{ fontWeight: 700, color: 'var(--accent-ink)' }}>{money(job.commission.amount)}</span>
+                        </div>
+                        <p className="sub" style={{ margin: '2px 0 0' }}>
+                          Set from this person's rate in Users &amp; permissions — a percentage of gross profit above, not the total contract amount.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
               </>
             )}
           </div>
