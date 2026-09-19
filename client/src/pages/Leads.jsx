@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { money, shortDate, dateTime, accountName, mapLinks, splitWorkTypes, joinWorkTypes } from '../utils';
@@ -7,6 +7,9 @@ import {
   LEAD_SOURCES, LEAD_STATUSES, LEAD_TYPES, JOB_TIMEFRAMES, METHOD_OF_ENTRY,
   HA_MATCH_TYPES, WORK_TYPES, CUSTOMER_TYPES,
 } from '../constants';
+import FilterBar from '../components/FilterBar';
+
+const BLANK_FILTERS = { lead_status: '', source: '', owner: '', score: '' };
 
 const BLANK_FORM = {
   first_name: '', last_name: '', phone: '', mobile_phone: '', email: '', address: '', source: '',
@@ -27,13 +30,35 @@ export default function Leads() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(BLANK_FORM);
   const [busyId, setBusyId] = useState(null);
+  const [filters, setFilters] = useState(BLANK_FILTERS);
 
   function load() {
     api.deals().then((all) => setDeals(all.filter((d) => d.stage === 'new')));
   }
   useEffect(() => { load(); api.companies().then(setCompanies); }, []);
 
-  const leads = (deals || []).slice().sort((a, b) => b.score - a.score);
+  const allLeads = (deals || []).slice().sort((a, b) => b.score - a.score);
+
+  // Owner list is whatever's actually present on today's leads (free-form per company), rather
+  // than a fixed constant — so the dropdown never shows an owner nobody's been assigned yet.
+  const ownerOptions = useMemo(() => (
+    [...new Set(allLeads.map((d) => d.owner_username).filter(Boolean))].sort().map((o) => ({ value: o, label: o }))
+  ), [allLeads]);
+
+  const filterDefs = [
+    { key: 'lead_status', label: 'Status', options: LEAD_STATUSES.map((s) => ({ value: s, label: s })) },
+    { key: 'source', label: 'Source', options: LEAD_SOURCES.map((s) => ({ value: s, label: s })) },
+    { key: 'owner', label: 'Owner', options: ownerOptions },
+    { key: 'score', label: 'Priority', options: [{ value: 'Hot', label: 'Hot' }, { value: 'Warm', label: 'Warm' }, { value: 'Cool', label: 'Cool' }] },
+  ].filter((f) => f.options.length > 0);
+
+  const leads = allLeads.filter((d) => (
+    (!filters.lead_status || (d.lead_status || 'New') === filters.lead_status) &&
+    (!filters.source || d.source === filters.source) &&
+    (!filters.owner || d.owner_username === filters.owner) &&
+    (!filters.score || d.label === filters.score)
+  ));
+  const filtersActive = Object.values(filters).some(Boolean);
 
   async function submit(e) {
     e.preventDefault();
@@ -43,7 +68,7 @@ export default function Leads() {
       mobile_phone: form.mobile_phone || null, email: form.email || null, address: form.address || null,
       source: form.source || null, company_id: form.company_id || null,
     });
-    const title = `${form.first_name} ${form.last_name}${form.source ? ` — ${form.source}` : ' — New inquiry'}`;
+    const title = `${form.first_name} ${form.last_name}${ form.source ? ` — ${form.source}` : ' — New inquiry'}`;
     await api.createDeal({
       contact_id: contact.id, company_id: form.company_id || null, title,
       value: Number(form.value) || 0, stage: 'new', source: form.source || null,
@@ -124,7 +149,7 @@ export default function Leads() {
             <div className="field"><label>Estimated value ($)</label><input type="number" min="0" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} /></div>
 
             <div className="field" style={{ gridColumn: '1 / -1', marginTop: 4 }}>
-              <div className="kicker">Inquiry</div>
+              <div className="ki{cker">In quiry</div>
             </div>
             <div className="field">
               <label>Lead type</label>
@@ -201,10 +226,21 @@ export default function Leads() {
         </div>
       )}
 
-      {!deals ? <div className="loading">Loading…</div> : leads.length === 0 ? (
-        <div className="card"><div className="empty">No new leads right now. New webhook signups land here automatically.</div></div>
-      ) : (
-        <div className="table-wrap">
+      {!deals ? <div className="loading">Loading…</div> : (
+        <>
+          {allLeads.length > 0 && filterDefs.length > 0 && (
+            <FilterBar
+              filters={filterDefs} values={filters}
+              onChange={(key, value) => setFilters((f) => ({ ...f, [key]: value }))}
+              onClear={() => setFilters(BLANK_FILTERS)}
+            />
+          )}
+          {leads.length === 0 ? (
+            <div className="card">
+              <div className="empty">{filtersActive ? 'No leads match your filters.' : "No new leads right now. New webhook signups land here automatically."}</div>
+            </div>
+          ) : (
+      <div className="table-wrap">
           <table className="list deal-table">
             <thead>
               <tr>
@@ -228,7 +264,7 @@ export default function Leads() {
                         onChange={(e) => setLeadStatus(deal, e.target.value)}
                         className={'status-select ' + (LEAD_STATUS_TEXT[deal.lead_status] || 'muted')}
                       >
-                        {LEAD_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        {LEAD_STATUSES.map((s) => <option key={s} value={s}>{s}�/option>)}
                       </select>
                     </td>
                     <td className="muted">{dateTime(deal.created_at)}</td>
@@ -257,6 +293,8 @@ export default function Leads() {
             </tbody>
           </table>
         </div>
+          )}
+        </>
       )}
     </>
   );
