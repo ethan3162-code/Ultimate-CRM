@@ -4,6 +4,10 @@ import { api } from '../api';
 import { money, shortDate, dateTime, isoDate, accountName, mapLinks, splitWorkTypes, joinWorkTypes } from '../utils';
 import { WORK_TYPES, CUSTOMER_TYPES } from '../constants';
 import { usePermission } from '../auth';
+import FilterBar from '../components/FilterBar';
+
+const BLANK_FILTERS = { owner: '', customer_type: '', score: '' };
+const SCORE_OPTIONS = ['Hot', 'Warm', 'Cool', 'Won', 'Lost'];
 
 // Fresh, unqualified interest lives on the Leads page now — this board picks
 // up once a lead has been qualified, so 'new' is intentionally left out here.
@@ -29,6 +33,7 @@ export default function Pipeline() {
   const [form, setForm] = useState({ title: '', value: '', stage: 'qualified', rep: '', work_type: '', customer_type: 'Residential' });
   const [view, setView] = useState('kanban');
   const [cursor, setCursor] = useState(() => { const d = new Date(); d.setDate(1); return d; });
+  const [filters, setFilters] = useState(BLANK_FILTERS);
 
   function load() {
     api.deals().then(setAllDeals);
@@ -37,7 +42,28 @@ export default function Pipeline() {
 
   // Leads (stage 'new') live on their own page — this board is the qualified
   // pipeline onward, so filter them out everywhere below.
-  const deals = useMemo(() => allDeals.filter((d) => d.stage !== 'new'), [allDeals]);
+  const qualifiedDeals = useMemo(() => allDeals.filter((d) => d.stage !== 'new'), [allDeals]);
+
+  // Owner list reflects who's actually assigned across today's opportunities, rather than a
+  // fixed constant, same reasoning as the Leads page's owner filter.
+  const ownerOptions = useMemo(() => (
+    [...new Set(qualifiedDeals.map((d) => d.owner_username).filter(Boolean))].sort().map((o) => ({ value: o, label: o }))
+  ), [qualifiedDeals]);
+
+  const filterDefs = [
+    { key: 'owner', label: 'Owner', options: ownerOptions },
+    { key: 'customer_type', label: 'Customer type', options: CUSTOMER_TYPES.map((t) => ({ value: t, label: t })) },
+    { key: 'score', label: 'Score', options: SCORE_OPTIONS.map((s) => ({ value: s, label: s })) },
+  ].filter((f) => f.options.length > 0);
+
+  // Applied here, once, so every view (Kanban/Table/Calendar) sees the same filtered set —
+  // filtering this board narrows what's on it everywhere, not just one view of it.
+  const deals = useMemo(() => qualifiedDeals.filter((d) => (
+    (!filters.owner || d.owner_username === filters.owner) &&
+    (!filters.customer_type || d.customer_type === filters.customer_type) &&
+    (!filters.score || d.label === filters.score)
+  )), [qualifiedDeals, filters]);
+  const filtersActive = Object.values(filters).some(Boolean);
 
   const cells = useMemo(() => {
     const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -105,6 +131,14 @@ export default function Pipeline() {
         <button type="button" className={'tab' + (view === 'table' ? ' active' : '')} onClick={() => setView('table')}>Table</button>
         <button type="button" className={'tab' + (view === 'calendar' ? ' active' : '')} onClick={() => setView('calendar')}>Calendar</button>
       </div>
+
+      {filterDefs.length > 0 && (
+        <FilterBar
+          filters={filterDefs} values={filters}
+          onChange={(key, value) => setFilters((f) => ({ ...f, [key]: value }))}
+          onClear={() => setFilters(BLANK_FILTERS)}
+        />
+      )}
 
       {showForm && canEdit && (
         <div className="card" style={{ marginBottom: 18 }}>
@@ -214,7 +248,7 @@ export default function Pipeline() {
                   )}
                 </div>
               ))}
-              {list.length === 0 && <div className="empty" style={{ fontSize: 12, padding: '10px 0' }}>No deals</div>}
+              {list.length === 0 && <div className="empty" style={{ fontSize: 12, padding: '10px 0' }}>{filtersActive ? 'No matches' : 'No deals'}</div>}
             </div>
           );
         })}
@@ -258,7 +292,7 @@ export default function Pipeline() {
                   </tr>
                 );
               })}
-              {deals.length === 0 && <tr><td colSpan={11}><div className="empty">No deals yet.</div></td></tr>}
+              {deals.length === 0 && <tr><td colSpan={11}><div className="empty">{filtersActive ? 'No opportunities match your filters.' : 'No deals yet.'}</div></td></tr>}
             </tbody>
           </table>
         </div>
