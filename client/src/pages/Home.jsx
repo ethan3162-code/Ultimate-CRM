@@ -7,8 +7,8 @@ import { BarList } from '../components/charts';
 const LEAD_STATUS_ORDER = ['New', 'Follow Up', 'Unresponsive', 'Restart', 'Converted', 'Lost'];
 const OPP_STAGE_LABEL = { qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation' };
 const OPP_STAGE_ORDER = ['qualified', 'proposal', 'negotiation'];
-const JOB_STATUS_LABEL = { accepted: 'Accepted', scheduled: 'Scheduled', in_progress: 'In progress', on_hold: 'On hold' };
-const JOB_STATUS_ORDER = ['accepted', 'scheduled', 'in_progress', 'on_hold'];
+const JOB_STATUS_LABEL = { pending_schedule: 'Pending schedule', accepted: 'Accepted', scheduled: 'Scheduled', in_progress: 'In progress', on_hold: 'On hold' };
+const JOB_STATUS_ORDER = ['pending_schedule', 'accepted', 'scheduled', 'in_progress', 'on_hold'];
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 
@@ -107,8 +107,8 @@ export default function Home() {
           <p className="sub" style={{ margin: '-4px 0 12px' }}>Estimates from salespeople who need your sign-off before they can go to the customer — open the project to approve or reject.</p>
           <div className="stack" style={{ gap: 2 }}>
             {pendingApprovals.map((a) => (
-              <Link key={a.id} to={`/jobs/${a.job_id}`} className="attention-row">
-                <span>{a.number} — {a.job_title}{a.requested_by ? ` · requested by ${a.requested_by}` : ''}</span>
+              <Link key={a.id} to={a.linked_type === 'opportunity' ? `/pipeline/${a.linked_id}` : `/jobs/${a.linked_id}`} className="attention-row">
+                <span>{a.number} — {a.linked_title}{a.requested_by ? ` · requested by ${a.requested_by}` : ''}</span>
                 <span className="mono" style={{ color: 'var(--amber)' }}>{a.total !== null ? money(a.total) : ''} {timeAgo(a.requested_at)}</span>
               </Link>
             ))}
