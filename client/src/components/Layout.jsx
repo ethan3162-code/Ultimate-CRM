@@ -32,6 +32,10 @@ const NAV = [
       // that already gates the inline Approve/Reject buttons on the Estimates and Project pages.
       { to: '/estimate-approvals', label: 'Estimate approvals', requiresApprover: true },
       { to: '/jobs', label: 'Projects', page: 'jobs' },
+      // Not one of the individually-configurable business pages — shown to admins, anyone flagged
+      // "Sees commissions" (everyone's payouts), and any salesperson with a commission rate set
+      // (their own payouts only), same personal-capability pattern as "Estimate approvals" above.
+      { to: '/commissions', label: 'Commission payouts', requiresCommissions: true },
       { to: '/transactions', label: 'Transactions', page: 'transactions' },
       { to: '/companies', label: 'Companies', page: 'companies' },
       { to: '/contacts', label: 'Contacts', page: 'contacts' },
@@ -95,6 +99,7 @@ export default function Layout() {
       ...group,
       items: group.items.filter((item) => {
         if (item.requiresApprover) return !!(user && user.can_approve_estimates);
+        if (item.requiresCommissions) return !!(user && (user.can_see_commissions || Number(user.commission_percent) > 0));
         return item.always || (perms[item.page] || 'none') !== 'none';
       }),
     }))
