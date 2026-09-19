@@ -101,7 +101,7 @@ const VALID_LEVELS = ['edit', 'view', 'none'];
 const SECTIONS = {
   'pipeline.about': { label: 'Deal value & info (the "About" card)', page: 'pipeline', fields: ['title', 'value', 'probability', 'expected_close', 'source'] },
   'pipeline.notes': { label: 'Notes & inquiry', page: 'pipeline', fields: ['project_description', 'inquiry_notes', 'lead_notes'] },
-  'jobs.billing': { label: 'Project billing', page: 'jobs', fields: ['contract_amount', 'change_order_amount', 'sales_tax_amount', 'capital_improvement', 'labor_paid'] },
+  'jobs.billing': { label: 'Project billing', page: 'jobs', fields: ['contract_amount', 'change_order_amount', 'sales_tax_amount', 'capital_improvement', 'labor_paid', 'salesperson_user_id'] },
   'jobs.schedule': { label: 'Schedule & status', page: 'jobs', fields: ['status', 'start_date', 'demo_days', 'site_prep_days', 'installation_days', 'final_walkthrough_days'] },
 };
 
