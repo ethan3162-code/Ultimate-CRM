@@ -553,6 +553,22 @@ function ensureColumn(table, column, ddl) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
   }
 }
+
+// --- Custom report builder: detail/tabular reports (Sept 2026) ---
+// Added on top of the original aggregate-chart report (data_source/group_by/metric/chart_type
+// above) so a report can also be a Salesforce-style detail list: explicit columns, a second
+// grouping level with subtotals, and a flexible filter list — see reportSources.js's FIELDS/
+// OPERATORS. `report_type` ('summary' | 'detail') picks which shape a given report renders as;
+// the original aggregate columns above are untouched, so existing summary-chart reports keep
+// working exactly as before. `group_by` (already on the table) doubles as the detail report's
+// first-level grouping field; `group_by_2` is the new second level.
+ensureColumn('custom_reports', 'report_type', "report_type TEXT NOT NULL DEFAULT 'summary'");
+ensureColumn('custom_reports', 'columns', "columns TEXT NOT NULL DEFAULT '[]'");
+ensureColumn('custom_reports', 'group_by_2', 'group_by_2 TEXT');
+ensureColumn('custom_reports', 'filters', "filters TEXT NOT NULL DEFAULT '[]'");
+ensureColumn('custom_reports', 'sort_field', 'sort_field TEXT');
+ensureColumn('custom_reports', 'sort_dir', "sort_dir TEXT NOT NULL DEFAULT 'desc'");
+
 ensureColumn('jobs', 'start_date', 'start_date TEXT');
 ensureColumn('jobs', 'end_date', 'end_date TEXT');
 ensureColumn('jobs', 'progress_percent', 'progress_percent INTEGER NOT NULL DEFAULT 0');
@@ -670,12 +686,12 @@ ensureColumn('estimates', 'approval_requested_at', 'approval_requested_at TEXT')
 ensureColumn('estimates', 'approved_by_user_id', 'approved_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 ensureColumn('estimates', 'approved_at', 'approved_at TEXT');
 ensureColumn('estimates', 'rejection_reason', 'rejection_reason TEXT');
-// Dashboard moved from an always-view page to an admin-only one (Sept 2026 — the user asked
-// that only admins see it, alongside Users & permissions, which was already admin-only). Any
-// leftover per-user 'dashboard' rows from when it was individually configurable are now dead —
-// getPermissions() forces every admin-only page from a fixed list, not from this table — so
-// clean them out rather than leave stale, unused rows behind.
-db.prepare(`DELETE FROM user_permissions WHERE page = 'dashboard'`).run();
+// Dashboard briefly went admin-only (Sept 2026), which deleted every per-user 'dashboard' row —
+// then (still Sept 2026) the user asked for it back as an individually-grantable page like any
+// other, alongside Automations and Integrations (see permissionsConfig.js's PAGES/ADMIN_ONLY_PAGES).
+// Nothing to clean up here any more; the backfill below (after seedPagePermissions is defined)
+// re-adds a 'none' row for 'dashboard' — and for 'automations'/'integrations'/'price_book', which
+// are new keys too — to every existing non-admin login that predates them.
 // Per-record assignment for notifications (Sept 2026) — the user asked that appointments and
 // project schedule milestones/task due dates email the person they're assigned to, with a
 // calendar-invite attachment (see notify.js/ics.js). These are deliberately separate from the
@@ -739,6 +755,17 @@ const usersNeedingDefaults = db.prepare(`
   WHERE u.role != 'admin' AND NOT EXISTS (SELECT 1 FROM user_permissions p WHERE p.user_id = u.id)
 `).all();
 for (const { id, role } of usersNeedingDefaults) seedPagePermissions(id, role);
+
+// Migration: back-fill any PAGES key added after a login was already seeded (dashboard/
+// automations/integrations moving back to individually-configurable, and items/price_book
+// splitting out of one combined "Items & price book" key) with a 'none' row, for every existing
+// non-admin login. INSERT OR IGNORE means this never touches a row that already exists, so it
+// can never reset a permission an admin already granted — it only ever adds the missing ones.
+const allNonAdminUserIds = db.prepare(`SELECT id FROM users WHERE role != 'admin'`).all().map((r) => r.id);
+const backfillPageRow = db.prepare(`INSERT OR IGNORE INTO user_permissions (user_id, page, level) VALUES (?, ?, 'none')`);
+for (const uid of allNonAdminUserIds) {
+  for (const key of Object.keys(PAGES)) backfillPageRow.run(uid, key);
+}
 
 // --- Customer texting auto-responses, Hatch-style (Sept 2026) ---
 // Seeded once, by name, so the four auto-responses the user asked for ("just like Hatch") work

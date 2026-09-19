@@ -85,7 +85,7 @@ router.get('/', (req, res) => {
     });
   }
 
-  // --- Projects & billing (jobs) ---
+  // --- Projects (jobs) ---
   if (perms.jobs !== 'none') {
     const rows = db.prepare(`
       SELECT j.id, j.title, j.address, j.status FROM jobs j
@@ -95,7 +95,7 @@ router.get('/', (req, res) => {
       ORDER BY j.created_at DESC LIMIT ?
     `).all(p, p, p, p, LIMIT);
     if (rows.length) groups.push({
-      key: 'jobs', label: 'Projects & billing',
+      key: 'jobs', label: 'Projects',
       results: rows.map((j) => ({ id: j.id, title: j.title, subtitle: [j.status.replace('_', ' '), j.address].filter(Boolean).join(' · '), path: `/jobs/${j.id}` })),
     });
   }

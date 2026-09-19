@@ -36,6 +36,7 @@ app.use('/api/contacts', requireAuth, requirePage('contacts'), require('./routes
 // role can reach.
 app.use('/api/deals', requireAuth, requireAnyPage(['leads', 'pipeline']), require('./routes/deals'));
 app.use('/api/jobs', requireAuth, requirePage('jobs'), require('./routes/jobs'));
+app.use('/api/transactions', requireAuth, requirePage('transactions'), require('./routes/transactions'));
 app.use('/api/dashboard', requireAuth, requirePage('dashboard'), require('./routes/dashboard'));
 app.use('/api/automations', requireAuth, requirePage('automations'), require('./routes/automations'));
 app.use('/api/tickets', requireAuth, requirePage('tickets'), require('./routes/tickets'));
@@ -44,9 +45,12 @@ app.use('/api/insights', requireAuth, requirePage('dashboard'), require('./route
 // user can use it rather than tying it to one page's permission level.
 app.use('/api/ai', requireAuth, require('./routes/ai'));
 app.use('/api/appointments', requireAuth, requirePage('calendar'), require('./routes/appointments'));
-// Google Calendar OAuth connect/disconnect lives on the admin-only Integrations page.
+// Google Calendar OAuth connect/disconnect lives on the Integrations page.
 app.use('/api/auth', requireAuth, requirePage('integrations'), require('./routes/auth'));
-app.use('/api/catalog-items', requireAuth, requirePage('items'), require('./routes/catalogItems'));
+// Gated by requireAnyPage rather than a single requirePage, since one shared table serves two
+// permissions now (Items = calculator materials, Price book = sales items) — see
+// routes/catalogItems.js for the finer per-row filtering by which kind of item it is.
+app.use('/api/catalog-items', requireAuth, requireAnyPage(['items', 'price_book']), require('./routes/catalogItems'));
 app.use('/api/reports', requireAuth, requirePage('dashboard'), require('./routes/reports'));
 app.use('/api/custom-reports', requireAuth, requirePage('reports'), require('./routes/customReports'));
 app.use('/api/employees', requireAuth, requirePage('employees'), require('./routes/employees'));

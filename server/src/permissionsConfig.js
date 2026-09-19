@@ -19,25 +19,47 @@ const ROLE_LABEL = {
   user: 'User',
 };
 
-// Every business page permissions apply to. `admin`-only pages (Users, Automations,
-// Integrations, Dashboard) are kept out of this list and gated separately (see
-// ADMIN_ONLY_PAGES) — they never open up to a non-admin login no matter what its individual
-// page permissions say.
+// Every business page permissions apply to. Dashboard, Automations and Integrations moved back
+// into this list (Sept 2026) — the user asked that these, like every other business page, only
+// open up to a non-admin login once an admin explicitly grants it, and disappear from that
+// person's menu entirely until then (see Layout.jsx's visibleNav filter and auth.jsx's
+// Protected) rather than being permanently walled off from every non-admin the way Users &
+// permissions and the custom report builder still are (see ADMIN_ONLY_PAGES).
+//
+// The 'items'/'price_book' KEYS (unchanged internal identifiers — same convention as 'jobs'
+// labeling "Projects" or 'materials' labeling "Material calculator" below: the key doesn't have
+// to read the same as the label) used to be one combined "Items & price book" page/permission
+// covering catalog_items rows of both kinds. Split into two so each can be granted independently,
+// then relabeled once more (Sept 2026) to the names the user actually wants: the 'items' key is
+// labeled "Price book" — the Material Calculator's own catalog (rows with a material_key —
+// asphalt, concrete, pavers, etc.); the 'price_book' key is labeled "Items" — the priced products/
+// services you drop into a job estimate (rows with no material_key). See routes/catalogItems.js's
+// itemPageKey() for the server-side split of the one shared table by permission (keyed the same
+// as always — only the display labels below changed).
+//
+// 'transactions' (Sept 2026) is the company-wide invoices/payments ledger (see
+// routes/transactions.js) — kept as its own permission, separate from 'jobs', so it can be
+// granted to someone doing the books without also handing them project-management access.
 const PAGES = {
   home: 'Home',
+  dashboard: 'Dashboard',
   leads: 'Leads',
   pipeline: 'Opportunities',
   companies: 'Companies',
   contacts: 'Contacts',
-  jobs: 'Projects & billing',
+  jobs: 'Projects',
+  transactions: 'Transactions',
   materials: 'Material calculator',
-  items: 'Items & price book',
+  items: 'Price book',
+  price_book: 'Items',
   calendar: 'Appointments',
   schedule: 'Project schedule',
   tickets: 'Tickets',
   employees: 'Employees',
   subcontractors: 'Subcontractors',
   vehicles: 'Vehicles',
+  automations: 'Automations',
+  integrations: 'Integrations',
 };
 
 // Pages every login can always at least view — the landing page has no edit actions of its own
@@ -46,13 +68,14 @@ const PAGES = {
 // should always have one once seeded) — not an override of an explicit 'none' an admin has set.
 const ALWAYS_VIEW_PAGES = ['home'];
 
-// Admin-only pages: system configuration (user accounts, automation rules, integration keys)
-// plus the Dashboard & reports rollup (Sept 2026 — the user asked that only admins see it),
-// never opened up to a non-admin login — not individually configurable like the business pages.
-// 'reports' (Sept 2026) is the custom report builder — kept admin-only for the same reason as
-// 'dashboard': it's a cross-cutting rollup over other people's data (pipeline, revenue, jobs),
-// not a single business object with its own natural owner.
-const ADMIN_ONLY_PAGES = ['users', 'automations', 'integrations', 'dashboard', 'reports'];
+// Admin-only pages: never opened up to a non-admin login no matter what its individual page
+// permissions (or any custom role) say — not individually configurable like the business pages
+// above. 'users' is account/permission management itself, so letting a non-admin in would let
+// them grant themselves (or anyone) more access. 'reports' (the custom report builder) stays
+// admin-only for the same reason it always has: it's a cross-cutting rollup that can query across
+// every other business object (deals, jobs, invoices, ...), not a single business object with its
+// own natural owner — unlike Dashboard/Automations/Integrations, which moved to PAGES above.
+const ADMIN_ONLY_PAGES = ['users', 'reports'];
 
 // Starting point applied when a new regular ('user') login is created: nothing but the always-
 // view pages. There's no role to infer a "home turf" from any more — the admin names the person
