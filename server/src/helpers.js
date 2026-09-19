@@ -192,6 +192,9 @@ function redactJobMoney(job) {
     estimates: (job.estimates || []).map(redactEstimateMoney),
     invoices: (job.invoices || []).map(redactInvoiceMoney),
     attendance: (job.attendance || []).map((a) => ({ ...a, daily_rate: null })),
+    // No general price visibility means no commission figures either — commission is derived
+    // straight from gross profit, so showing it would leak a dollar figure through the back door.
+    commission: job.commission && { ...job.commission, grossProfitAmount: null, amount: null },
   };
 }
 
@@ -317,8 +320,86 @@ function getJobFull(id) {
   const account = company ? { id: company.id, type: 'company', name: company.name } : contact ? { id: contact.id, type: 'contact', name: `${contact.first_name} ${contact.last_name}` } : null;
   const leadSource = (deal && deal.source) || (contact && contact.source) || null;
   const owner = job.owner_user_id ? db.prepare(`SELECT username FROM users WHERE id = ?`).get(job.owner_user_id) : null;
+  const salesperson = job.salesperson_user_id ? db.prepare(`SELECT username, commission_percent FROM users WHERE id = ?`).get(job.salesperson_user_id) : null;
+  const commission = getJobCommission(job, billing, salesperson);
 
-  return { ...job, estimates, invoices, photos, costing, billing, attendance, account, opportunity: deal, lead_source: leadSource, owner_username: owner ? owner.username : null };
+  return {
+    ...job, estimates, invoices, photos, costing, billing, attendance, account, opportunity: deal, lead_source: leadSource,
+    owner_username: owner ? owner.username : null,
+    salesperson_username: salesperson ? salesperson.username : null,
+    commission,
+  };
+}
+
+// Salesman commission (Sept 2026): the project's own salesperson_user_id (set from the
+// originating opportunity's owner when the project is created — see createProjectFromDeal —
+// but independently editable from the Project billing section) earns a percentage of gross
+// profit — not the total contract value — so a job that only broke even, or lost money, never
+// pays out a commission it didn't actually earn. The rate itself lives on the user
+// (users.commission_percent, admin-set from Users & permissions), not on the job, since
+// "configurable per salesperson" means one rate that applies to everything that person is
+// credited with, not something re-typed per project. Deliberately keyed off salesperson_user_id
+// rather than the job's owner_user_id — that field is who gets emailed the schedule (a foreman
+// or scheduler), not necessarily who sold the job.
+function getJobCommission(job, billing, salesperson) {
+  if (!job.salesperson_user_id || !salesperson) return null;
+  const percent = Number(salesperson.commission_percent) || 0;
+  const grossProfitAmount = billing.grossProfitAmount;
+  const amount = +((grossProfitAmount * percent) / 100).toFixed(2);
+  return {
+    ownerUserId: job.salesperson_user_id,
+    ownerUsername: salesperson.username,
+    percent,
+    grossProfitAmount,
+    amount,
+  };
+}
+
+// Hides the commission block for a login that isn't allowed to see it (see auth.js's
+// canSeeJobCommission) — separate from redactJobMoney/price visibility because commission
+// visibility is its own independent flag, not tied to whether someone can see prices generally.
+// A job with no owner (commission already null) stays null either way; a job that DOES earn a
+// commission but is hidden from this viewer becomes { hidden: true } instead of disappearing
+// silently, so the client can show a "🔒 Hidden" state (same convention as price_hidden) rather
+// than looking like the project simply has no commission at all.
+function redactJobCommission(job) {
+  if (!job) return job;
+  return { ...job, commission: job.commission ? { hidden: true } : null };
+}
+
+// Commission payout report (Sept 2026): which jobs' commissions should be paid out in a given
+// week/month, bucketed by the date the customer's balance was actually cleared — the latest
+// payment recorded against any of the job's invoices — rather than by invoice or job creation
+// date. That means a salesperson is credited exactly once, in the period the money actually
+// finished coming in, never repeatedly for each partial payment along the way. A job still
+// carrying a balance is left out entirely — it hasn't earned its payout yet — and a job with no
+// payments at all has nothing to bucket by, so it's skipped too (it'll show up once it's paid).
+function getCommissionPayouts(periodStart, periodEnd) {
+  const jobs = db.prepare(`SELECT * FROM jobs WHERE salesperson_user_id IS NOT NULL`).all();
+  const rows = [];
+  for (const job of jobs) {
+    const invoiceRows = db.prepare(`SELECT id FROM invoices WHERE job_id = ?`).all(job.id);
+    if (!invoiceRows.length) continue;
+    const invoices = invoiceRows.map((r) => getInvoiceFull(r.id));
+    const costing = getJobCosting(job.id, { invoices });
+    const billing = getJobBilling(job, costing, invoices);
+    if (billing.customerBalance > 0.01) continue;
+    const allPayments = invoices.flatMap((i) => i.payments);
+    if (!allPayments.length) continue;
+    const payoutDate = allPayments.reduce((max, p) => (p.paid_at > max ? p.paid_at : max), allPayments[0].paid_at);
+    const payoutDay = (payoutDate || '').slice(0, 10);
+    if (!payoutDay || payoutDay < periodStart || payoutDay > periodEnd) continue;
+    const salesperson = db.prepare(`SELECT id, username, commission_percent FROM users WHERE id = ?`).get(job.salesperson_user_id);
+    if (!salesperson) continue;
+    const commission = getJobCommission(job, billing, salesperson);
+    if (!commission) continue;
+    rows.push({
+      jobId: job.id, title: job.title, address: job.address, payoutDate: payoutDay,
+      salespersonUserId: salesperson.id, salespersonUsername: salesperson.username,
+      percent: commission.percent, grossProfitAmount: commission.grossProfitAmount, amount: commission.amount,
+    });
+  }
+  return rows.sort((a, b) => (a.payoutDate < b.payoutDate ? -1 : a.payoutDate > b.payoutDate ? 1 : 0));
 }
 
 // Residential vs Commercial for a job — used to pick which Terms & Conditions text a customer-
@@ -436,11 +517,11 @@ function createProjectFromDeal(deal, address, status) {
   const result = db.prepare(`
     INSERT INTO jobs (
       contact_id, company_id, deal_id, title, status, address,
-      demo_days, site_prep_days, installation_days, final_walkthrough_days, contract_amount
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+      demo_days, site_prep_days, installation_days, final_walkthrough_days, contract_amount, salesperson_user_id
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
     deal.contact_id || null, deal.company_id || null, deal.id, deal.title, status || 'pending_schedule',
-    address || null, 1, 2, 5, 1, contractAmount
+    address || null, 1, 2, 5, 1, contractAmount, deal.owner_user_id || null
   );
   const jobId = result.lastInsertRowid;
   logActivity('job', jobId, 'note', `Project "${deal.title}" created automatically after its estimate was signed.`);
@@ -509,6 +590,6 @@ module.exports = {
   getJobCustomerType, getEstimatePaymentSchedule, createInvoiceFromEstimate, createProjectFromDeal, resolveEstimateParty,
   readDisplayFlags, getEstimateScheduleRows, saveEstimateScheduleRows,
   STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, stageDays, totalDays, computeProgress, addDays, computeEndDate, getJobMilestones,
-  redactEstimateMoney, redactInvoiceMoney, redactJobMoney, getPendingEstimateApprovals,
-  getContractForEstimate,
+  redactEstimateMoney, redactInvoiceMoney, redactJobMoney, redactJobCommission, getPendingEstimateApprovals,
+  getContractForEstimate, getCommissionPayouts,
 };
