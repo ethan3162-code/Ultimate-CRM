@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { money, dateTime, accountName } from '../utils';
+import { money, dateTime, accountName, estimateTotal } from '../utils';
 import LineItemEditor from '../components/LineItemEditor';
+import PaymentScheduleEditor from '../components/PaymentScheduleEditor';
 import DisplayOptions from '../components/DisplayOptions';
 import { usePermission, useAuth } from '../auth';
 
@@ -10,7 +11,7 @@ import { usePermission, useAuth } from '../auth';
 // "pending" state this page also has to show for a not-yet-project estimate.
 const STATUS_PILL = { draft: '', sent: 'amber', approved: 'green' };
 
-const BLANK_ITEM = { description: '', qty: 1, unit_price: 0 };
+const BLANK_ITEM = { description: '', notes: '', qty: 1, unit_price: 0 };
 
 // Joist-style tabs (Sept 2026) — "Declined" is a customer's explicit decline (declined_at set,
 // see routes/public.js's /estimates/:token/decline), never the separate internal-approval reject,
@@ -49,6 +50,7 @@ export default function Estimates() {
   const [items, setItems] = useState([{ ...BLANK_ITEM }]);
   const [taxRate, setTaxRate] = useState('0');
   const [depositPercent, setDepositPercent] = useState('');
+  const [paymentSchedule, setPaymentSchedule] = useState([]);
   const [displayOptions, setDisplayOptions] = useState({ show_rate: true, show_qty: true, show_item_total: true });
   const [saving, setSaving] = useState(false);
   const [copiedLink, setCopiedLink] = useState(null);
@@ -62,6 +64,7 @@ export default function Estimates() {
   const [editItems, setEditItems] = useState([{ ...BLANK_ITEM }]);
   const [editTaxRate, setEditTaxRate] = useState('0');
   const [editDepositPercent, setEditDepositPercent] = useState('');
+  const [editPaymentSchedule, setEditPaymentSchedule] = useState([]);
   const [editContractId, setEditContractId] = useState('');
   const [editDisplayOptions, setEditDisplayOptions] = useState({ show_rate: true, show_qty: true, show_item_total: true });
   const [savingEdit, setSavingEdit] = useState(false);
@@ -91,7 +94,8 @@ export default function Estimates() {
         deal_id: Number(dealId),
         tax_rate: Number(taxRate) || 0,
         deposit_percent: Number(depositPercent) || 0,
-        items: cleanItems.map((it) => ({ description: it.description, qty: Number(it.qty) || 0, unit_price: Number(it.unit_price) || 0 })),
+        items: cleanItems.map((it) => ({ description: it.description, notes: it.notes || '', qty: Number(it.qty) || 0, unit_price: Number(it.unit_price) || 0 })),
+        payment_schedule: paymentSchedule.filter((r) => r.name.trim()).map((r) => ({ name: r.name.trim(), percent: Number(r.percent) || 0 })),
         contract_id: contractId ? Number(contractId) : null,
         ...displayOptions,
       });
@@ -100,6 +104,7 @@ export default function Estimates() {
       setItems([{ ...BLANK_ITEM }]);
       setTaxRate('0');
       setDepositPercent('');
+      setPaymentSchedule([]);
       setDisplayOptions({ show_rate: true, show_qty: true, show_item_total: true });
       setShowForm(false);
       load();
@@ -142,9 +147,10 @@ export default function Estimates() {
 
   function startEdit(est) {
     setEditingId(est.id);
-    setEditItems(est.items.map((it) => ({ description: it.description, qty: it.qty, unit_price: it.unit_price })));
+    setEditItems(est.items.map((it) => ({ description: it.description, notes: it.notes || '', qty: it.qty, unit_price: it.unit_price })));
     setEditTaxRate(String(est.tax_rate ?? 0));
     setEditDepositPercent(est.deposit_percent ? String(est.deposit_percent) : '');
+    setEditPaymentSchedule((est.payment_schedule || []).map((r) => ({ name: r.name, percent: r.percent })));
     setEditContractId(est.contract_id ? String(est.contract_id) : '');
     setEditDisplayOptions({
       show_rate: est.show_rate !== 0, show_qty: est.show_qty !== 0, show_item_total: est.show_item_total !== 0,
@@ -162,9 +168,10 @@ export default function Estimates() {
     setSavingEdit(true);
     try {
       await api.updateEstimate(estimateId, {
-        items: cleanItems.map((it) => ({ description: it.description, qty: Number(it.qty) || 0, unit_price: Number(it.unit_price) || 0 })),
+        items: cleanItems.map((it) => ({ description: it.description, notes: it.notes || '', qty: Number(it.qty) || 0, unit_price: Number(it.unit_price) || 0 })),
         tax_rate: Number(editTaxRate) || 0,
         deposit_percent: Number(editDepositPercent) || 0,
+        payment_schedule: editPaymentSchedule.filter((r) => r.name.trim()).map((r) => ({ name: r.name.trim(), percent: Number(r.percent) || 0 })),
         contract_id: editContractId ? Number(editContractId) : null,
         ...editDisplayOptions,
       });
@@ -259,6 +266,7 @@ export default function Estimates() {
               <label>Deposit required upfront (%)</label>
               <input type="number" min="0" max="100" placeholder="e.g. 30" value={editDepositPercent} onChange={(e) => setEditDepositPercent(e.target.value)} />
             </div>
+            <PaymentScheduleEditor rows={editPaymentSchedule} setRows={setEditPaymentSchedule} total={estimateTotal(editItems, editTaxRate)} />
             <div className="field" style={{ margin: '10px 0', maxWidth: 320 }}>
               <label>Contract <span className="muted" style={{ fontWeight: 400 }}>— terms &amp; conditions this estimate carries</span></label>
               <select value={editContractId} onChange={(e) => setEditContractId(e.target.value)}>
@@ -439,6 +447,7 @@ export default function Estimates() {
               <label>Deposit required upfront (%)</label>
               <input type="number" min="0" max="100" placeholder="e.g. 30" value={depositPercent} onChange={(e) => setDepositPercent(e.target.value)} />
             </div>
+            <PaymentScheduleEditor rows={paymentSchedule} setRows={setPaymentSchedule} total={estimateTotal(items, taxRate)} />
             <div className="field" style={{ margin: '10px 0', maxWidth: 320 }}>
               <label>Contract <span className="muted" style={{ fontWeight: 400 }}>— terms &amp; conditions this estimate carries</span></label>
               <select value={contractId} onChange={(e) => setContractId(e.target.value)}>
