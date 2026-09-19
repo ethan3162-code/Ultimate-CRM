@@ -37,6 +37,7 @@ import Integrations from './pages/Integrations';
 import Estimates from './pages/Estimates';
 import Contracts from './pages/Contracts';
 import EstimateApprovals from './pages/EstimateApprovals';
+import CommissionPayouts from './pages/CommissionPayouts';
 import EstimateApproval from './pages/EstimateApproval';
 import InvoiceView from './pages/InvoiceView';
 import Users from './pages/Users';
@@ -75,6 +76,7 @@ function AuthedApp() {
           <Route path="/estimates" element={<Protected page="estimates"><Estimates /></Protected>} />
           <Route path="/contracts" element={<Protected page="contracts"><Contracts /></Protected>} />
           <Route path="/estimate-approvals" element={<EstimateApprovals />} />
+          <Route path="/commissions" element={<CommissionPayouts />} />
           <Route path="/companies" element={<Protected page="companies"><Companies /></Protected>} />
           <Route path="/companies/:id" element={<Protected page="companies"><CompanyDetail /></Protected>} />
           <Route path="/contacts" element={<Protected page="contacts"><Contacts /></Protected>} />
