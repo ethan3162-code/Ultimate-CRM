@@ -701,6 +701,16 @@ ensureColumn('users', 'can_see_prices', 'can_see_prices INTEGER NOT NULL DEFAULT
 // approve someone else's request (admins can always approve, regardless of this flag).
 ensureColumn('users', 'requires_estimate_approval', 'requires_estimate_approval INTEGER NOT NULL DEFAULT 0');
 ensureColumn('users', 'can_approve_estimates', 'can_approve_estimates INTEGER NOT NULL DEFAULT 0');
+// Salesman commission (Sept 2026) — one admin-controlled percentage per login, applied against a
+// project's gross profit (see helpers.js's getJobBilling), not its total contract value, so a
+// discounted or high-cost job never pays out more commission than it actually earned the company.
+// Defaults to 0 (no commission) so nothing changes for any existing login until an admin sets a
+// rate. `can_see_commissions` is a separate, independent visibility flag (same standalone-boolean
+// convention as can_see_prices above) — a login can see dollar figures generally without also
+// being allowed to see what a specific salesperson earns; the salesperson can always see their
+// own commission on their own projects regardless of this flag (see auth.js's canSeeCommission).
+ensureColumn('users', 'commission_percent', 'commission_percent REAL NOT NULL DEFAULT 0');
+ensureColumn('users', 'can_see_commissions', 'can_see_commissions INTEGER NOT NULL DEFAULT 0');
 // Optional notification email for a login (separate from a contact's email — a login doesn't
 // need one to use the app) — used only to email an approver when someone requests estimate
 // approval, best-effort via the same Gmail mailer automations use.
@@ -869,6 +879,14 @@ if (!db.prepare(`SELECT 1 FROM contracts LIMIT 1`).get()) {
 // existing deals/contacts `owner_user_id` columns (different tables, same naming convention) —
 // null/unassigned by default so nothing changes until someone is actually picked.
 ensureColumn('jobs', 'owner_user_id', 'owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+// Who earns commission on this project (Sept 2026) — deliberately a SEPARATE column from
+// owner_user_id above: that one is "who gets emailed the schedule," this one is "which
+// salesperson's rate applies to this project's gross profit" (see helpers.js's getJobCommission).
+// Defaulted from the originating opportunity's own owner_user_id when a project is created
+// automatically off a signed estimate (see createProjectFromDeal) — the person who worked the
+// deal is who should get credit — but stays independently editable afterward (Project billing
+// section) in case that needs correcting or the project had no opportunity behind it at all.
+ensureColumn('jobs', 'salesperson_user_id', 'salesperson_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 ensureColumn('appointments', 'assigned_user_id', 'assigned_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 ensureColumn('tasks', 'assigned_user_id', 'assigned_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 // Rename of an earlier stage key ('material_order' -> 'site_prep') on any DB seeded before the rename.
