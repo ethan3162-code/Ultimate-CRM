@@ -215,18 +215,53 @@ router.patch('/estimates/:estimateId', (req, res) => {
   // routes/jobs.js's /invoices/:invoiceId/change-orders), which keeps a clear record of exactly
   // what was added after the original signed agreement rather than silently editing it.
   if (existing.signed_at) return res.status(400).json({ error: "this estimate has been signed and can't be edited — use a change order on the invoice instead" });
-  const { status, tax_rate, show_rate, show_qty, show_item_total, contract_id } = req.body;
-  db.prepare(`UPDATE estimates SET status = ?, tax_rate = ?, show_rate = ?, show_qty = ?, show_item_total = ?, contract_id = ? WHERE id = ?`)
-    .run(
-      status ?? existing.status, tax_rate ?? existing.tax_rate,
-      show_rate === undefined ? existing.show_rate : (show_rate ? 1 : 0),
-      show_qty === undefined ? existing.show_qty : (show_qty ? 1 : 0),
-      show_item_total === undefined ? existing.show_item_total : (show_item_total ? 1 : 0),
-      contract_id === undefined ? existing.contract_id : (contract_id || null),
-      req.params.estimateId
-    );
+  const { status, tax_rate, show_rate, show_qty, show_item_total, contract_id, items, deposit_percent, number } = req.body;
+
+  // Editing line items (or anything that changes the total — tax/deposit) is a substantive edit,
+  // not the lightweight status-only patch this route also serves (e.g. nothing currently sends a
+  // bare status change, but the field's still honored below for anyone that does). A substantive
+  // edit isn't allowed once an invoice already exists off this estimate — the invoice was already
+  // generated against the old numbers, so from here on any change goes through a change order
+  // instead (same reasoning as the signed-estimate guard above).
+  const isContentEdit = items !== undefined;
+  if (isContentEdit) {
+    if (!items.length) return res.status(400).json({ error: 'at least one line item is required' });
+    const linkedInvoice = db.prepare(`SELECT 1 FROM invoices WHERE estimate_id = ? LIMIT 1`).get(existing.id);
+    if (linkedInvoice) return res.status(400).json({ error: 'an invoice has already been generated from this estimate — use a change order instead' });
+    db.prepare(`DELETE FROM estimate_items WHERE estimate_id = ?`).run(existing.id);
+    const insertItem = db.prepare(`INSERT INTO estimate_items (estimate_id, description, qty, unit_price) VALUES (?,?,?,?)`);
+    for (const it of items) insertItem.run(existing.id, it.description, Number(it.qty) || 0, Number(it.unit_price) || 0);
+  }
+
+  db.prepare(`
+    UPDATE estimates SET
+      status = ?, tax_rate = ?, deposit_percent = ?, number = ?, show_rate = ?, show_qty = ?, show_item_total = ?, contract_id = ?,
+      approval_status = ?, approval_requested_at = ?, approved_by_user_id = ?, approved_at = ?, rejection_reason = ?
+    WHERE id = ?
+  `).run(
+    status ?? existing.status,
+    tax_rate ?? existing.tax_rate,
+    deposit_percent === undefined ? existing.deposit_percent : (Number(deposit_percent) || 0),
+    number || existing.number,
+    show_rate === undefined ? existing.show_rate : (show_rate ? 1 : 0),
+    show_qty === undefined ? existing.show_qty : (show_qty ? 1 : 0),
+    show_item_total === undefined ? existing.show_item_total : (show_item_total ? 1 : 0),
+    contract_id === undefined ? existing.contract_id : (contract_id || null),
+    // A content edit invalidates whatever approval decision (or in-flight request) was made
+    // against the old numbers — back to a plain draft, so it needs a fresh "Request approval"
+    // rather than silently keeping a stale approve/reject attached to different numbers.
+    isContentEdit ? null : existing.approval_status,
+    isContentEdit ? null : existing.approval_requested_at,
+    isContentEdit ? null : existing.approved_by_user_id,
+    isContentEdit ? null : existing.approved_at,
+    isContentEdit ? null : existing.rejection_reason,
+    req.params.estimateId
+  );
   if (status && status !== existing.status) {
-    logActivity('job', existing.job_id, 'estimate', `Estimate ${existing.number} marked ${status}.`);
+    logActivity(existing.job_id ? 'job' : 'deal', existing.job_id || existing.deal_id, 'estimate', `Estimate ${existing.number} marked ${status}.`);
+  }
+  if (isContentEdit) {
+    logActivity(existing.job_id ? 'job' : 'deal', existing.job_id || existing.deal_id, 'estimate', `Estimate ${existing.number} edited.`);
   }
   sendEstimate(req, res, getEstimateFull(req.params.estimateId));
 });
