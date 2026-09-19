@@ -60,7 +60,13 @@ export default function LineItemEditor({ items, setItems, taxRate, setTaxRate, c
     setItems(items.filter((_, idx) => idx !== i));
   }
   function pickFromCatalog(item) {
-    setItems([...items, { description: item.name, qty: 1, unit_price: item.unit_price }]);
+    // The estimate line has one text field, so carry both the item's name and its catalog
+    // description into it — otherwise picking from Items silently drops the description the
+    // user wrote there (see Items.jsx), and the line just shows a bare name.
+    const description = item.description && item.description.trim()
+      ? `${item.name} — ${item.description.trim()}`
+      : item.name;
+    setItems([...items, { description, qty: 1, unit_price: item.unit_price }]);
     setPickerOpen(false);
   }
 
