@@ -4,8 +4,9 @@ import { api } from '../api';
 import { shortDate, dateTime, isoDate, money, accountName } from '../utils';
 import { usePermission } from '../auth';
 
-const STATUS_PILL = { accepted: '', scheduled: '', in_progress: 'amber', complete: 'green', on_hold: 'amber', cancelled: 'red' };
+const STATUS_PILL = { pending_schedule: 'amber', accepted: '', scheduled: '', in_progress: 'amber', complete: 'green', on_hold: 'amber', cancelled: 'red' };
 const STATUS_LABEL = {
+  pending_schedule: 'Pending Schedule',
   accepted: 'Project Accepted', scheduled: 'Project Scheduled', in_progress: 'Project in Progress',
   complete: 'Project Complete', on_hold: 'Project On Hold', cancelled: 'Project Cancelled',
 };
