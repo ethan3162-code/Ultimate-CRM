@@ -4,12 +4,27 @@ import { api } from '../api';
 import { money, shortDate, timeAgo, splitWorkTypes } from '../utils';
 import { EXPENSE_CATEGORIES, PROJECT_STATUSES, PROJECT_STATUS_LABEL } from '../constants';
 import LineItemEditor from '../components/LineItemEditor';
+import DisplayOptions from '../components/DisplayOptions';
 import PaymentModal from '../components/PaymentModal';
 import TaskList from '../components/TaskList';
 import { usePermission, useSection, usePriceVisibility, useAuth } from '../auth';
 
 const REVENUE_BASIS_LABEL = { invoiced: 'Invoiced', estimated: 'Approved estimate (projected — not yet invoiced)', none: 'No invoice or approved estimate yet' };
 const BLANK_EXPENSE = { category: 'Materials', description: '', qty: '1', unit_cost: '', incurred_on: '' };
+
+// Attendance is logged one row per employee per day, but the customer/owner should see the crew
+// cost as a single per-date subtotal rather than each person's individual rate — this groups the
+// flat list (already ordered work_date DESC, id DESC by the server) into one entry per date.
+function groupAttendanceByDate(attendance) {
+  const byDate = new Map();
+  for (const a of attendance) {
+    if (!byDate.has(a.work_date)) byDate.set(a.work_date, { work_date: a.work_date, subtotal: 0, entries: [] });
+    const day = byDate.get(a.work_date);
+    day.subtotal += Number(a.daily_rate) || 0;
+    day.entries.push(a);
+  }
+  return [...byDate.values()];
+}
 
 function marginColor(margin) {
   if (margin === null || margin === undefined) return 'var(--ink-soft)';
@@ -18,7 +33,7 @@ function marginColor(margin) {
   return 'var(--accent-ink)';
 }
 
-const STATUS_PILL = { accepted: '', scheduled: '', in_progress: 'amber', complete: 'green', on_hold: 'amber', cancelled: 'red', draft: '', sent: 'amber', approved: 'green', partial: 'amber', paid: 'green', overdue: 'red' };
+const STATUS_PILL = { pending_schedule: 'amber', accepted: '', scheduled: '', in_progress: 'amber', complete: 'green', on_hold: 'amber', cancelled: 'red', draft: '', sent: 'amber', approved: 'green', partial: 'amber', paid: 'green', overdue: 'red' };
 const KIND_LABEL = { deposit: 'Deposit', standard: null };
 const STAGES = [
   { key: 'demo', label: 'Demo', field: 'demo_days' },
@@ -80,6 +95,9 @@ export default function JobDetail() {
   const [items, setItems] = useState([{ description: '', qty: 1, unit_price: 0 }]);
   const [taxRate, setTaxRate] = useState('0');
   const [depositPercent, setDepositPercent] = useState('');
+  const [contractId, setContractId] = useState('');
+  const [contracts, setContracts] = useState([]);
+  const [displayOptions, setDisplayOptions] = useState({ show_rate: true, show_qty: true, show_item_total: true });
   const [requestingDepositFor, setRequestingDepositFor] = useState(null);
   const [rejectingFor, setRejectingFor] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -90,10 +108,11 @@ export default function JobDetail() {
   const [photoLabel, setPhotoLabel] = useState('progress');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [copiedLink, setCopiedLink] = useState(null);
+  const [sendingLink, setSendingLink] = useState(null); // e.g. "est-3-email" / "inv-5-sms" — which button is mid-send
   const [expenseForm, setExpenseForm] = useState(BLANK_EXPENSE);
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [employees, setEmployees] = useState([]);
-  const [attendanceForm, setAttendanceForm] = useState({ employee_id: '', work_date: new Date().toISOString().slice(0, 10) });
+  const [attendanceForm, setAttendanceForm] = useState({ employee_id: '', work_date: new Date().toISOString().slice(0, 10), day_type: 'full' });
   const [loggingAttendance, setLoggingAttendance] = useState(false);
   const [editingInfo, setEditingInfo] = useState(false);
   const [infoForm, setInfoForm] = useState(blankInfo());
@@ -160,6 +179,7 @@ export default function JobDetail() {
     load();
   }
   useEffect(() => { api.catalogItems().then(setCatalog); }, []);
+  useEffect(() => { api.contracts().then(setContracts).catch(() => setContracts([])); }, []);
 
   // Pick up material-calculator results handed off from the Materials page, if any.
   useEffect(() => {
@@ -211,11 +231,26 @@ export default function JobDetail() {
       tax_rate: Number(taxRate) || 0,
       deposit_percent: Number(depositPercent) || 0,
       items: cleanItems.map((it) => ({ description: it.description, qty: Number(it.qty) || 0, unit_price: Number(it.unit_price) || 0 })),
+      contract_id: contractId ? Number(contractId) : null,
+      ...displayOptions,
     });
     setItems([{ description: '', qty: 1, unit_price: 0 }]);
     setTaxRate('0');
     setDepositPercent('');
+    setContractId('');
+    setDisplayOptions({ show_rate: true, show_qty: true, show_item_total: true });
     setShowEstimateForm(false);
+    load();
+  }
+
+  async function duplicateEstimate(estimateId) {
+    await api.duplicateEstimate(estimateId).catch((err) => window.alert(err.message));
+    load();
+  }
+
+  async function deleteEstimateRow(estimateId) {
+    if (!window.confirm('Delete this draft estimate? This can\'t be undone.')) return;
+    await api.deleteEstimate(estimateId).catch((err) => window.alert(err.message));
     load();
   }
 
@@ -299,7 +334,7 @@ export default function JobDetail() {
     setLoggingAttendance(true);
     try {
       await api.addAttendance(id, attendanceForm);
-      setAttendanceForm({ employee_id: '', work_date: new Date().toISOString().slice(0, 10) });
+      setAttendanceForm({ employee_id: '', work_date: new Date().toISOString().slice(0, 10), day_type: 'full' });
       load();
     } catch (err) {
       window.alert(err.message);
@@ -327,13 +362,39 @@ export default function JobDetail() {
     setTimeout(() => setCopiedLink(null), 1500);
   }
 
+  async function sendEstimateVia(estimate, method) {
+    const key = `est-${estimate.id}-${method}`;
+    setSendingLink(key);
+    try {
+      const result = await api.sendEstimate(estimate.id, method);
+      if (!result.sent) window.alert(`Couldn't ${method === 'sms' ? 'text' : 'email'} this estimate: ${result.reason}`);
+    } catch (err) {
+      window.alert(err.message);
+    } finally {
+      setSendingLink(null);
+    }
+  }
+
+  async function sendInvoiceVia(invoice, method) {
+    const key = `inv-${invoice.id}-${method}`;
+    setSendingLink(key);
+    try {
+      const result = await api.sendInvoice(invoice.id, method);
+      if (!result.sent) window.alert(`Couldn't ${method === 'sms' ? 'text' : 'email'} this invoice: ${result.reason}`);
+    } catch (err) {
+      window.alert(err.message);
+    } finally {
+      setSendingLink(null);
+    }
+  }
+
   if (!job) return <div className="loading">Loading…</div>;
 
   return (
     <>
       <div className="page-head">
         <div>
-          <p className="sub" style={{ margin: '0 0 4px' }}><Link to="/jobs">Jobs &amp; billing</Link> / {job.title}</p>
+          <p className="sub" style={{ margin: '0 0 4px' }}><Link to="/jobs">Projects</Link> / {job.title}</p>
           <h1>{job.title}</h1>
           <p className="sub">{job.address || 'No address'} · scheduled {shortDate(job.scheduled_date)}</p>
         </div>
@@ -527,6 +588,16 @@ export default function JobDetail() {
                   <label>Deposit required upfront (%)</label>
                   <input type="number" min="0" max="100" placeholder="e.g. 30" value={depositPercent} onChange={(e) => setDepositPercent(e.target.value)} />
                 </div>
+                <div className="field" style={{ marginTop: 10, maxWidth: 320 }}>
+                  <label>Contract <span className="muted" style={{ fontWeight: 400 }}>— terms &amp; conditions this estimate carries</span></label>
+                  <select value={contractId} onChange={(e) => setContractId(e.target.value)}>
+                    <option value="">— default for customer type —</option>
+                    {contracts.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <DisplayOptions value={displayOptions} onChange={setDisplayOptions} />
                 <button className="btn primary sm" type="submit" style={{ marginTop: 10 }}>Save estimate</button>
               </form>
             )}
@@ -605,7 +676,15 @@ export default function JobDetail() {
                           </button>
                         )
                       ) : (
-                        <button className="btn sm" onClick={() => copyApprovalLink(est)}>{copiedLink === est.id ? 'Copied!' : 'Copy approval link'}</button>
+                        <>
+                          <button className="btn sm" onClick={() => copyApprovalLink(est)}>{copiedLink === est.id ? 'Copied!' : 'Copy approval link'}</button>
+                          <button className="btn sm" disabled={sendingLink === `est-${est.id}-email`} onClick={() => sendEstimateVia(est, 'email')}>
+                            {sendingLink === `est-${est.id}-email` ? 'Emailing…' : 'Email'}
+                          </button>
+                          <button className="btn sm" disabled={sendingLink === `est-${est.id}-sms`} onClick={() => sendEstimateVia(est, 'sms')}>
+                            {sendingLink === `est-${est.id}-sms` ? 'Texting…' : 'Text'}
+                          </button>
+                        </>
                       )}
                       {requestingDepositFor === est.id ? (
                         <>
@@ -620,6 +699,9 @@ export default function JobDetail() {
                       ) : (
                         <button className="btn sm" onClick={() => setRequestingDepositFor(est.id)}>Request deposit…</button>
                       )}
+                      <a className="btn sm" href={api.estimatePdfUrl(est.id)} target="_blank" rel="noreferrer">View/Print PDF</a>
+                      <button className="btn sm" onClick={() => duplicateEstimate(est.id)}>Duplicate</button>
+                      {!est.signed_at && <button className="btn sm subtle" onClick={() => deleteEstimateRow(est.id)}>Delete</button>}
                     </div>
                     )}
                   </div>
@@ -804,21 +886,32 @@ export default function JobDetail() {
                   {employees.filter((e) => e.active).map((e) => <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>)}
                 </select>
                 <input type="date" value={attendanceForm.work_date} onChange={(e) => setAttendanceForm({ ...attendanceForm, work_date: e.target.value })} required />
+                <select value={attendanceForm.day_type} onChange={(e) => setAttendanceForm({ ...attendanceForm, day_type: e.target.value })}>
+                  <option value="full">Full day</option>
+                  <option value="half">Half day</option>
+                </select>
                 <button className="btn primary sm" type="submit" disabled={loggingAttendance}>{loggingAttendance ? 'Logging…' : '+ Log day'}</button>
               </form>
             )}
             {job.attendance.length === 0 ? <div className="empty">No crew logged on this job yet.</div> : (
-              <div className="stack" style={{ gap: 2 }}>
-                {job.attendance.map((a) => (
-                  <div key={a.id} className="attention-row">
-                    <span>
-                      <Link to={`/employees/${a.employee_id}`}>{a.employee_first_name} {a.employee_last_name}</Link>
-                      <span className="muted" style={{ marginLeft: 6 }}>{shortDate(a.work_date)}</span>
-                    </span>
-                    <span className="row" style={{ gap: 8 }}>
-                      <span className="mono">{money(a.daily_rate)}</span>
-                      {canEdit && <button type="button" className="btn subtle sm" onClick={() => removeAttendance(a.id)}>✕</button>}
-                    </span>
+              <div className="stack" style={{ gap: 10 }}>
+                {groupAttendanceByDate(job.attendance).map((day) => (
+                  <div key={day.work_date}>
+                    <div className="row between" style={{ fontWeight: 600, fontSize: 13 }}>
+                      <span>{shortDate(day.work_date)}</span>
+                      <span className="mono">{canSeePrices ? money(day.subtotal) : '🔒 Hidden'}</span>
+                    </div>
+                    <div className="stack" style={{ gap: 2, marginTop: 2 }}>
+                      {day.entries.map((a) => (
+                        <div key={a.id} className="attention-row">
+                          <span>
+                            <Link to={`/employees/${a.employee_id}`}>{a.employee_first_name} {a.employee_last_name}</Link>
+                            {a.day_type === 'half' && <span className="muted" style={{ marginLeft: 6 }}>(half day)</span>}
+                          </span>
+                          {canEdit && <button type="button" className="btn subtle sm" onClick={() => removeAttendance(a.id)}>✕</button>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -864,6 +957,13 @@ export default function JobDetail() {
                         <button className="btn primary sm" onClick={() => setPayingInvoice(inv)}>Charge / record payment</button>
                       )}
                       <button className="btn sm" onClick={() => copyInvoiceLink(inv)}>{copiedLink === `inv-${inv.id}` ? 'Copied!' : 'Copy invoice link'}</button>
+                      <button className="btn sm" disabled={sendingLink === `inv-${inv.id}-email`} onClick={() => sendInvoiceVia(inv, 'email')}>
+                        {sendingLink === `inv-${inv.id}-email` ? 'Emailing…' : 'Email'}
+                      </button>
+                      <button className="btn sm" disabled={sendingLink === `inv-${inv.id}-sms`} onClick={() => sendInvoiceVia(inv, 'sms')}>
+                        {sendingLink === `inv-${inv.id}-sms` ? 'Texting…' : 'Text'}
+                      </button>
+                      <a className="btn sm" href={api.invoicePdfUrl(inv.id)} target="_blank" rel="noreferrer">Download PDF</a>
                     </div>
                   </div>
                 ))}
