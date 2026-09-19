@@ -157,6 +157,25 @@ function canApproveEstimates(user) {
   return user.role === 'admin' || !!user.can_approve_estimates;
 }
 
+/** Whether this login can see salesman-commission figures at all (Users & permissions —
+    "Can see commissions"). A standalone per-user flag, deliberately independent of
+    can_see_prices — someone can be trusted with job costing/pricing generally without also
+    seeing what a specific salesperson personally earns. Admins always see commissions. This is
+    the general flag only; `canSeeJobCommission` below also lets a job's own owner see their own
+    commission on that one job even without this flag. */
+function canSeeCommissions(user) {
+  return user.role === 'admin' || !!user.can_see_commissions;
+}
+
+/** Whether this login can see the commission figure on one specific job — either because they
+    have the general can_see_commissions visibility, or because it's their own commission (they
+    are the job's credited salesperson — see helpers.js's salesperson_user_id, not the job's
+    owner_user_id/schedule assignee). Used to redact the `commission` block job-by-job rather
+    than all-or-nothing, so a salesperson can always see what they personally earned. */
+function canSeeJobCommission(user, job) {
+  return canSeeCommissions(user) || (!!job && job.salesperson_user_id === user.id);
+}
+
 /** Rejects a PATCH whose body touches a restricted section. `updates` is the raw req.body for a
     page whose overall access is already confirmed 'edit' by requirePage/requireAnyPage — this
     only needs to check the finer-grained section list. Returns an error string, or null if fine. */
@@ -298,6 +317,8 @@ function publicUser(user) {
     can_see_prices: canSeePrices(user),
     requires_estimate_approval: requiresEstimateApproval(user),
     can_approve_estimates: canApproveEstimates(user),
+    can_see_commissions: canSeeCommissions(user),
+    commission_percent: Number(user.commission_percent) || 0,
     custom_role_ids: user.role === 'admin' ? [] : getUserCustomRoleIds(user.id),
   };
 }
@@ -363,7 +384,7 @@ module.exports = {
   ROLES, ROLE_LABEL, PAGES, ALWAYS_VIEW_PAGES, ADMIN_ONLY_PAGES, DEFAULT_PRIMARY_PAGES, VALID_LEVELS, SECTIONS,
   seedPagePermissions, getPermissions, setUserPermissions, getUserDirectPermissions, getUserDirectSections,
   getSectionLevel, getSectionLevels, checkSectionEdit, canSeePrices,
-  requiresEstimateApproval, canApproveEstimates,
+  requiresEstimateApproval, canApproveEstimates, canSeeCommissions, canSeeJobCommission,
   listCustomRoles, createCustomRole, updateCustomRole, deleteCustomRole, setUserCustomRoles, getUserCustomRoleIds,
   hashPassword, verifyPassword, signToken, setSessionCookie, clearSessionCookie, publicUser,
   readSession, requireAuth, requirePage, requireAnyPage, requireAdmin,
