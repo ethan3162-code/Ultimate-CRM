@@ -811,6 +811,22 @@ ensureColumn('estimates', 'contract_id', 'contract_id INTEGER REFERENCES contrac
 ensureColumn('estimates', 'declined_at', 'declined_at TEXT');
 ensureColumn('estimates', 'decline_reason', 'decline_reason TEXT');
 
+// Global markup % (added on top of the line-item subtotal, the contractor's own margin) and an
+// optional discount (flat $ or %, taken off the marked-up subtotal) — Sept 2026. Both apply to
+// the estimate as a whole, same as tax_rate, so they live as columns on the row rather than a
+// side table like the line items or payment schedule. discount_type is NULL for "no discount set"
+// (as opposed to 0 for "not the flat kind") so a saved estimate can distinguish "never had a
+// discount" from "had one, then removed it" — not that either currently matters, but it keeps
+// the same NULL-means-absent convention the rest of this schema uses (see sign_token etc). Copied
+// straight onto the invoice at conversion time (see helpers.js's createInvoiceFromEstimate) so an
+// invoice's total always matches the estimate's, without re-baking either into the line items.
+ensureColumn('estimates', 'markup_percent', 'markup_percent REAL NOT NULL DEFAULT 0');
+ensureColumn('estimates', 'discount_type', 'discount_type TEXT');
+ensureColumn('estimates', 'discount_value', 'discount_value REAL NOT NULL DEFAULT 0');
+ensureColumn('invoices', 'markup_percent', 'markup_percent REAL NOT NULL DEFAULT 0');
+ensureColumn('invoices', 'discount_type', 'discount_type TEXT');
+ensureColumn('invoices', 'discount_value', 'discount_value REAL NOT NULL DEFAULT 0');
+
 // Seeds the one real contract the user provided (Sept 2026) — replaces the old placeholder
 // Residential/Commercial split from termsText.js with the actual "AGREEMENT & LIMITED WARRANTY"
 // document the user sent, used as the default for both customer types until the user creates
