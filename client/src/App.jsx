@@ -29,10 +29,14 @@ import Tickets from './pages/Tickets';
 import TicketDetail from './pages/TicketDetail';
 import Calendar from './pages/Calendar';
 import Schedule from './pages/Schedule';
+import NeedsScheduling from './pages/NeedsScheduling';
 import Materials from './pages/Materials';
 import Items from './pages/Items';
 import PriceBook from './pages/PriceBook';
 import Integrations from './pages/Integrations';
+import Estimates from './pages/Estimates';
+import Contracts from './pages/Contracts';
+import EstimateApprovals from './pages/EstimateApprovals';
 import EstimateApproval from './pages/EstimateApproval';
 import InvoiceView from './pages/InvoiceView';
 import Users from './pages/Users';
@@ -68,6 +72,9 @@ function AuthedApp() {
           <Route path="/leads" element={<Protected page="leads"><Leads /></Protected>} />
           <Route path="/pipeline" element={<Protected page="pipeline"><Pipeline /></Protected>} />
           <Route path="/pipeline/:id" element={<Protected page="pipeline"><DealDetail /></Protected>} />
+          <Route path="/estimates" element={<Protected page="estimates"><Estimates /></Protected>} />
+          <Route path="/contracts" element={<Protected page="contracts"><Contracts /></Protected>} />
+          <Route path="/estimate-approvals" element={<EstimateApprovals />} />
           <Route path="/companies" element={<Protected page="companies"><Companies /></Protected>} />
           <Route path="/companies/:id" element={<Protected page="companies"><CompanyDetail /></Protected>} />
           <Route path="/contacts" element={<Protected page="contacts"><Contacts /></Protected>} />
@@ -89,6 +96,7 @@ function AuthedApp() {
           <Route path="/tickets/:id" element={<Protected page="tickets"><TicketDetail /></Protected>} />
           <Route path="/calendar" element={<Protected page="calendar"><Calendar /></Protected>} />
           <Route path="/schedule" element={<Protected page="schedule"><Schedule /></Protected>} />
+          <Route path="/needs-scheduling" element={<Protected page="schedule"><NeedsScheduling /></Protected>} />
           <Route path="/materials" element={<Protected page="materials"><Materials /></Protected>} />
           <Route path="/items" element={<Protected page="items"><Items /></Protected>} />
           <Route path="/price-book" element={<Protected page="price_book"><PriceBook /></Protected>} />
