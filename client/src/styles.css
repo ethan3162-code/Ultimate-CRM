@@ -408,6 +408,21 @@ table.list tbody tr:last-child td { border-bottom: none; }
   background: var(--paper); color: var(--ink-soft); font-size: 12.5px; font-weight: 600; cursor: pointer;
 }
 .method-toggle button.active { background: var(--accent-soft); border-color: var(--accent-soft-line); color: var(--accent-ink); }
+.modal-card.wide { max-width: 460px; }
+.item-picker-search { width: 100%; margin-bottom: 10px; }
+.item-picker-list { max-height: 340px; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: 10px; }
+.item-picker-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%;
+  text-align: left; background: none; border: none; border-bottom: 1px solid var(--line-soft);
+  padding: 10px 12px; cursor: pointer; font: inherit; color: inherit;
+}
+.item-picker-row:last-child { border-bottom: none; }
+.item-picker-row:hover { background: var(--line-soft); }
+.item-picker-row .name { font-weight: 600; font-size: 13.5px; }
+.item-picker-row .desc { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
+.item-picker-row .price { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.item-picker-empty { padding: 20px 12px; text-align: center; color: var(--muted); font-size: 13px; }
+
 .card-visual {
   border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; color: #fff;
   background: linear-gradient(135deg, var(--accent-ink), var(--accent));
@@ -606,6 +621,41 @@ table.list tbody tr.row-hot:hover td, table.list tbody tr.row-warm:hover td { ba
 .doc-brand { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; }
 .doc-brand .brand-logo { height: 44px; }
 
+/* Joist-style document header: centered title, company block + "Prepared For" block, doc numbers. */
+.doc-title { text-align: center; font-family: 'IBM Plex Mono', monospace; font-size: 21px; font-weight: 700; letter-spacing: .1em; margin: 2px 0 22px; color: var(--ink); }
+.doc-meta-row { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-bottom: 16px; font-size: 13px; line-height: 1.55; color: var(--ink); }
+.doc-meta-row > div { flex: 1 1 220px; }
+.doc-meta-row .doc-prepared-for { text-align: right; }
+.doc-company-name { font-weight: 700; font-size: 14.5px; margin-bottom: 3px; }
+.doc-label { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 2px; }
+.doc-numbers-row { display: flex; gap: 28px; justify-content: flex-end; font-size: 13px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.doc-numbers-row > div { text-align: right; }
+
+/* Payment-schedule table (deposit / balance rows, derived from deposit_percent). */
+.schedule-table { width: 100%; border-collapse: collapse; margin: 10px 0 2px; font-size: 13px; }
+.schedule-table th { text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 4px 6px; }
+.schedule-table td { padding: 6px 6px; border-top: 1px solid var(--line-soft); }
+.schedule-table td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.schedule-table td .note { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+
+/* Terms & Conditions / Agreement block. */
+.doc-terms { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+.doc-terms h3 { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; text-align: left; margin: 0 0 10px; color: var(--ink); font-weight: 700; }
+.doc-terms-intro { font-size: 11.5px; line-height: 1.55; color: var(--muted); margin-bottom: 14px; }
+.doc-terms-subhead { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; margin: 0 0 12px; color: var(--ink); font-weight: 700; }
+.doc-clause { font-size: 11.5px; line-height: 1.55; color: var(--muted); margin-bottom: 9px; }
+.doc-clause strong { display: block; color: var(--ink); font-weight: 600; font-size: 12px; margin-bottom: 1px; }
+
+/* Signature lines — an image (the customer's drawn signature, or the company's uploaded stamp)
+   sitting over the line, then "Signed on: DATE" and the printed party name underneath. Both
+   columns share the same date, since the company's stamp represents standing authorization
+   applied the day the agreement was executed. */
+.sign-row { display: flex; gap: 32px; margin-top: 22px; flex-wrap: wrap; }
+.sign-line { flex: 1; min-width: 200px; border-top: 1px solid var(--ink); padding-top: 6px; font-size: 11.5px; color: var(--muted); }
+.sign-line strong { color: var(--ink); font-weight: 600; }
+.sign-img { height: 48px; display: flex; align-items: flex-end; margin-bottom: 4px; }
+.sign-img img { max-height: 48px; max-width: 100%; object-fit: contain; }
+
 @media print {
   .no-print { display: none !important; }
   .sidebar, .topbar, .nav-backdrop { display: none !important; }
@@ -739,3 +789,35 @@ table.list tbody tr.row-hot:hover td, table.list tbody tr.row-warm:hover td { ba
 .report-subgroup-row td { background: var(--line-soft); font-weight: 600; }
 .report-subtotal-row td { font-style: italic; color: var(--muted); border-bottom: 1px solid var(--line-soft); }
 .report-grandtotal-row td { font-weight: 700; border-top: 2px solid var(--ink); }
+
+/* Joist-style Estimates list (Sept 2026) — Pending/Approved/Declined tabs, a search bar, and
+   compact month-grouped rows that expand in place to reveal the existing detail card, so nothing
+   already built (line items, approval status, actions) gets removed — it just starts collapsed. */
+.est-search { max-width: 360px; margin-bottom: 14px; }
+.est-search input {
+  width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--paper);
+  padding: 8px 12px; font-size: 13.5px; color: var(--ink);
+}
+.est-search input:focus { border-color: var(--accent); outline: none; }
+.est-month-header {
+  font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--muted); margin: 22px 0 8px;
+}
+.est-month-header:first-child { margin-top: 0; }
+.est-group { border: 1px solid var(--line); border-radius: 12px; background: var(--paper-raised); box-shadow: var(--shadow); overflow: hidden; }
+.est-item { border-bottom: 1px solid var(--line-soft); }
+.est-item:last-child { border-bottom: none; }
+.est-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 12px 16px; cursor: pointer;
+}
+.est-row:hover { background: var(--line-soft); }
+.est-row-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.est-row-name { font-weight: 600; white-space: nowrap; }
+.est-row-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.est-row-side { text-align: right; font-size: 12.5px; color: var(--muted); flex-shrink: 0; }
+.est-row-side div + div { margin-top: 1px; }
+.est-row-chevron { color: var(--muted); font-size: 12px; margin-left: 6px; transition: transform .15s; }
+.est-row-chevron.open { transform: rotate(90deg); }
+.est-detail-wrap { padding: 0 16px 16px; }
+.est-detail-wrap .card { border: none; box-shadow: none; padding: 0; background: none; }
