@@ -121,6 +121,16 @@ export default function JobDetail() {
   const [billingForm, setBillingForm] = useState(blankBilling());
   const [savingBilling, setSavingBilling] = useState(false);
 
+  // Editing an existing estimate (Sept 2026) — kept separate from the "+ New estimate" form's
+  // state above so opening one never clobbers the other.
+  const [editingEstimateId, setEditingEstimateId] = useState(null);
+  const [editItems, setEditItems] = useState([{ description: '', qty: 1, unit_price: 0 }]);
+  const [editTaxRate, setEditTaxRate] = useState('0');
+  const [editDepositPercent, setEditDepositPercent] = useState('');
+  const [editContractId, setEditContractId] = useState('');
+  const [editDisplayOptions, setEditDisplayOptions] = useState({ show_rate: true, show_qty: true, show_item_total: true });
+  const [savingEdit, setSavingEdit] = useState(false);
+
   function blankInfo(j) {
     return {
       labor_crew: j?.labor_crew || '', desired_start_date: j?.desired_start_date || '',
@@ -246,6 +256,43 @@ export default function JobDetail() {
   async function duplicateEstimate(estimateId) {
     await api.duplicateEstimate(estimateId).catch((err) => window.alert(err.message));
     load();
+  }
+
+  function startEditEstimate(est) {
+    setEditingEstimateId(est.id);
+    setEditItems(est.items.map((it) => ({ description: it.description, qty: it.qty, unit_price: it.unit_price })));
+    setEditTaxRate(String(est.tax_rate ?? 0));
+    setEditDepositPercent(est.deposit_percent ? String(est.deposit_percent) : '');
+    setEditContractId(est.contract_id ? String(est.contract_id) : '');
+    setEditDisplayOptions({
+      show_rate: est.show_rate !== 0, show_qty: est.show_qty !== 0, show_item_total: est.show_item_total !== 0,
+    });
+  }
+
+  function cancelEditEstimate() {
+    setEditingEstimateId(null);
+  }
+
+  async function saveEditEstimate(e, estimateId) {
+    e.preventDefault();
+    const cleanItems = editItems.filter((it) => it.description.trim());
+    if (!cleanItems.length) return;
+    setSavingEdit(true);
+    try {
+      await api.updateEstimate(estimateId, {
+        items: cleanItems.map((it) => ({ description: it.description, qty: Number(it.qty) || 0, unit_price: Number(it.unit_price) || 0 })),
+        tax_rate: Number(editTaxRate) || 0,
+        deposit_percent: Number(editDepositPercent) || 0,
+        contract_id: editContractId ? Number(editContractId) : null,
+        ...editDisplayOptions,
+      });
+      setEditingEstimateId(null);
+      load();
+    } catch (err) {
+      window.alert(err.message);
+    } finally {
+      setSavingEdit(false);
+    }
   }
 
   async function deleteEstimateRow(estimateId) {
@@ -604,7 +651,39 @@ export default function JobDetail() {
 
             {job.estimates.length === 0 ? <div className="empty">No estimates yet.</div> : (
               <div className="stack" style={{ gap: 10 }}>
-                {job.estimates.map((est) => (
+                {job.estimates.map((est) => {
+                  const estInvoiced = (job.invoices || []).some((inv) => inv.estimate_id === est.id);
+                  if (editingEstimateId === est.id) {
+                    return (
+                      <div key={est.id} style={{ border: '1px solid var(--line-soft)', borderRadius: 9, padding: '10px 12px' }}>
+                        <p className="sub" style={{ margin: '0 0 10px' }}>
+                          Editing {est.number}{est.approval_status && est.approval_status !== 'pending' ? ' — saving will clear its approval status, since the numbers are changing' : ''}.
+                        </p>
+                        <form onSubmit={(e) => saveEditEstimate(e, est.id)}>
+                          <LineItemEditor items={editItems} setItems={setEditItems} taxRate={editTaxRate} setTaxRate={setEditTaxRate} catalog={(catalog || []).filter((c) => !c.material_key)} />
+                          <div className="field" style={{ marginTop: 10, maxWidth: 220 }}>
+                            <label>Deposit required upfront (%)</label>
+                            <input type="number" min="0" max="100" placeholder="e.g. 30" value={editDepositPercent} onChange={(e) => setEditDepositPercent(e.target.value)} />
+                          </div>
+                          <div className="field" style={{ marginTop: 10, maxWidth: 320 }}>
+                            <label>Contract <span className="muted" style={{ fontWeight: 400 }}>— terms &amp; conditions this estimate carries</span></label>
+                            <select value={editContractId} onChange={(e) => setEditContractId(e.target.value)}>
+                              <option value="">— default for customer type —</option>
+                              {contracts.map((c) => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <DisplayOptions value={editDisplayOptions} onChange={setEditDisplayOptions} />
+                          <div className="row" style={{ gap: 8, marginTop: 10 }}>
+                            <button className="btn primary sm" type="submit" disabled={savingEdit}>{savingEdit ? 'Saving…' : 'Save changes'}</button>
+                            <button className="btn subtle sm" type="button" onClick={cancelEditEstimate}>Cancel</button>
+                          </div>
+                        </form>
+                      </div>
+                    );
+                  }
+                  return (
                   <div key={est.id} style={{ border: '1px solid var(--line-soft)', borderRadius: 9, padding: '10px 12px' }}>
                     <div className="row between">
                       <span className="link-strong mono">{est.number}</span>
@@ -666,7 +745,8 @@ export default function JobDetail() {
 
                     {canEdit && (
                     <div className="row" style={{ marginTop: 8, gap: 6, flexWrap: 'wrap' }}>
-                      <button className="btn sm" onClick={() => convert(est.id)}>Convert to invoice →</button>
+                      {!est.signed_at && !estInvoiced && <button className="btn sm" onClick={() => startEditEstimate(est)}>Edit</button>}
+                      {!estInvoiced && <button className="btn sm" onClick={() => convert(est.id)}>Convert to invoice →</button>}
                       {est.requires_internal_approval ? (
                         est.approval_status === 'pending' ? (
                           <span className="pill amber">Pending approval…</span>
@@ -705,7 +785,8 @@ export default function JobDetail() {
                     </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
