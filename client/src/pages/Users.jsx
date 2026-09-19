@@ -22,6 +22,7 @@ export default function Users() {
   const [editingId, setEditingId] = useState(null);
   const [resetPassword, setResetPassword] = useState('');
   const [resetEmail, setResetEmail] = useState('');
+  const [commissionInputs, setCommissionInputs] = useState({});
   const [permEditingId, setPermEditingId] = useState(null);
   const [permDraft, setPermDraft] = useState(null);
   const [sectionDraft, setSectionDraft] = useState(null);
@@ -82,6 +83,31 @@ export default function Users() {
 
   async function toggleCanApprove(user) {
     await api.updateUser(user.id, { can_approve_estimates: !user.can_approve_estimates }).catch((err) => window.alert(err.message));
+    load();
+  }
+
+  // Commission % is a free-typed number rather than a toggle, so it's tracked as its own local
+  // draft per user (keyed by id) and only saved on blur — typing "1" then "12.5" shouldn't fire
+  // a save request after every keystroke.
+  function commissionValue(user) {
+    return commissionInputs[user.id] !== undefined ? commissionInputs[user.id] : String(user.commission_percent);
+  }
+  async function saveCommission(user) {
+    const raw = commissionInputs[user.id];
+    if (raw === undefined) return;
+    const pct = Number(raw);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      window.alert('Commission percent must be a number between 0 and 100.');
+      setCommissionInputs((d) => { const next = { ...d }; delete next[user.id]; return next; });
+      return;
+    }
+    setCommissionInputs((d) => { const next = { ...d }; delete next[user.id]; return next; });
+    if (pct === user.commission_percent) return;
+    await api.updateUser(user.id, { commission_percent: pct }).catch((err) => window.alert(err.message));
+    load();
+  }
+  async function toggleSeesCommissions(user) {
+    await api.updateUser(user.id, { can_see_commissions: !user.can_see_commissions }).catch((err) => window.alert(err.message));
     load();
   }
 
@@ -185,7 +211,7 @@ export default function Users() {
       <div className="page-head">
         <div>
           <h1>Users &amp; permissions</h1>
-          <p className="sub">Logins for the team, exactly which pages (and parts of a page) each person can edit, view, or not see, whether they can see dollar figures, whether their estimates need a manager's approval before going to a customer, who can approve those requests, and which reusable roles they hold.</p>
+          <p className="sub">Logins for the team, exactly which pages (and parts of a page) each person can edit, view, or not see, whether they can see dollar figures, whether their estimates need a manager's approval before going to a customer, who can approve those requests, each person's commission rate on projects they own and who can see commission figures, and which reusable roles they hold.</p>
         </div>
         <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New login</button>
       </div>
@@ -316,7 +342,7 @@ export default function Users() {
         <h2>Logins</h2>
         <div className="table-wrap">
           <table className="list">
-            <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Prices</th><th>Estimate approval</th><th>Approver</th><th>Created</th><th></th></tr></thead>
+            <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Prices</th><th>Estimate approval</th><th>Approver</th><th>Commission %</th><th>Sees commissions</th><th>Created</th><th></th></tr></thead>
             <tbody>
               {users.map((u) => (
                 <Fragment key={u.id}>
@@ -350,6 +376,27 @@ export default function Users() {
                         </button>
                       )}
                     </td>
+                    <td>
+                      {u.role === 'admin' ? <span className="muted">n/a</span> : (
+                        <span className="row" style={{ gap: 4, alignItems: 'center' }}>
+                          <input
+                            type="number" min="0" max="100" step="0.1"
+                            value={commissionValue(u)}
+                            onChange={(e) => setCommissionInputs((d) => ({ ...d, [u.id]: e.target.value }))}
+                            onBlur={() => saveCommission(u)}
+                            style={{ width: 60, padding: '4px 6px' }}
+                          />
+                          <span className="muted" style={{ fontSize: 12 }}>%</span>
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {u.role === 'admin' ? <span className="muted">sees all</span> : (
+                        <button className="btn sm subtle" onClick={() => toggleSeesCommissions(u)} title="Regardless of this setting, a salesperson can always see their own commission on their own projects.">
+                          {u.can_see_commissions ? '👁️ Everyone’s' : 'Own only'}
+                        </button>
+                      )}
+                    </td>
                     <td className="muted">{u.created_at ? u.created_at.slice(0, 10) : '—'}</td>
                     <td>
                       {editingId === u.id ? (
@@ -375,7 +422,7 @@ export default function Users() {
                   </tr>
                   {permEditingId === u.id && permDraft && (
                     <tr>
-                      <td colSpan={8} style={{ background: 'var(--paper-raised)' }}>
+                      <td colSpan={10} style={{ background: 'var(--paper-raised)' }}>
                         <div style={{ padding: '10px 4px' }}>
                           <p className="sub" style={{ margin: '0 0 10px' }}>
                             Exactly what <strong>{u.username}</strong> can do on each page — nothing here is tied to their role after the fact, so any combination is fine. Any role held below can only add access on top of this, never take it away.
