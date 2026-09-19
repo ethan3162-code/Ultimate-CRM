@@ -1,9 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
-import { money } from '../utils';
+import { money, shortDate } from '../utils';
+import { TermsBlock } from '../components/DocumentTerms';
 
 const STATUS_LABEL = { draft: 'Draft', sent: 'Sent', partial: 'Partially paid', paid: 'Paid', overdue: 'Overdue' };
+
+function CompanyBlock({ company }) {
+  if (!company) return null;
+  return (
+    <div className="doc-company">
+      <div className="doc-company-name">{company.name}</div>
+      <div>{company.address_line1}</div>
+      <div>{company.city_state_zip}</div>
+      <div>{company.phone}</div>
+      <div>{company.email}</div>
+      <div>{company.website}</div>
+    </div>
+  );
+}
 
 export default function InvoiceView() {
   const { token } = useParams();
@@ -19,29 +34,47 @@ export default function InvoiceView() {
   return (
     <div className="approval-shell">
       <div className="doc-brand">
-        <img src="/logo-full.png" alt="Precision Paving & Masonry" className="brand-logo" />
+        <img src="/logo-full.png" alt={invoice.company?.name || 'Precision Paving & Masonry'} className="brand-logo" />
         <button type="button" className="btn sm no-print" onClick={() => window.print()}>Print</button>
-      </div>
-      <div className="page-head">
-        <div>
-          <h1>Invoice {invoice.number}</h1>
-          <p className="sub">
-            {invoice.job_title}{invoice.job_address ? ` — ${invoice.job_address}` : ''}{invoice.customer_name ? ` · for ${invoice.customer_name}` : ''}
-            {invoice.due_date ? ` · Due ${invoice.due_date}` : ''}
-          </p>
-        </div>
       </div>
 
       <div className="card">
+        <div className="doc-title">INVOICE</div>
+        <div className="doc-meta-row">
+          <CompanyBlock company={invoice.company} />
+          <div className="doc-prepared-for">
+            <span className="doc-label">Bill To</span>
+            <div className="doc-company-name">{invoice.customer_name || '—'}</div>
+            {invoice.customer_address && <div>{invoice.customer_address}</div>}
+            {invoice.customer_phone && <div>{invoice.customer_phone}</div>}
+            {invoice.customer_email && <div>{invoice.customer_email}</div>}
+          </div>
+        </div>
+        <div className="doc-numbers-row">
+          <div><span className="doc-label">Invoice #</span>{invoice.number}</div>
+          <div><span className="doc-label">Date</span>{shortDate(invoice.created_at)}</div>
+          {invoice.due_date && <div><span className="doc-label">Due</span>{shortDate(invoice.due_date)}</div>}
+        </div>
+        <p className="sub" style={{ margin: '0 0 12px' }}>
+          {invoice.job_title}{invoice.job_address ? ` — ${invoice.job_address}` : ''}
+        </p>
+
         <table className="line-items">
-          <thead><tr><th>Description</th><th className="num">Qty</th><th className="num">Unit price</th><th className="num">Amount</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Description</th>
+              {invoice.show_qty !== false && <th className="num">Qty</th>}
+              {invoice.show_rate !== false && <th className="num">Unit price</th>}
+              {invoice.show_item_total !== false && <th className="num">Amount</th>}
+            </tr>
+          </thead>
           <tbody>
             {invoice.items.map((it) => (
               <tr key={it.id}>
                 <td>{it.description}</td>
-                <td className="num">{it.qty}</td>
-                <td className="num">{money(it.unit_price)}</td>
-                <td className="num">{money(it.qty * it.unit_price)}</td>
+                {invoice.show_qty !== false && <td className="num">{it.qty}</td>}
+                {invoice.show_rate !== false && <td className="num">{money(it.unit_price)}</td>}
+                {invoice.show_item_total !== false && <td className="num">{money(it.qty * it.unit_price)}</td>}
               </tr>
             ))}
           </tbody>
@@ -53,6 +86,17 @@ export default function InvoiceView() {
           <div className="totals-row"><span className="lbl">Paid so far</span><span className="amt">{money(invoice.amount_paid)}</span></div>
         )}
         <div className="totals-row"><span className="lbl" style={{ fontWeight: 700 }}>Balance due</span><span className="amt" style={{ fontWeight: 700 }}>{money(invoice.balance)}</span></div>
+
+        <TermsBlock
+          terms={invoice.terms}
+          signature={invoice.signed_at ? {
+            date: shortDate(invoice.signed_at),
+            companyImage: invoice.company_signature_data_url,
+            companyName: invoice.company?.name,
+            customerImage: invoice.signature_data_url,
+            customerName: invoice.signed_name,
+          } : null}
+        />
       </div>
 
       <div className="card" style={{ marginTop: 16 }}>
