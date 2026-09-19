@@ -123,8 +123,13 @@ router.get('/:id', (req, res) => {
   if (!deal) return res.status(404).json({ error: 'not found' });
   const activities = db.prepare(`SELECT * FROM activities WHERE related_type = 'deal' AND related_id = ? ORDER BY created_at DESC`).all(req.params.id);
   const jobs = db.prepare(`SELECT id, title, status FROM jobs WHERE deal_id = ? ORDER BY created_at DESC`).all(req.params.id);
+  // A project is only ever created automatically once a customer signs an estimate (see
+  // routes/public.js's /estimates/:token/sign) — never at estimate creation. So while this deal
+  // has no project yet, the UI needs to know whether an estimate is out there pending a signature,
+  // rather than offering any way to skip straight to a project.
+  const estimates = db.prepare(`SELECT id, number, status, signed_at, declined_at, created_at FROM estimates WHERE deal_id = ? ORDER BY created_at DESC`).all(req.params.id);
   const full = withScore(withCustomerInfo(deal));
-  res.json({ ...(canSeePrices(req.user) ? full : redactDealMoney(full)), activities, jobs });
+  res.json({ ...(canSeePrices(req.user) ? full : redactDealMoney(full)), activities, jobs, estimates });
 });
 
 router.patch('/:id', (req, res) => {
