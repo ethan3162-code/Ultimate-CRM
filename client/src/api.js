@@ -171,6 +171,7 @@ export const api = {
   createCatalogItem: (data) => request('/catalog-items', { method: 'POST', body: JSON.stringify(data) }),
   updateCatalogItem: (id, data) => request(`/catalog-items/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteCatalogItem: (id) => request(`/catalog-items/${id}`, { method: 'DELETE' }),
+  bulkImportCatalogItems: (items, materialKey) => request('/catalog-items/bulk', { method: 'POST', body: JSON.stringify({ items, material_key: materialKey || null }) }),
 
   webhookInfo: () => request('/integrations/webhook'),
   regenerateWebhook: () => request('/integrations/webhook/regenerate', { method: 'POST' }),
