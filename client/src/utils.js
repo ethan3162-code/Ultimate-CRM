@@ -10,12 +10,37 @@ export function money(n) {
   return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
 }
 
+export function estimateSubtotal(items) {
+  return (items || []).reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.unit_price) || 0), 0);
+}
+
+// Full subtotal -> markup -> discount -> tax -> total breakdown for an estimate/invoice, shared by
+// LineItemEditor (the authoritative totals shown under the line items) and PricingAdjustments (the
+// live $ deltas shown next to the markup % field and discount button themselves) so the two never
+// disagree, and by a payment-schedule editor next to them (which needs the current total to show
+// each row's $ amount) before the estimate is even saved. Mirrors server/src/helpers.js's
+// withTotals exactly — markup first (a % added on top of the line-item cost), then a discount off
+// that marked-up number (flat $ or %), tax last — so a saved estimate's total never differs from
+// what the builder showed while creating it.
+export function estimateBreakdown(items, taxRate, markupPercent, discountType, discountValue) {
+  const subtotal = estimateSubtotal(items);
+  const markupAmount = subtotal * ((Number(markupPercent) || 0) / 100);
+  const markedUp = subtotal + markupAmount;
+  let discountAmount = 0;
+  if (discountType === 'percent') discountAmount = markedUp * ((Number(discountValue) || 0) / 100);
+  else if (discountType === 'flat') discountAmount = Number(discountValue) || 0;
+  discountAmount = Math.max(0, Math.min(discountAmount, markedUp));
+  const afterDiscount = markedUp - discountAmount;
+  const tax = afterDiscount * (Number(taxRate) || 0);
+  return { subtotal, markupAmount, discountAmount, tax, total: afterDiscount + tax };
+}
+
 // The same subtotal/tax/total math LineItemEditor uses internally, exposed so a payment-schedule
 // editor next to it (which needs the estimate's current total to show each row's $ amount) can
-// derive it from the same in-progress items/tax-rate state, live, before the estimate is saved.
-export function estimateTotal(items, taxRate) {
-  const subtotal = (items || []).reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.unit_price) || 0), 0);
-  return subtotal + subtotal * (Number(taxRate) || 0);
+// derive it from the same in-progress items/tax-rate/markup/discount state, live, before the
+// estimate is saved.
+export function estimateTotal(items, taxRate, markupPercent, discountType, discountValue) {
+  return estimateBreakdown(items, taxRate, markupPercent, discountType, discountValue).total;
 }
 
 // A deal's work_type is stored as one TEXT column — a single value for a single-service project
