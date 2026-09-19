@@ -8,10 +8,22 @@
 const db = require('./db');
 const mailer = require('./mailer');
 const { buildIcs, buildIcsMulti } = require('./ics');
+const { getCompanyProfile } = require('./companyProfile');
 
 function getUser(userId) {
   if (!userId) return null;
   return db.prepare(`SELECT id, username, email FROM users WHERE id = ?`).get(userId);
+}
+
+// Who "us" is for a document's own internal alerts (signed / first viewed) — the project or
+// opportunity's assigned owner if one is set, falling back to the company's own email (the same
+// address already shown on the estimate/invoice header) so this works out of the box without
+// anyone having to also put an email on their login first.
+function internalRecipient(ownerUserId) {
+  const owner = getUser(ownerUserId);
+  if (owner && owner.email) return { email: owner.email, name: owner.username };
+  const company = getCompanyProfile();
+  return { email: company.email, name: company.name };
 }
 
 function fmtDateTime(iso) {
@@ -105,4 +117,57 @@ async function notifyTaskDueDate(task) {
   return result;
 }
 
-module.exports = { notifyAppointment, notifyJobMilestones, notifyTaskDueDate };
+/** Customer signed an estimate — fires once (routes/public.js only calls this from the sign
+    handler itself, which only ever runs once per estimate). Emails whoever owns the project that
+    was just created (or the deal, if signing didn't create one — shouldn't happen in practice
+    but kept defensive), falling back to the company's own address. */
+async function notifyEstimateSigned({ estimate, job, deal, contactName }) {
+  const ownerUserId = (job && job.owner_user_id) || (deal && deal.owner_user_id) || null;
+  const to = internalRecipient(ownerUserId);
+  const title = (job && job.title) || (deal && deal.title) || estimate.number;
+  const result = await mailer.sendEmail({
+    to: to.email,
+    subject: `Signed: Estimate ${estimate.number} — ${title}`,
+    text: `${contactName || 'The customer'} just signed Estimate ${estimate.number} for "${title}".\n\nAn invoice has been generated automatically${job ? ` and the project has moved to Pending Schedule.` : '.'}`,
+  });
+  if (!result.sent && mailer.isConfigured()) console.error(`Estimate-signed notification to ${to.email} not sent: ${result.reason}`);
+  return result;
+}
+
+/** Customer explicitly declined an estimate (routes/public.js's /estimates/:token/decline) —
+    fires once, same as notifyEstimateSigned. Since a decline never creates a project, the owner
+    to notify is whichever the estimate was already attached to (job if it has one, else deal). */
+async function notifyEstimateDeclined({ estimate, job, deal, contactName, reason }) {
+  const ownerUserId = (job && job.owner_user_id) || (deal && deal.owner_user_id) || null;
+  const to = internalRecipient(ownerUserId);
+  const title = (job && job.title) || (deal && deal.title) || estimate.number;
+  const result = await mailer.sendEmail({
+    to: to.email,
+    subject: `Declined: Estimate ${estimate.number} — ${title}`,
+    text: `${contactName || 'The customer'} just declined Estimate ${estimate.number} for "${title}".${reason ? `\n\nReason given: ${reason}` : ''}`,
+  });
+  if (!result.sent && mailer.isConfigured()) console.error(`Estimate-declined notification to ${to.email} not sent: ${result.reason}`);
+  return result;
+}
+
+/** Customer opened the public estimate or invoice link — routes/public.js only calls this the
+    FIRST time a given document is viewed (see estimates.first_viewed_at / invoices.first_viewed_at),
+    so this fires once per document rather than on every page reload. */
+async function notifyDocumentViewed({ kind, number, job, deal, contactName }) {
+  const ownerUserId = (job && job.owner_user_id) || (deal && deal.owner_user_id) || null;
+  const to = internalRecipient(ownerUserId);
+  const title = (job && job.title) || (deal && deal.title) || number;
+  const label = kind === 'invoice' ? 'Invoice' : 'Estimate';
+  const result = await mailer.sendEmail({
+    to: to.email,
+    subject: `Viewed: ${label} ${number} — ${title}`,
+    text: `${contactName || 'The customer'} just opened ${label} ${number} for "${title}" for the first time.`,
+  });
+  if (!result.sent && mailer.isConfigured()) console.error(`Document-viewed notification to ${to.email} not sent: ${result.reason}`);
+  return result;
+}
+
+module.exports = {
+  notifyAppointment, notifyJobMilestones, notifyTaskDueDate, notifyEstimateSigned, notifyDocumentViewed,
+  notifyEstimateDeclined,
+};
