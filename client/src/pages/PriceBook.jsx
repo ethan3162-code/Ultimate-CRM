@@ -4,9 +4,9 @@
 // "Items", even though its permission key is 'price_book'). These are the priced products/
 // services you drop into a job estimate, kept separate from the calculator's raw-material catalog
 // so your estimate picker only shows things you actually sell by the line.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
-import { money } from '../utils';
+import { money, csvToCatalogItems } from '../utils';
 import { usePermission } from '../auth';
 
 const BLANK = { name: '', description: '', unit: '', unit_price: '' };
@@ -19,8 +19,57 @@ export default function PriceBook() {
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState(null);
 
+  // Bulk import from a CSV — a price list exported from Joist, QuickBooks, or a spreadsheet
+  // (Sept 2026). `importText` is the raw file/paste content; the preview table below derives
+  // from it live via csvToCatalogItems, so editing the pasted text updates the preview as you go.
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFileName, setImportFileName] = useState('');
+  const [importText, setImportText] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const fileInputRef = useRef(null);
+
   function load() { api.catalogItems().then(setItems); }
   useEffect(load, []);
+
+  // null before anything's been read/pasted yet; [] specifically means the text had no
+  // recognizable name/product column, which the UI below calls out distinctly from "0 rows".
+  const importRows = useMemo(() => (importText.trim() ? csvToCatalogItems(importText) : null), [importText]);
+
+  function openImport() {
+    setImportOpen(true);
+    setImportText('');
+    setImportFileName('');
+    setImportResult(null);
+  }
+  function closeImport() {
+    setImportOpen(false);
+  }
+  function onImportFileChange(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setImportFileName(file.name);
+    setImportResult(null);
+    const reader = new FileReader();
+    reader.onload = () => setImportText(String(reader.result || ''));
+    reader.readAsText(file);
+  }
+  async function runImport() {
+    if (!importRows || !importRows.length) return;
+    setImporting(true);
+    try {
+      const result = await api.bulkImportCatalogItems(importRows);
+      setImportResult(result);
+      setImportText('');
+      setImportFileName('');
+      load();
+    } catch (err) {
+      window.alert(err.message);
+    } finally {
+      setImporting(false);
+    }
+  }
 
   const salesItems = useMemo(() => (items || []).filter((i) => !i.material_key), [items]);
 
@@ -73,8 +122,80 @@ export default function PriceBook() {
           <h1>Items</h1>
           <p className="sub">Products and services you add to job estimates — labor, add-ons, anything you sell by the line.</p>
         </div>
-        {canEdit && <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New item</button>}
+        {canEdit && (
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn" onClick={openImport}>Import from CSV…</button>
+            <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New item</button>
+          </div>
+        )}
       </div>
+
+      {importOpen && canEdit && (
+        <div className="card" style={{ marginBottom: 18 }}>
+          <h2 style={{ marginTop: 0 }}>Import items from a CSV</h2>
+          <p className="sub">
+            Upload a price-list export — from Joist, QuickBooks, or a spreadsheet's "Save as CSV" — and it's matched up by
+            column name (Name/Item Name/Product Name, Description, Unit Cost/Price, Unit) automatically. Review the preview
+            below before importing; nothing is added until you click Import.
+          </p>
+          <input
+            ref={fileInputRef} type="file" accept=".csv,text/csv"
+            onChange={onImportFileChange}
+          />
+          {importFileName && <p className="sub" style={{ margin: '6px 0 0' }}>Loaded <strong>{importFileName}</strong>.</p>}
+
+          <div className="field" style={{ marginTop: 10 }}>
+            <label>Or paste CSV text</label>
+            <textarea
+              rows={6} style={{ fontFamily: 'monospace', fontSize: 12 }}
+              placeholder={'Name,Description,Unit Cost,Unit\nSealcoating,Driveway sealcoat application,0.18,sq ft'}
+              value={importText} onChange={(e) => { setImportText(e.target.value); setImportResult(null); }}
+            />
+          </div>
+
+          {importText.trim() && importRows === null && (
+            <div className="empty" style={{ marginTop: 10 }}>
+              Couldn't find a name/product column in that file's header row — check that the first row has a column
+              like "Name", "Item Name", or "Product Name".
+            </div>
+          )}
+
+          {importRows && importRows.length > 0 && (
+            <>
+              <p className="sub" style={{ marginTop: 12 }}>Preview — {importRows.length} item{importRows.length === 1 ? '' : 's'} found:</p>
+              <div className="table-wrap">
+                <table className="list">
+                  <thead><tr><th>Product name</th><th>Description</th><th>Unit cost</th><th>Unit</th></tr></thead>
+                  <tbody>
+                    {importRows.slice(0, 8).map((it, i) => (
+                      <tr key={i}>
+                        <td className="link-strong">{it.name}</td>
+                        <td className="muted">{it.description || '—'}</td>
+                        <td className="mono">{money(it.unit_price)}</td>
+                        <td className="muted">{it.unit || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {importRows.length > 8 && <p className="sub">…and {importRows.length - 8} more.</p>}
+            </>
+          )}
+
+          {importResult && (
+            <div className="sub" style={{ margin: '10px 0 0', color: 'var(--accent-ink)' }}>
+              ✓ Imported {importResult.inserted} item{importResult.inserted === 1 ? '' : 's'}.
+            </div>
+          )}
+
+          <div className="row" style={{ gap: 8, marginTop: 12 }}>
+            <button className="btn primary" type="button" disabled={!importRows || !importRows.length || importing} onClick={runImport}>
+              {importing ? 'Importing…' : `Import${importRows && importRows.length ? ` ${importRows.length} item${importRows.length === 1 ? '' : 's'}` : ''}`}
+            </button>
+            <button className="btn subtle" type="button" onClick={closeImport}>Close</button>
+          </div>
+        </div>
+      )}
 
       {showForm && canEdit && (
         <div className="card" style={{ marginBottom: 18 }}>
