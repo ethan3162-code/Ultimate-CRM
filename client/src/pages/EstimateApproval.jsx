@@ -189,6 +189,12 @@ export default function EstimateApproval() {
           </tbody>
         </table>
         <div className="totals-row"><span className="lbl">Subtotal</span><span className="amt">{money(estimate.subtotal)}</span></div>
+        {estimate.markup_amount > 0 && (
+          <div className="totals-row"><span className="lbl">Markup{estimate.markup_percent ? ` (${estimate.markup_percent}%)` : ''}</span><span className="amt">{money(estimate.markup_amount)}</span></div>
+        )}
+        {estimate.discount_amount > 0 && (
+          <div className="totals-row"><span className="lbl">Discount</span><span className="amt">-{money(estimate.discount_amount)}</span></div>
+        )}
         <div className="totals-row"><span className="lbl">Tax</span><span className="amt">{money(estimate.tax)}</span></div>
         <div className="totals-row"><span className="lbl" style={{ fontWeight: 700 }}>Total</span><span className="amt" style={{ fontWeight: 700 }}>{money(estimate.total)}</span></div>
         {showSchedule && (
