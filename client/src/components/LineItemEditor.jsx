@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { money } from '../utils';
 
 /** A searchable "Items" picker modal (Joist-style) — replaces the old plain <select> dropdown.
@@ -54,19 +54,17 @@ export default function LineItemEditor({ items, setItems, taxRate, setTaxRate, c
     setItems(next);
   }
   function addRow() {
-    setItems([...items, { description: '', qty: 1, unit_price: 0 }]);
+    setItems([...items, { description: '', notes: '', qty: 1, unit_price: 0 }]);
   }
   function removeRow(i) {
     setItems(items.filter((_, idx) => idx !== i));
   }
   function pickFromCatalog(item) {
-    // The estimate line has one text field, so carry both the item's name and its catalog
-    // description into it — otherwise picking from Items silently drops the description the
-    // user wrote there (see Items.jsx), and the line just shows a bare name.
-    const description = item.description && item.description.trim()
-      ? `${item.name} — ${item.description.trim()}`
-      : item.name;
-    setItems([...items, { description, qty: 1, unit_price: item.unit_price }]);
+    // Keep the item's name as the line's short title and its catalog description as its own
+    // field (`notes`) — a catalog item's description is often a whole multi-paragraph scope-of-
+    // work writeup (see Items.jsx), which needs to render as its own block under the line on the
+    // estimate/PDF, not get squashed into the same single-line field as the name.
+    setItems([...items, { description: item.name, notes: item.description || '', qty: 1, unit_price: item.unit_price }]);
     setPickerOpen(false);
   }
 
@@ -86,12 +84,23 @@ export default function LineItemEditor({ items, setItems, taxRate, setTaxRate, c
         </thead>
         <tbody>
           {items.map((it, i) => (
-            <tr key={i}>
-              <td><input value={it.description} onChange={(e) => updateItem(i, 'description', e.target.value)} placeholder="e.g. Labor, materials…" /></td>
-              <td className="num"><input type="number" step="any" value={it.qty} onChange={(e) => updateItem(i, 'qty', e.target.value)} /></td>
-              <td className="num"><input type="number" step="any" value={it.unit_price} onChange={(e) => updateItem(i, 'unit_price', e.target.value)} /></td>
-              <td><button type="button" className="btn subtle sm" onClick={() => removeRow(i)}>✕</button></td>
-            </tr>
+            <Fragment key={i}>
+              <tr>
+                <td><input value={it.description} onChange={(e) => updateItem(i, 'description', e.target.value)} placeholder="e.g. Labor, materials…" /></td>
+                <td className="num"><input type="number" step="any" value={it.qty} onChange={(e) => updateItem(i, 'qty', e.target.value)} /></td>
+                <td className="num"><input type="number" step="any" value={it.unit_price} onChange={(e) => updateItem(i, 'unit_price', e.target.value)} /></td>
+                <td><button type="button" className="btn subtle sm" onClick={() => removeRow(i)}>✕</button></td>
+              </tr>
+              <tr className="line-item-notes-row">
+                <td colSpan={4}>
+                  <textarea
+                    className="line-item-notes" rows={2} value={it.notes || ''}
+                    onChange={(e) => updateItem(i, 'notes', e.target.value)}
+                    placeholder="Description shown under this line on the estimate (optional)"
+                  />
+                </td>
+              </tr>
+            </Fragment>
           ))}
         </tbody>
       </table>
