@@ -18,13 +18,19 @@ const NAV = [
   {
     // Sept 2026 — Projects (and Transactions right after it) moved in here, right after
     // Opportunities, so the sidebar itself reads as the sales workflow the user described: Lead
-    // -> Opportunity -> Project -> Transaction. Companies/Contacts/Conversations are supporting
-    // customer records rather than funnel stages, so they stay listed after the four stages
-    // rather than between them.
+    // -> book appointment -> Opportunity -> Estimate (written against the opportunity, before a
+    // project exists) -> signed -> Project + Invoice (auto-created) -> Transaction.
+    // Companies/Contacts/Conversations are supporting customer records rather than funnel
+    // stages, so they stay listed after the funnel rather than between its steps.
     group: 'Sales',
     items: [
       { to: '/leads', label: 'Leads', page: 'leads' },
       { to: '/pipeline', label: 'Opportunities', page: 'pipeline' },
+      { to: '/estimates', label: 'Estimates', page: 'estimates' },
+      // Not a business-object page permission like the others here — shown only to a login an
+      // admin flagged "Can approve estimates" (Users & permissions), the same personal capability
+      // that already gates the inline Approve/Reject buttons on the Estimates and Project pages.
+      { to: '/estimate-approvals', label: 'Estimate approvals', requiresApprover: true },
       { to: '/jobs', label: 'Projects', page: 'jobs' },
       { to: '/transactions', label: 'Transactions', page: 'transactions' },
       { to: '/companies', label: 'Companies', page: 'companies' },
@@ -50,6 +56,7 @@ const NAV = [
     group: 'Scheduling',
     items: [
       { to: '/calendar', label: 'Appointments', page: 'calendar' },
+      { to: '/needs-scheduling', label: 'Needs Scheduling', page: 'schedule' },
       { to: '/schedule', label: 'Project schedule', page: 'schedule' },
     ],
   },
@@ -58,6 +65,7 @@ const NAV = [
     group: 'System',
     items: [
       { to: '/automations', label: 'Automations', page: 'automations' },
+      { to: '/contracts', label: 'Contracts', page: 'contracts' },
       { to: '/integrations', label: 'Integrations', page: 'integrations' },
       { to: '/users', label: 'Users & permissions', page: 'users' },
     ],
@@ -83,7 +91,13 @@ export default function Layout() {
   // is hidden (e.g. all of "System" for a non-admin) disappears entirely rather than showing an
   // empty header.
   const visibleNav = NAV
-    .map((group) => ({ ...group, items: group.items.filter((item) => item.always || (perms[item.page] || 'none') !== 'none') }))
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        if (item.requiresApprover) return !!(user && user.can_approve_estimates);
+        return item.always || (perms[item.page] || 'none') !== 'none';
+      }),
+    }))
     .filter((group) => group.items.length > 0);
 
   return (
