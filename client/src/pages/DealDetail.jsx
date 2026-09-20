@@ -497,12 +497,16 @@ export default function DealDetail() {
                     ? 'The customer declined this estimate — send a new one to move this opportunity forward.'
                     : 'A project is created automatically as soon as the customer signs this estimate — there’s nothing else to do here until then.'}
                 </p>
-                <Link to="/estimates" className="btn sm">View estimates &rarr;</Link>
+                {estimateStatusKey === 'declined' && canEdit ? (
+                  <Link to={`/estimates?deal_id=${deal.id}`} className="btn primary sm">+ Create new estimate</Link>
+                ) : (
+                  <Link to="/estimates" className="btn sm">View estimates &rarr;</Link>
+                )}
               </>
             ) : deal.stage === 'won' && canEdit ? (
               <>
                 <p className="sub" style={{ margin: '-4px 0 10px' }}>This opportunity is won — send the customer an estimate. A project is created automatically once they sign it.</p>
-                <Link to="/estimates" className="btn primary sm">+ Create estimate</Link>
+                <Link to={`/estimates?deal_id=${deal.id}`} className="btn primary sm">+ Create estimate</Link>
               </>
             ) : (
               <div className="empty">Projects start once this opportunity is won and the customer signs an estimate.</div>
@@ -542,7 +546,10 @@ export default function DealDetail() {
               <div className="timeline">
                 {deal.activities.map((a) => (
                   <div className="timeline-item" key={a.id}>
-                    <div className="when">{timeAgo(a.created_at)}</div>
+                    <div>
+                      <div className="when">{timeAgo(a.created_at)}</div>
+                      {a.created_by_username && <div className="who">by {a.created_by_username}</div>}
+                    </div>
                     <div className="body"><span className="type-tag">{a.type.replace('_', ' ')}</span>{a.note}</div>
                   </div>
                 ))}
