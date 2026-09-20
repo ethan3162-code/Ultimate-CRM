@@ -10,6 +10,8 @@ try {
   nodemailer = null;
 }
 
+const { getCompanyProfile } = require('./companyProfile');
+
 function isConfigured() {
   return Boolean(nodemailer && process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
 }
@@ -35,7 +37,7 @@ async function sendEmail({ to, subject, text, attachments }) {
   if (!t) return { sent: false, reason: 'not configured' };
   try {
     await t.sendMail({
-      from: `"${process.env.GMAIL_FROM_NAME || 'Ultimate CRM'}" <${process.env.GMAIL_USER}>`,
+      from: `"${process.env.GMAIL_FROM_NAME || getCompanyProfile().name}" <${process.env.GMAIL_USER}>`,
       to,
       subject: subject || '(no subject)',
       text: text || '',
