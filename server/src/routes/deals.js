@@ -121,7 +121,7 @@ router.post('/', (req, res) => {
 router.get('/:id', (req, res) => {
   const deal = db.prepare(`${DEAL_SELECT} WHERE d.id = ?`).get(req.params.id);
   if (!deal) return res.status(404).json({ error: 'not found' });
-  const activities = db.prepare(`SELECT * FROM activities WHERE related_type = 'deal' AND related_id = ? ORDER BY created_at DESC`).all(req.params.id);
+  const activities = db.prepare(`SELECT a.*, u.username AS created_by_username FROM activities a LEFT JOIN users u ON u.id = a.created_by_user_id WHERE a.related_type = 'deal' AND a.related_id = ? ORDER BY a.created_at DESC`).all(req.params.id);
   const jobs = db.prepare(`SELECT id, title, status FROM jobs WHERE deal_id = ? ORDER BY created_at DESC`).all(req.params.id);
   // A project is only ever created automatically once a customer signs an estimate (see
   // routes/public.js's /estimates/:token/sign) — never at estimate creation. So while this deal
@@ -187,8 +187,11 @@ router.patch('/:id', (req, res) => {
 router.post('/:id/activities', (req, res) => {
   const { note, type } = req.body;
   if (!note) return res.status(400).json({ error: 'note is required' });
-  logActivity('deal', req.params.id, type || 'note', note);
-  const activities = db.prepare(`SELECT * FROM activities WHERE related_type = 'deal' AND related_id = ? ORDER BY created_at DESC`).all(req.params.id);
+  // Notes are append-only — there is deliberately no PATCH/DELETE route for activities anywhere
+  // in the API, and created_by_user_id is stamped from the logged-in session so the timeline can
+  // always show who wrote each note.
+  logActivity('deal', req.params.id, type || 'note', note, req.user && req.user.id);
+  const activities = db.prepare(`SELECT a.*, u.username AS created_by_username FROM activities a LEFT JOIN users u ON u.id = a.created_by_user_id WHERE a.related_type = 'deal' AND a.related_id = ? ORDER BY a.created_at DESC`).all(req.params.id);
   res.status(201).json(activities);
 });
 
