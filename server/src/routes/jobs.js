@@ -115,10 +115,23 @@ router.post('/', (req, res) => {
 router.get('/:id', (req, res) => {
   const job = getJobFull(req.params.id);
   if (!job) return res.status(404).json({ error: 'not found' });
-  const activities = db.prepare(`SELECT * FROM activities WHERE related_type = 'job' AND related_id = ? ORDER BY created_at DESC`).all(req.params.id);
+  const activities = db.prepare(`SELECT a.*, u.username AS created_by_username FROM activities a LEFT JOIN users u ON u.id = a.created_by_user_id WHERE a.related_type = 'job' AND a.related_id = ? ORDER BY a.created_at DESC`).all(req.params.id);
   const priced = canSeePrices(req.user) ? job : redactJobMoney(job);
   const full = canSeeJobCommission(req.user, job) ? priced : redactJobCommission(priced);
   res.json({ ...full, activities });
+});
+
+// Free-text notes on a project — same shape as the deals/:id/activities endpoint. Append-only:
+// there is deliberately no PATCH/DELETE for activities anywhere in the API, and the note is
+// stamped with created_by_user_id so the timeline can always show who logged it.
+router.post('/:id/activities', (req, res) => {
+  const { note, type } = req.body;
+  if (!note) return res.status(400).json({ error: 'note is required' });
+  const existing = db.prepare(`SELECT id FROM jobs WHERE id = ?`).get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  logActivity('job', req.params.id, type || 'note', note, req.user && req.user.id);
+  const activities = db.prepare(`SELECT a.*, u.username AS created_by_username FROM activities a LEFT JOIN users u ON u.id = a.created_by_user_id WHERE a.related_type = 'job' AND a.related_id = ? ORDER BY a.created_at DESC`).all(req.params.id);
+  res.status(201).json(activities);
 });
 
 router.patch('/:id', (req, res) => {
