@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { money, dateTime, accountName, estimateTotal, estimateSubtotal } from '../utils';
 import LineItemEditor from '../components/LineItemEditor';
@@ -80,6 +80,11 @@ export default function Estimates() {
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState(() => new Set());
 
+  // Arriving from an opportunity's "+ Create estimate" button (DealDetail.jsx) — ?deal_id=<id>
+  // in the URL means "open the new-estimate form with this deal already picked", so the person
+  // never has to hunt for it again in the dropdown below.
+  const [searchParams] = useSearchParams();
+
   function load() {
     api.estimates().then(setEstimates);
   }
@@ -88,6 +93,16 @@ export default function Estimates() {
     api.deals().then(setDeals);
     api.catalogItems().then(setCatalog);
     api.contracts().then(setContracts).catch(() => setContracts([]));
+  }, []);
+  useEffect(() => {
+    const preselect = searchParams.get('deal_id');
+    if (preselect) {
+      setDealId(preselect);
+      setShowForm(true);
+    }
+    // Only ever act on the param that was on the page when it first loaded — this must not
+    // reopen the form or clobber the person's in-progress dealId pick on a later re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function submit(e) {
