@@ -889,6 +889,13 @@ ensureColumn('jobs', 'owner_user_id', 'owner_user_id INTEGER REFERENCES users(id
 ensureColumn('jobs', 'salesperson_user_id', 'salesperson_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 ensureColumn('appointments', 'assigned_user_id', 'assigned_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 ensureColumn('tasks', 'assigned_user_id', 'assigned_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+// Who logged this note/activity (Sept 2026) — nullable because plenty of activity rows are
+// system-generated (automation engine, stage-change side effects) with no logged-in user behind
+// them at all; those keep reading as unattributed. Notes a person types through the UI (the
+// only kind exposed via POST .../activities) now carry req.user.id so the timeline can show who
+// wrote it. There is deliberately no UPDATE/DELETE route for activities anywhere in the API —
+// once logged, a note stays in the log for good.
+ensureColumn('activities', 'created_by_user_id', 'created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 // Rename of an earlier stage key ('material_order' -> 'site_prep') on any DB seeded before the rename.
 db.prepare(`UPDATE jobs SET stage = 'site_prep' WHERE stage = 'material_order'`).run();
 // Project status lifecycle expanded to 6 states ('completed' -> 'complete', plus new 'accepted'/'on_hold')
