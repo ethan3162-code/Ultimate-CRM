@@ -71,7 +71,7 @@ export default function SignaturePad({ onChange }) {
       <canvas
         ref={canvasRef} className={'sign-pad' + (locked ? ' sign-pad-locked' : '')} width={560} height={160}
         onMouseDown={start} onMouseMove={move} onMouseUp={end} onMouseLeave={end}
-        onTouchStart={start} onTouchMove={move} onTouchEnd={end}
+        onTouchStart={start} onTouchMove={move} onTouchEnd={end} onTouchCancel={end}
       />
       <div className="row" style={{ gap: 8, marginTop: 6, alignItems: 'center' }}>
         <button type="button" className="btn subtle sm" onClick={clear}>{locked ? 'Redo' : 'Clear'}</button>
