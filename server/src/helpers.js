@@ -1,6 +1,8 @@
 const crypto = require('crypto');
 const db = require('./db');
 const { requiresEstimateApproval, canApproveEstimates } = require('./auth');
+const { getCompanyProfile } = require('./companyProfile');
+const { getSetting } = require('./settings');
 
 // The three Display Options toggles (Rate / Quantity / Item Totals) a customer-facing estimate or
 // invoice can be created or edited with — each defaults to shown (1) so a request that doesn't
@@ -105,6 +107,11 @@ function getEstimateFull(id) {
     created_by_username: creator ? creator.username : null,
     approved_by_username: approver ? approver.username : null,
     requires_internal_approval,
+    // Same company name + uploaded stamp the customer-facing approval page and PDF sign with
+    // (see routes/public.js and pdf.js) — included here too so the internal Estimates/JobDetail
+    // views can render the identical two-column signature block, not just a plain text line.
+    company: getCompanyProfile(),
+    company_signature_data_url: getSetting('company_signature_data_url') || null,
   };
 }
 
