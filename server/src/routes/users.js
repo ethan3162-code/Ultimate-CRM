@@ -105,7 +105,7 @@ router.patch('/:id', (req, res) => {
   res.json(safeUser(db.prepare(`SELECT * FROM users WHERE id = ?`).get(req.params.id)));
 });
 
-// Which custom roles ((permission templates) this login holds — replaces the full set at once.
+// Which custom roles (permission templates) this login holds — replaces the full set at once.
 // Not available for admin logins, which always have full access regardless of any role.
 router.patch('/:id/roles', (req, res) => {
   const existing = db.prepare(`SELECT * FROM users WHERE id = ?`).get(req.params.id);
