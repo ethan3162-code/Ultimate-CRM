@@ -568,15 +568,20 @@ router.post('/invoices/:invoiceId/payments', (req, res) => {
   const refSuffix = reference ? ` (${reference})` : '';
   logActivity('job', invoice.job_id, 'payment', `Payment of $${amount.toFixed(2)} (${method || 'card'})${refSuffix} received on ${invoice.number}.`);
 
-  if (updated.balance <= 0.001) {
+  const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(invoice.job_id);
+  const contact = job?.contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(job.contact_id) : null;
+  const contactName = contact ? `${contact.first_name} ${contact.last_name}` : null;
+  const fullyPaid = updated.balance <= 0.001;
+
+  notify.notifyInvoicePayment({ invoice: updated, job, amount, method: method || 'card', fullyPaid, contactName }).catch(() => {});
+
+  if (fullyPaid) {
     db.prepare(`UPDATE invoices SET status = 'paid' WHERE id = ?`).run(invoice.id);
-    const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(invoice.job_id);
-    const contact = job?.contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(job.contact_id) : null;
     fireTrigger('invoice_paid', {
       related_type: 'job', related_id: invoice.job_id,
       dedupe_id: `invoice-paid:${invoice.id}`,
       number: invoice.number, total: updated.total, job_title: job?.title,
-      contact_name: contact ? `${contact.first_name} ${contact.last_name}` : null,
+      contact_name: contactName,
       contact_email: contact ? contact.email : null,
     });
   }
