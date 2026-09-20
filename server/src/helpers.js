@@ -471,9 +471,12 @@ function getContractForEstimate(estimate, customerType) {
   return { id: null, name: null, heading: 'AGREEMENT & LIMITED WARRANTY', intro: '', clauses: [] };
 }
 
-function logActivity(related_type, related_id, type, note) {
-  db.prepare(`INSERT INTO activities (related_type, related_id, type, note) VALUES (?,?,?,?)`)
-    .run(related_type, related_id, type, note);
+// created_by_user_id is optional and defaults to null — most call sites are system/automation
+// code (stage-change side effects, the automation engine, invoice/estimate lifecycle events) with
+// no logged-in user behind them; only the user-facing "add a note" endpoints pass req.user.id.
+function logActivity(related_type, related_id, type, note, created_by_user_id = null) {
+  db.prepare(`INSERT INTO activities (related_type, related_id, type, note, created_by_user_id) VALUES (?,?,?,?,?)`)
+    .run(related_type, related_id, type, note, created_by_user_id || null);
 }
 
 // Generates an invoice from an estimate against a specific job — the exact same INV-#### /
