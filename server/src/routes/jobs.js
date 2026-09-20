@@ -515,6 +515,20 @@ router.post('/estimates/:estimateId/sign', (req, res) => {
   sendEstimate(req, res, getEstimateFull(estimate.id));
 });
 
+// Move a declined estimate back to Pending (Sept 2026) — customers sometimes decline and then
+// change their mind (or it was declined by mistake), so this undoes it: clears declined_at/
+// decline_reason so the estimate drops back into the Pending tab exactly as if it were never
+// declined, and can be edited, re-sent, or signed in person from there.
+router.post('/estimates/:estimateId/reopen', (req, res) => {
+  const existing = db.prepare(`SELECT * FROM estimates WHERE id = ?`).get(req.params.estimateId);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  if (!existing.declined_at) return res.status(400).json({ error: "this estimate isn't declined" });
+
+  db.prepare(`UPDATE estimates SET declined_at = NULL, decline_reason = NULL WHERE id = ?`).run(existing.id);
+  logActivity(existing.job_id ? 'job' : 'deal', existing.job_id || existing.deal_id, 'estimate', `Estimate ${existing.number} moved back to pending by ${req.user.username} (decline undone).`);
+  sendEstimate(req, res, getEstimateFull(existing.id));
+});
+
 // --- Invoices ---
 router.post('/:id/invoices', (req, res) => {
   const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(req.params.id);
