@@ -8,12 +8,21 @@ export default function SignaturePad({ onChange }) {
   const canvasRef = useRef(null);
   const drawing = useRef(false);
 
+  // The canvas's drawing buffer is a fixed 560×160 (its width/height attributes below), but the
+  // CSS renders it at width: 100% — on any screen narrower than 560px (i.e. basically every
+  // phone) the on-screen box is smaller than the buffer, so a touch position in on-screen pixels
+  // has to be scaled up to buffer pixels or the ink lands in the wrong place entirely. Desktops
+  // wide enough to render it near 1:1 never showed this, which is why it only broke on mobile.
   function point(e) {
-    const rect = canvasRef.current.getBoundingClientRect();
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
     const src = e.touches ? e.touches[0] : e;
-    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return { x: (src.clientX - rect.left) * scaleX, y: (src.clientY - rect.top) * scaleY };
   }
   function start(e) {
+    e.preventDefault();
     drawing.current = true;
     const ctx = canvasRef.current.getContext('2d');
     const { x, y } = point(e);
