@@ -529,6 +529,23 @@ router.post('/estimates/:estimateId/reopen', (req, res) => {
   sendEstimate(req, res, getEstimateFull(existing.id));
 });
 
+// Undo a customer's e-signature (Sept 2026) — a signature can be mis-captured (wrong name typed,
+// a blank/garbled drawing) with no way back; this clears just the signature fields so the
+// estimate drops into "not signed by the customer yet" and can be signed again from the same
+// place (in-app "Sign now", the public approval link, or in person) — mirrors the /reopen route
+// above for declines. Deliberately leaves alone anything a signing may have already created (the
+// Project, its first invoice, the deal moving to "won" — see estimateSigning.js) since none of
+// that depends on the exact signature image on file.
+router.post('/estimates/:estimateId/clear-signature', (req, res) => {
+  const existing = db.prepare(`SELECT * FROM estimates WHERE id = ?`).get(req.params.estimateId);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  if (!existing.signed_at) return res.status(400).json({ error: "this estimate isn't signed" });
+
+  db.prepare(`UPDATE estimates SET signed_at = NULL, signed_name = NULL, signature_data_url = NULL WHERE id = ?`).run(existing.id);
+  logActivity(existing.job_id ? 'job' : 'deal', existing.job_id || existing.deal_id, 'estimate', `Estimate ${existing.number}'s signature was cleared by ${req.user.username} — can be signed again.`);
+  sendEstimate(req, res, getEstimateFull(existing.id));
+});
+
 // --- Invoices ---
 router.post('/:id/invoices', (req, res) => {
   const job = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(req.params.id);
