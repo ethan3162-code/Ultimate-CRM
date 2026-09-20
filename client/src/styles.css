@@ -343,6 +343,7 @@ table.list tbody tr:last-child td { border-bottom: none; }
 .timeline-item { display: grid; grid-template-columns: 90px 1fr; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
 .timeline-item:last-child { border-bottom: none; }
 .timeline-item .when { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.timeline-item .who { font-size: 10.5px; color: var(--muted); white-space: nowrap; margin-top: 2px; }
 .timeline-item .body { font-size: 13.5px; }
 .timeline-item .type-tag { font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase; color: var(--accent-ink); margin-right: 6px; }
 
