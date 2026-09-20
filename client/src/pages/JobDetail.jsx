@@ -297,6 +297,15 @@ export default function JobDetail() {
     load();
   }
 
+  // Undo a customer's e-signature (Sept 2026) — for a mis-captured signature (wrong name, a bad
+  // drawing) with no way to fix it before; clears signed_at/signed_name/signature_data_url so it
+  // drops back into "not signed yet" and can be signed again right away.
+  async function clearSignature(estimateId) {
+    if (!window.confirm('Clear this signature so it can be signed again?')) return;
+    await api.clearEstimateSignature(estimateId).catch((err) => window.alert(err.message));
+    load();
+  }
+
   function startEditEstimate(est) {
     setEditingEstimateId(est.id);
     setEditItems(est.items.map((it) => ({ description: it.description, notes: it.notes || '', qty: it.qty, unit_price: it.unit_price })));
@@ -774,6 +783,12 @@ export default function JobDetail() {
                     {est.signed_at ? (
                       <div className="sub" style={{ margin: '6px 0 0', color: 'var(--accent-ink)' }}>
                         ✓ Signed by {est.signed_name} — {shortDate(est.signed_at)}
+                        {canEdit && (
+                          <>
+                            {' '}
+                            <button className="btn sm subtle" style={{ marginLeft: 4 }} onClick={() => clearSignature(est.id)}>Clear signature</button>
+                          </>
+                        )}
                       </div>
                     ) : est.declined_at ? (
                       <div className="sub" style={{ margin: '6px 0 0', color: 'var(--red)' }}>
