@@ -70,12 +70,14 @@ export const api = {
   deal: (id) => request(`/deals/${id}`),
   createDeal: (data) => request('/deals', { method: 'POST', body: JSON.stringify(data) }),
   updateDeal: (id, data) => request(`/deals/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  addDealNote: (id, note) => request(`/deals/${id}/activities`, { method: 'POST', body: JSON.stringify({ note, type: 'note' }) }),
 
   jobs: () => request('/jobs'),
   transactions: () => request('/transactions'),
   job: (id) => request(`/jobs/${id}`),
   createJob: (data) => request('/jobs', { method: 'POST', body: JSON.stringify(data) }),
   updateJob: (id, data) => request(`/jobs/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  addJobNote: (id, note) => request(`/jobs/${id}/activities`, { method: 'POST', body: JSON.stringify({ note, type: 'note' }) }),
 
   addAttendance: (jobId, data) => request(`/jobs/${jobId}/attendance`, { method: 'POST', body: JSON.stringify(data) }),
   deleteAttendance: (attendanceId) => request(`/jobs/attendance/${attendanceId}`, { method: 'DELETE' }),
