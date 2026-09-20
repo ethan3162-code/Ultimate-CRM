@@ -626,6 +626,7 @@ table.list tbody tr.row-hot:hover td, table.list tbody tr.row-warm:hover td { ba
 /* --- Public estimate approval + invoice pages --- */
 .approval-shell { max-width: 640px; margin: 0 auto; padding: 32px 16px 60px; }
 .sign-pad { border: 1px dashed var(--line); border-radius: 10px; background: var(--paper); touch-action: none; cursor: crosshair; width: 100%; height: 160px; }
+.sign-pad-locked { border-style: solid; border-color: var(--accent-ink); cursor: default; opacity: .9; }
 .doc-brand { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; }
 .doc-brand .brand-logo { height: 44px; }
 
