@@ -7,6 +7,7 @@ import PricingAdjustments from '../components/PricingAdjustments';
 import PaymentScheduleEditor from '../components/PaymentScheduleEditor';
 import DisplayOptions from '../components/DisplayOptions';
 import { SignatureBlock } from '../components/DocumentTerms';
+import SignEstimateModal from '../components/SignEstimateModal';
 import { usePermission, useAuth } from '../auth';
 
 // Same pill palette JobDetail.jsx uses for an estimate's status, plus the internal-approval
@@ -62,6 +63,8 @@ export default function Estimates() {
   const [sendingLink, setSendingLink] = useState(null);
   const [rejectingFor, setRejectingFor] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
+  // In-person signing (Sept 2026) — which estimate the Sign modal is open for, if any.
+  const [signingEstimate, setSigningEstimate] = useState(null);
 
   // Editing an existing draft (Sept 2026) — a separate bit of form state from the "new estimate"
   // form above so the two can never clobber each other if a click lands on the wrong button.
@@ -444,6 +447,7 @@ export default function Estimates() {
               )
             ) : (
               <>
+                {!est.signed_at && !est.declined_at && <button className="btn primary sm" onClick={() => setSigningEstimate(est)}>Sign now</button>}
                 <button className="btn sm" onClick={() => copyApprovalLink(est)}>{copiedLink === est.id ? 'Copied!' : 'Copy approval link'}</button>
                 <button className="btn sm" disabled={sendingLink === `${est.id}-email`} onClick={() => sendEstimateVia(est, 'email')}>
                   {sendingLink === `${est.id}-email` ? 'Emailing…' : 'Email'}
@@ -578,6 +582,15 @@ export default function Estimates() {
             ))
           )}
         </>
+      )}
+
+      {signingEstimate && (
+        <SignEstimateModal
+          estimate={signingEstimate}
+          defaultCustomerName={signingEstimate.company_name || (signingEstimate.first_name ? `${signingEstimate.first_name} ${signingEstimate.last_name}` : '')}
+          onClose={() => setSigningEstimate(null)}
+          onSigned={() => load()}
+        />
       )}
     </>
   );
