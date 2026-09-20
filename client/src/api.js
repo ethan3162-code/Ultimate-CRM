@@ -126,6 +126,7 @@ export const api = {
   sendEstimate: (estimateId, method) => request(`/jobs/estimates/${estimateId}/send`, { method: 'POST', body: JSON.stringify({ method }) }),
   signEstimateInPerson: (estimateId, data) => request(`/jobs/estimates/${estimateId}/sign`, { method: 'POST', body: JSON.stringify(data) }),
   reopenEstimate: (estimateId) => request(`/jobs/estimates/${estimateId}/reopen`, { method: 'POST' }),
+  clearEstimateSignature: (estimateId) => request(`/jobs/estimates/${estimateId}/clear-signature`, { method: 'POST' }),
   updateEstimate: (estimateId, data) => request(`/jobs/estimates/${estimateId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   duplicateEstimate: (estimateId) => request(`/jobs/estimates/${estimateId}/duplicate`, { method: 'POST' }),
   deleteEstimate: (estimateId) => request(`/jobs/estimates/${estimateId}`, { method: 'DELETE' }),
