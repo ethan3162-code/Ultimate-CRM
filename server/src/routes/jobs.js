@@ -8,6 +8,7 @@ const {
   getEstimateScheduleRows, saveEstimateScheduleRows,
 } = require('../helpers');
 const { fireTrigger } = require('../automationEngine');
+const { signEstimateRecord } = require('../estimateSigning');
 const { canSeePrices, canSeeJobCommission, checkSectionEdit, getPermissions, canApproveEstimates } = require('../auth');
 const mailer = require('../mailer');
 const sms = require('../sms');
@@ -494,6 +495,24 @@ router.post('/estimates/:estimateId/send', async (req, res) => {
   }
   if (result.sent) logActivity(estimate.job_id ? 'job' : 'deal', estimate.job_id || estimate.deal_id, 'estimate', `Estimate ${estimate.number} ${method === 'sms' ? 'texted' : 'emailed'} to the customer.`);
   res.json(result);
+});
+
+// In-person signing (Sept 2026) — lets whoever's logged in hand their phone/tablet straight to
+// the customer standing in front of them and capture the same typed-name + drawn signature the
+// public /approve/:token page collects, without having to text/email a link first. Exact same
+// gates and side effects as that public flow (see routes/public.js's /estimates/:token/sign and
+// estimateSigning.js) — this is just a second, authenticated door into the identical logic.
+router.post('/estimates/:estimateId/sign', (req, res) => {
+  const estimate = getEstimateFull(req.params.estimateId);
+  if (!estimate) return res.status(404).json({ error: 'not found' });
+  if (estimate.requires_internal_approval) return res.status(403).json({ error: 'this estimate is still awaiting internal approval' });
+  if (estimate.signed_at) return res.status(400).json({ error: 'this estimate has already been signed' });
+  if (estimate.declined_at) return res.status(400).json({ error: 'this estimate was declined — edit and re-send it for a fresh signature' });
+  const { signed_name, signature_data_url } = req.body;
+  if (!signed_name || !signed_name.trim()) return res.status(400).json({ error: 'a name is required to sign' });
+
+  signEstimateRecord(estimate, { signed_name, signature_data_url });
+  sendEstimate(req, res, getEstimateFull(estimate.id));
 });
 
 // --- Invoices ---
