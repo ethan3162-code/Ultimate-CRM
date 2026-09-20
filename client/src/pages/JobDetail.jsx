@@ -9,6 +9,7 @@ import PaymentScheduleEditor from '../components/PaymentScheduleEditor';
 import DisplayOptions from '../components/DisplayOptions';
 import PaymentModal from '../components/PaymentModal';
 import TaskList from '../components/TaskList';
+import { SignatureBlock } from '../components/DocumentTerms';
 import { usePermission, useSection, usePriceVisibility, useAuth } from '../auth';
 
 const REVENUE_BASIS_LABEL = { invoiced: 'Invoiced', estimated: 'Approved estimate (projected — not yet invoiced)', none: 'No invoice or approved estimate yet' };
@@ -766,6 +767,19 @@ export default function JobDetail() {
                       </div>
                     ) : (
                       <div className="sub" style={{ margin: '6px 0 0' }}>Not signed by the customer yet.</div>
+                    )}
+
+                    {/* Signature section — the same two-column company stamp + customer signature
+                        block the printed PDF and customer approval page sign with (see
+                        DocumentTerms.jsx), so it's visible right here too, not just on the PDF. */}
+                    {!est.declined_at && (
+                      <SignatureBlock
+                        leftImage={est.company_signature_data_url}
+                        leftLabel={est.company?.name || 'Company'}
+                        rightImage={est.signature_data_url}
+                        rightLabel={est.signed_name || 'Customer'}
+                        date={est.signed_at ? shortDate(est.signed_at) : 'awaiting signature'}
+                      />
                     )}
 
                     {est.requires_internal_approval && est.approval_status === 'pending' && (
