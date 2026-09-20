@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
-import { money, dateTime, accountName, estimateTotal, estimateSubtotal } from '../utils';
+import { money, dateTime, shortDate, accountName, estimateTotal, estimateSubtotal } from '../utils';
 import LineItemEditor from '../components/LineItemEditor';
 import PricingAdjustments from '../components/PricingAdjustments';
 import PaymentScheduleEditor from '../components/PaymentScheduleEditor';
 import DisplayOptions from '../components/DisplayOptions';
+import { SignatureBlock } from '../components/DocumentTerms';
 import { usePermission, useAuth } from '../auth';
 
 // Same pill palette JobDetail.jsx uses for an estimate's status, plus the internal-approval
@@ -368,6 +369,21 @@ export default function Estimates() {
           <div className="sub" style={{ margin: '6px 0 0', color: 'var(--accent-ink)' }}>✓ Invoiced.</div>
         ) : (
           <div className="sub" style={{ margin: '6px 0 0' }}>Not signed by the customer yet.</div>
+        )}
+
+        {/* Signature section — same two-column company stamp + customer signature block the
+            printed PDF and customer approval page sign with (see DocumentTerms.jsx), shown here
+            too so an admin looking at the estimate itself can see exactly what was (or will be)
+            signed, without having to open the PDF. Blank lines with an "awaiting signature"
+            caption stand in for whichever side hasn't signed yet. */}
+        {!est.declined_at && (
+          <SignatureBlock
+            leftImage={est.company_signature_data_url}
+            leftLabel={est.company?.name || 'Company'}
+            rightImage={est.signature_data_url}
+            rightLabel={est.signed_name || 'Customer'}
+            date={est.signed_at ? shortDate(est.signed_at) : 'awaiting signature'}
+          />
         )}
 
         {est.requires_internal_approval && est.approval_status === 'pending' && (
