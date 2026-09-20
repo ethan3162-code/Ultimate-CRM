@@ -8,6 +8,7 @@ import {
   HA_MATCH_TYPES, WORK_TYPES, CUSTOMER_TYPES,
 } from '../constants';
 import FilterBar from '../components/FilterBar';
+import AppointmentModal from '../components/AppointmentModal';
 
 const BLANK_FILTERS = { lead_status: '', source: '', owner: '', score: '' };
 
@@ -31,6 +32,8 @@ export default function Leads() {
   const [form, setForm] = useState(BLANK_FORM);
   const [busyId, setBusyId] = useState(null);
   const [filters, setFilters] = useState(BLANK_FILTERS);
+  // Which lead the "Schedule appointment" button was clicked for — null means the modal is closed.
+  const [apptFor, setApptFor] = useState(null);
 
   function load() {
     api.deals().then((all) => setDeals(all.filter((d) => d.stage === 'new')));
@@ -104,6 +107,10 @@ export default function Leads() {
     await api.updateDeal(deal.id, { lead_status });
     setBusyId(null);
     load();
+  }
+  async function saveAppointment(payload) {
+    await api.createAppointment({ ...payload, deal_id: apptFor.id, company_id: apptFor.company_id || null });
+    setApptFor(null);
   }
 
   return (
@@ -282,6 +289,7 @@ export default function Leads() {
                     <td>
                       {canEdit && (
                         <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
+                          <button className="btn sm subtle" disabled={busyId === deal.id} onClick={() => setApptFor(deal)}>Schedule</button>
                           <button className="btn sm primary" disabled={busyId === deal.id} onClick={() => qualify(deal)}>Qualify →</button>
                           <button className="btn sm subtle" disabled={busyId === deal.id} onClick={() => disqualify(deal)}>Disqualify</button>
                         </div>
@@ -295,6 +303,14 @@ export default function Leads() {
         </div>
           )}
         </>
+      )}
+      {apptFor && (
+        <AppointmentModal
+          appointment={{ title: `Consultation — ${apptFor.first_name ? `${apptFor.first_name} ${apptFor.last_name}` : apptFor.title}` }}
+          defaultDate={new Date().toISOString().slice(0, 10)}
+          onClose={() => setApptFor(null)}
+          onSubmit={saveAppointment}
+        />
       )}
     </>
   );
