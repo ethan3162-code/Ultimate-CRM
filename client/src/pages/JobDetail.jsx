@@ -10,6 +10,7 @@ import DisplayOptions from '../components/DisplayOptions';
 import PaymentModal from '../components/PaymentModal';
 import TaskList from '../components/TaskList';
 import { SignatureBlock } from '../components/DocumentTerms';
+import SignEstimateModal from '../components/SignEstimateModal';
 import { usePermission, useSection, usePriceVisibility, useAuth } from '../auth';
 
 const REVENUE_BASIS_LABEL = { invoiced: 'Invoiced', estimated: 'Approved estimate (projected — not yet invoiced)', none: 'No invoice or approved estimate yet' };
@@ -108,6 +109,8 @@ export default function JobDetail() {
   const [requestingDepositFor, setRequestingDepositFor] = useState(null);
   const [rejectingFor, setRejectingFor] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
+  // In-person signing (Sept 2026) — which estimate the Sign modal is open for, if any.
+  const [signingEstimate, setSigningEstimate] = useState(null);
   const [payingInvoice, setPayingInvoice] = useState(null);
   const [schedule, setSchedule] = useState({ start_date: '', demo_days: 1, site_prep_days: 2, installation_days: 5, final_walkthrough_days: 1, owner_user_id: '' });
   const [directory, setDirectory] = useState([]);
@@ -833,6 +836,7 @@ export default function JobDetail() {
                         )
                       ) : (
                         <>
+                          {!est.signed_at && !est.declined_at && <button className="btn primary sm" onClick={() => setSigningEstimate(est)}>Sign now</button>}
                           <button className="btn sm" onClick={() => copyApprovalLink(est)}>{copiedLink === est.id ? 'Copied!' : 'Copy approval link'}</button>
                           <button className="btn sm" disabled={sendingLink === `est-${est.id}-email`} onClick={() => sendEstimateVia(est, 'email')}>
                             {sendingLink === `est-${est.id}-email` ? 'Emailing…' : 'Email'}
@@ -1218,6 +1222,15 @@ export default function JobDetail() {
 
       {payingInvoice && (
         <PaymentModal invoice={payingInvoice} onClose={() => setPayingInvoice(null)} onSubmit={submitPayment} />
+      )}
+
+      {signingEstimate && (
+        <SignEstimateModal
+          estimate={signingEstimate}
+          defaultCustomerName={job.account?.name || ''}
+          onClose={() => setSigningEstimate(null)}
+          onSigned={() => load()}
+        />
       )}
     </>
   );
