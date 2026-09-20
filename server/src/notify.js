@@ -150,6 +150,28 @@ async function notifyEstimateDeclined({ estimate, job, deal, contactName, reason
   return result;
 }
 
+/** A payment was recorded against an invoice (routes/jobs.js's authenticated POST
+    /invoices/:invoiceId/payments — whoever's logged in entering a check/cash/card payment they
+    took, or a card payment coming in some other way). Invoices don't get "signed" the way
+    estimates do, so this is the invoice-side parallel: fires every time money lands, not just
+    once, since a business owner wants to know about each payment as it's recorded, partial or
+    full. */
+async function notifyInvoicePayment({ invoice, job, amount, method, fullyPaid, contactName }) {
+  const ownerUserId = (job && job.owner_user_id) || null;
+  const to = internalRecipient(ownerUserId);
+  const title = (job && job.title) || invoice.number;
+  const balanceLine = fullyPaid
+    ? 'This invoice is now paid in full.'
+    : `Remaining balance: $${invoice.balance.toFixed(2)}.`;
+  const result = await mailer.sendEmail({
+    to: to.email,
+    subject: `${fullyPaid ? 'Paid in full' : 'Payment received'}: Invoice ${invoice.number} — ${title}`,
+    text: `A payment of $${amount.toFixed(2)} (${method}) was just recorded on Invoice ${invoice.number} for "${title}"${contactName ? ` from ${contactName}` : ''}.\n\n${balanceLine}`,
+  });
+  if (!result.sent && mailer.isConfigured()) console.error(`Invoice-payment notification to ${to.email} not sent: ${result.reason}`);
+  return result;
+}
+
 /** Customer opened the public estimate or invoice link — routes/public.js only calls this the
     FIRST time a given document is viewed (see estimates.first_viewed_at / invoices.first_viewed_at),
     so this fires once per document rather than on every page reload. */
@@ -169,5 +191,5 @@ async function notifyDocumentViewed({ kind, number, job, deal, contactName }) {
 
 module.exports = {
   notifyAppointment, notifyJobMilestones, notifyTaskDueDate, notifyEstimateSigned, notifyDocumentViewed,
-  notifyEstimateDeclined,
+  notifyEstimateDeclined, notifyInvoicePayment,
 };
