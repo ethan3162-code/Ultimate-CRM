@@ -177,6 +177,13 @@ export default function Estimates() {
     load();
   }
 
+  // Undo a customer decline (Sept 2026) — clears declined_at/decline_reason so the estimate
+  // drops back into the Pending tab, in case they change their mind or it was declined by mistake.
+  async function reopenEstimate(estimateId) {
+    await api.reopenEstimate(estimateId).catch((err) => window.alert(err.message));
+    load();
+  }
+
   function startEdit(est) {
     setEditingId(est.id);
     setEditItems(est.items.map((it) => ({ description: it.description, notes: it.notes || '', qty: it.qty, unit_price: it.unit_price })));
@@ -367,6 +374,12 @@ export default function Estimates() {
         ) : est.declined_at ? (
           <div className="sub" style={{ margin: '6px 0 0', color: 'var(--red)' }}>
             ✗ Declined by the customer — {dateTime(est.declined_at)}{est.decline_reason ? `: ${est.decline_reason}` : '.'}
+            {canEdit && (
+              <>
+                {' '}
+                <button className="btn sm" style={{ marginLeft: 4 }} onClick={() => reopenEstimate(est.id)}>Move back to pending</button>
+              </>
+            )}
           </div>
         ) : est.has_invoice ? (
           <div className="sub" style={{ margin: '6px 0 0', color: 'var(--accent-ink)' }}>✓ Invoiced.</div>
