@@ -68,7 +68,7 @@ export default function Leads() {
       mobile_phone: form.mobile_phone || null, email: form.email || null, address: form.address || null,
       source: form.source || null, company_id: form.company_id || null,
     });
-    const title = `${form.first_name} ${form.last_name}${ form.source ? ` — ${form.source}` : ' — New inquiry'}`;
+    const title = `${form.first_name} ${form.last_name}${form.source ? ` — ${form.source}` : ' — New inquiry'}`;
     await api.createDeal({
       contact_id: contact.id, company_id: form.company_id || null, title,
       value: Number(form.value) || 0, stage: 'new', source: form.source || null,
@@ -149,7 +149,7 @@ export default function Leads() {
             <div className="field"><label>Estimated value ($)</label><input type="number" min="0" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} /></div>
 
             <div className="field" style={{ gridColumn: '1 / -1', marginTop: 4 }}>
-              <div className="ki{cker">In quiry</div>
+              <div className="kicker">Inquiry</div>
             </div>
             <div className="field">
               <label>Lead type</label>
@@ -240,7 +240,7 @@ export default function Leads() {
               <div className="empty">{filtersActive ? 'No leads match your filters.' : "No new leads right now. New webhook signups land here automatically."}</div>
             </div>
           ) : (
-      <div className="table-wrap">
+        <div className="table-wrap">
           <table className="list deal-table">
             <thead>
               <tr>
