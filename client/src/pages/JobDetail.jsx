@@ -126,6 +126,7 @@ export default function JobDetail() {
   const [editingBilling, setEditingBilling] = useState(false);
   const [billingForm, setBillingForm] = useState(blankBilling());
   const [savingBilling, setSavingBilling] = useState(false);
+  const [note, setNote] = useState('');
 
   // Editing an existing estimate (Sept 2026) — kept separate from the "+ New estimate" form's
   // state above so opening one never clobbers the other.
@@ -181,6 +182,14 @@ export default function JobDetail() {
     await api.updateJob(id, infoForm);
     setSavingInfo(false);
     setEditingInfo(false);
+    load();
+  }
+
+  async function addNote(e) {
+    e.preventDefault();
+    if (!note.trim()) return;
+    await api.addJobNote(id, note);
+    setNote('');
     load();
   }
 
@@ -1170,11 +1179,20 @@ export default function JobDetail() {
 
           <div className="card">
             <h2>Activity</h2>
+            {canEdit && (
+              <form onSubmit={addNote} className="row" style={{ marginBottom: 14, gap: 8 }}>
+                <input style={{ flex: 1, border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', background: 'var(--paper)' }} placeholder="Log a note or call…" value={note} onChange={(e) => setNote(e.target.value)} />
+                <button className="btn" type="submit">Add</button>
+              </form>
+            )}
             {job.activities.length === 0 ? <div className="empty">Nothing logged yet.</div> : (
               <div className="timeline">
                 {job.activities.map((a) => (
                   <div className="timeline-item" key={a.id}>
-                    <div className="when">{timeAgo(a.created_at)}</div>
+                    <div>
+                      <div className="when">{timeAgo(a.created_at)}</div>
+                      {a.created_by_username && <div className="who">by {a.created_by_username}</div>}
+                    </div>
                     <div className="body"><span className="type-tag">{a.type.replace('_', ' ')}</span>{a.note}</div>
                   </div>
                 ))}
