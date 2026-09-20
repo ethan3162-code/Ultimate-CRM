@@ -5,6 +5,16 @@ import { money, shortDate } from '../utils';
 import { TermsBlock } from '../components/DocumentTerms';
 import SignaturePad from '../components/SignaturePad';
 
+// Preset decline reasons (Sept 2026) — a quick pick list instead of a blank text box, so most
+// customers can decline in one tap; "Other" reveals a free-text field for anything not listed.
+const DECLINE_REASONS = [
+  'Found a better price',
+  'Going with a different contractor',
+  'Project delayed',
+  'No longer moving forward with this project',
+  'Other',
+];
+
 /** Company name/address/phone/email/website — the same block on both the "prepared for" header
     and (once signed) the print view. Reused so the estimate and invoice documents look identical. */
 function CompanyBlock({ company }) {
@@ -29,7 +39,8 @@ export default function EstimateApproval() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [declining, setDeclining] = useState(false);
-  const [declineReason, setDeclineReason] = useState('');
+  const [declineReasonOption, setDeclineReasonOption] = useState('');
+  const [declineReasonOther, setDeclineReasonOther] = useState('');
   const [decliningBusy, setDecliningBusy] = useState(false);
 
   useEffect(() => {
@@ -52,10 +63,11 @@ export default function EstimateApproval() {
   }
 
   async function submitDecline() {
+    const reason = declineReasonOption === 'Other' ? declineReasonOther.trim() : declineReasonOption;
     setDecliningBusy(true);
     setError(null);
     try {
-      await api.declineEstimate(token, { reason: declineReason.trim() });
+      await api.declineEstimate(token, { reason });
       const fresh = await api.publicEstimate(token);
       setEstimate(fresh);
     } catch (err) {
@@ -194,8 +206,17 @@ export default function EstimateApproval() {
             <p className="sub" style={{ margin: '-4px 0 12px' }}>Let your contractor know why, if you'd like — this can't be undone, but they can always send you a revised estimate.</p>
             <div className="field" style={{ marginBottom: 10 }}>
               <label>Reason (optional)</label>
-              <input value={declineReason} onChange={(e) => setDeclineReason(e.target.value)} placeholder="e.g. going with another contractor" />
+              <select value={declineReasonOption} onChange={(e) => setDeclineReasonOption(e.target.value)}>
+                <option value="">Select a reason…</option>
+                {DECLINE_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
             </div>
+            {declineReasonOption === 'Other' && (
+              <div className="field" style={{ marginBottom: 10 }}>
+                <label>Tell us more</label>
+                <input value={declineReasonOther} onChange={(e) => setDeclineReasonOther(e.target.value)} placeholder="Type your reason" />
+              </div>
+            )}
             {error && <p className="sub" style={{ color: 'var(--red)' }}>{error}</p>}
             <div className="row" style={{ gap: 8 }}>
               <button className="btn" style={{ borderColor: 'var(--red)', color: 'var(--red)' }} disabled={decliningBusy} onClick={submitDecline}>
