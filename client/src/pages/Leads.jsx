@@ -90,12 +90,6 @@ export default function Leads() {
     load();
   }
 
-  async function qualify(deal) {
-    setBusyId(deal.id);
-    await api.updateDeal(deal.id, { stage: 'qualified' });
-    setBusyId(null);
-    load();
-  }
   async function disqualify(deal) {
     setBusyId(deal.id);
     await api.updateDeal(deal.id, { stage: 'lost' });
@@ -118,7 +112,7 @@ export default function Leads() {
       <div className="page-head">
         <div>
           <h1>Leads</h1>
-          <p className="sub">Fresh, unqualified interest — walk-ins, webhook signups, referrals. Qualify a lead to move it into Opportunities, or disqualify it if it's not a fit.</p>
+          <p className="sub">Fresh, unqualified interest — walk-ins, webhook signups, referrals. Scheduling an appointment is what moves a lead into Opportunities — disqualify it instead if it's not a fit.</p>
         </div>
         {canEdit && <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New lead</button>}
       </div>
@@ -289,8 +283,7 @@ export default function Leads() {
                     <td>
                       {canEdit && (
                         <div className="row" style={{ gap: 6, justifyContent: 'flex-end' }}>
-                          <button className="btn sm subtle" disabled={busyId === deal.id} onClick={() => setApptFor(deal)}>Schedule</button>
-                          <button className="btn sm primary" disabled={busyId === deal.id} onClick={() => qualify(deal)}>Qualify →</button>
+                          <button className="btn sm primary" disabled={busyId === deal.id} onClick={() => setApptFor(deal)}>Schedule →</button>
                           <button className="btn sm subtle" disabled={busyId === deal.id} onClick={() => disqualify(deal)}>Disqualify</button>
                         </div>
                       )}
