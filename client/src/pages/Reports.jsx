@@ -6,15 +6,30 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { timeAgo } from '../utils';
 
+const CATEGORY_ORDER = ['Financial', 'Sales', 'Leads', 'Jobs'];
+
+function groupByCategory(list) {
+  const byCategory = new Map();
+  for (const r of list) {
+    if (!byCategory.has(r.category)) byCategory.set(r.category, []);
+    byCategory.get(r.category).push(r);
+  }
+  const ordered = CATEGORY_ORDER.filter((c) => byCategory.has(c)).map((c) => [c, byCategory.get(c)]);
+  for (const [c, rows] of byCategory) if (!CATEGORY_ORDER.includes(c)) ordered.push([c, rows]);
+  return ordered;
+}
+
 export default function Reports() {
   const navigate = useNavigate();
   const [reports, setReports] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [builtin, setBuiltin] = useState(null);
 
   function load() {
     api.customReports().then(setReports);
   }
   useEffect(load, []);
+  useEffect(() => { api.builtinReports().then(setBuiltin).catch(() => setBuiltin([])); }, []);
 
   async function createReport() {
     setCreating(true);
@@ -43,6 +58,32 @@ export default function Reports() {
         </div>
         <button className="btn primary" onClick={createReport} disabled={creating}>{creating ? 'Creating…' : '+ New report'}</button>
       </div>
+
+      <div className="card" style={{ marginBottom: 18 }}>
+        <h2 style={{ marginBottom: 2 }}>Built-in reports</h2>
+        <p className="sub" style={{ margin: '0 0 10px' }}>The standard set — fixed, not editable, but always up to date. Same ones shown on the Dashboard.</p>
+        {builtin === null ? (
+          <div className="loading">Loading…</div>
+        ) : (
+          <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+            {groupByCategory(builtin).map(([category, rows]) => (
+              <div key={category}>
+                <div className="kicker">{category}</div>
+                <div className="stack" style={{ gap: 2 }}>
+                  {rows.map((r) => (
+                    <Link key={r.key} to={`/reports/system/${r.key}`} className="attention-row">
+                      <span>{r.title}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <h2 style={{ marginBottom: 2 }}>Your reports</h2>
+      <p className="sub" style={{ margin: '0 0 10px' }}>Reports you've built yourself — freely editable any time.</p>
 
       {!reports ? (
         <div className="loading">Loading…</div>
