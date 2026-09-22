@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
 const { logActivity } = require('../helpers');
+const { fireTrigger } = require('../automationEngine');
 const google = require('../google');
 const notify = require('../notify');
 
@@ -73,6 +74,29 @@ router.post('/', async (req, res) => {
       appt = db.prepare(`SELECT * FROM appointments WHERE id = ?`).get(appt.id);
     } catch (err) {
       console.error('Google Calendar create failed:', err.message);
+    }
+  }
+
+  // Booking an appointment against a lead is the one thing that promotes it to an Opportunity —
+  // see PATCH /deals/:id's matching guard, which blocks every other path from making that same
+  // jump without an appointment on file. A deal that's already past 'new' (or has no deal_id at
+  // all — a contact-only or general appointment) is untouched.
+  if (deal_id) {
+    const deal = db.prepare(`SELECT * FROM deals WHERE id = ?`).get(deal_id);
+    if (deal && deal.stage === 'new') {
+      db.prepare(`UPDATE deals SET stage = 'qualified', lead_status = 'Converted', updated_at = datetime('now') WHERE id = ?`).run(deal.id);
+      logActivity('deal', deal.id, 'stage_change', `Stage moved from "new" to "qualified" — appointment "${appt.title}" scheduled.`);
+      const dealContact = deal.contact_id ? db.prepare(`SELECT first_name, last_name, email FROM contacts WHERE id = ?`).get(deal.contact_id) : null;
+      const dealCompany = deal.company_id ? db.prepare(`SELECT name FROM companies WHERE id = ?`).get(deal.company_id) : null;
+      fireTrigger('deal_stage_changed', {
+        related_type: 'deal', related_id: deal.id,
+        dedupe_id: `${deal.id}:qualified`,
+        title: deal.title, value: deal.value, from_stage: 'new', to_stage: 'qualified',
+        contact_name: dealContact ? `${dealContact.first_name} ${dealContact.last_name}` : null,
+        contact_email: dealContact ? dealContact.email : null,
+        company_name: dealCompany ? dealCompany.name : null,
+        deal_id: deal.id,
+      });
     }
   }
 
