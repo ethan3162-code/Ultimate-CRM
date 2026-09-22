@@ -1033,7 +1033,7 @@ export default function JobDetail() {
 
           <div className="card">
             <div className="row between" style={{ alignItems: 'flex-start' }}>
-              <h2 style={{ marginBottom: 4 }}>Job costing</h2>
+              <h2 style={{ marginBottom: 0 }}>Job costing</h2>
               {canEdit && <button className="btn sm" onClick={() => setShowExpenseForm((v) => !v)}>+ Log expense</button>}
             </div>
             <p className="sub" style={{ margin: '4px 0 12px' }}>
