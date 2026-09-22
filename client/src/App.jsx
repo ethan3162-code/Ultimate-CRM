@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import Reports from './pages/Reports';
 import ReportDetail from './pages/ReportDetail';
+import BuiltinReportDetail from './pages/BuiltinReportDetail';
 import Messages from './pages/Messages';
 import Conversations from './pages/Conversations';
 import Leads from './pages/Leads';
@@ -71,6 +72,11 @@ function AuthedApp() {
           <Route path="/dashboard" element={<Protected page="dashboard"><Dashboard /></Protected>} />
           <Route path="/reports" element={<Protected page="reports"><Reports /></Protected>} />
           <Route path="/reports/:id" element={<Protected page="reports"><ReportDetail /></Protected>} />
+          {/* Built-in reports are gated on Dashboard access, not Reports (which stays admin-only) —
+              these are the same cards a non-admin already sees embedded on their Dashboard, just
+              broken out into their own page, so clicking one from there must not need an
+              admin-only permission it was never gated on before. */}
+          <Route path="/reports/system/:key" element={<Protected page="dashboard"><BuiltinReportDetail /></Protected>} />
           <Route path="/leads" element={<Protected page="leads"><Leads /></Protected>} />
           <Route path="/pipeline" element={<Protected page="pipeline"><Pipeline /></Protected>} />
           <Route path="/pipeline/:id" element={<Protected page="pipeline"><DealDetail /></Protected>} />
