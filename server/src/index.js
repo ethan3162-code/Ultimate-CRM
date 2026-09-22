@@ -64,6 +64,10 @@ app.use('/api/auth', requireAuth, require('./routes/auth'));
 app.use('/api/catalog-items', requireAuth, requireAnyPage(['items', 'price_book']), require('./routes/catalogItems'));
 app.use('/api/reports', requireAuth, requirePage('dashboard'), require('./routes/reports'));
 app.use('/api/custom-reports', requireAuth, requirePage('reports'), require('./routes/customReports'));
+// Fixed "built-in" reports (Sept 2026) — the old Dashboard reports-grid cards, now their own
+// pages under /reports. Reachable from either the Dashboard or the (admin-only) Reports page, so
+// it's gated on having access to either rather than tying it to just one.
+app.use('/api/builtin-reports', requireAuth, requireAnyPage(['dashboard', 'reports']), require('./routes/builtinReports'));
 app.use('/api/employees', requireAuth, requirePage('employees'), require('./routes/employees'));
 app.use('/api/subcontractors', requireAuth, requirePage('subcontractors'), require('./routes/subcontractors'));
 app.use('/api/vehicles', requireAuth, requirePage('vehicles'), require('./routes/vehicles'));
