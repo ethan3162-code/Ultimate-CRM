@@ -9,6 +9,7 @@ import Messages from './pages/Messages';
 import Conversations from './pages/Conversations';
 import Leads from './pages/Leads';
 import Pipeline from './pages/Pipeline';
+import Kanban from './pages/Kanban';
 import DealDetail from './pages/DealDetail';
 import Companies from './pages/Companies';
 import CompanyDetail from './pages/CompanyDetail';
@@ -73,6 +74,7 @@ function AuthedApp() {
           <Route path="/leads" element={<Protected page="leads"><Leads /></Protected>} />
           <Route path="/pipeline" element={<Protected page="pipeline"><Pipeline /></Protected>} />
           <Route path="/pipeline/:id" element={<Protected page="pipeline"><DealDetail /></Protected>} />
+          <Route path="/kanban" element={<Protected page="pipeline"><Kanban /></Protected>} />
           <Route path="/estimates" element={<Protected page="estimates"><Estimates /></Protected>} />
           <Route path="/contracts" element={<Protected page="contracts"><Contracts /></Protected>} />
           <Route path="/estimate-approvals" element={<EstimateApprovals />} />
