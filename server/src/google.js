@@ -1,8 +1,13 @@
 // Minimal Google Calendar OAuth2 + REST client — no `googleapis` dependency,
 // just fetch (Node 18+) against Google's documented OAuth2 and Calendar v3
-// endpoints. Tokens for the single connected business calendar are stored in
-// the `oauth_tokens` table (one row, provider = 'google').
+// endpoints. Tokens are stored in the `oauth_tokens` table, one row per
+// (provider, user_id) — user_id 0 is the single shared company calendar,
+// any other id is that login's own, personally-connected Google Calendar
+// (per-user sync, Sept 2026). Every function below takes an optional userId
+// (defaulting to 0, the company calendar) so the same client code drives
+// both kinds of connection.
 const db = require('./db');
+const COMPANY = 0;
 
 const SCOPE = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email';
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -63,38 +68,39 @@ async function refreshAccessToken(refreshToken) {
   return res.json();
 }
 
-function saveTokens({ access_token, refresh_token, expires_in, scope }, connectedEmail) {
+function saveTokens({ access_token, refresh_token, expires_in, scope }, connectedEmail, userId = COMPANY) {
   const expiry_date = Date.now() + (expires_in || 3600) * 1000;
-  const existing = db.prepare(`SELECT * FROM oauth_tokens WHERE provider = 'google'`).get();
+  const existing = getStoredTokens(userId);
   db.prepare(`
-    INSERT INTO oauth_tokens (provider, access_token, refresh_token, expiry_date, scope, connected_email, updated_at)
-    VALUES ('google', ?, ?, ?, ?, ?, datetime('now'))
-    ON CONFLICT(provider) DO UPDATE SET
+    INSERT INTO oauth_tokens (provider, user_id, access_token, refresh_token, expiry_date, scope, connected_email, updated_at)
+    VALUES ('google', ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(provider, user_id) DO UPDATE SET
       access_token = excluded.access_token,
       refresh_token = COALESCE(excluded.refresh_token, oauth_tokens.refresh_token),
       expiry_date = excluded.expiry_date,
       scope = excluded.scope,
       connected_email = COALESCE(excluded.connected_email, oauth_tokens.connected_email),
       updated_at = datetime('now')
-  `).run(access_token, refresh_token || (existing ? existing.refresh_token : null), expiry_date, scope, connectedEmail || null);
+  `).run(userId, access_token, refresh_token || (existing ? existing.refresh_token : null), expiry_date, scope, connectedEmail || null);
 }
 
-function getStoredTokens() {
-  return db.prepare(`SELECT * FROM oauth_tokens WHERE provider = 'google'`).get();
+function getStoredTokens(userId = COMPANY) {
+  return db.prepare(`SELECT * FROM oauth_tokens WHERE provider = 'google' AND user_id = ?`).get(userId);
 }
 
-function disconnect() {
-  db.prepare(`DELETE FROM oauth_tokens WHERE provider = 'google'`).run();
+function disconnect(userId = COMPANY) {
+  db.prepare(`DELETE FROM oauth_tokens WHERE provider = 'google' AND user_id = ?`).run(userId);
 }
 
-/** Returns a valid access token, refreshing it first if it's expired. Returns null if not connected. */
-async function getValidAccessToken() {
-  const row = getStoredTokens();
+/** Returns a valid access token for this calendar (company by default), refreshing it first if
+    it's expired. Returns null if that calendar isn't connected. */
+async function getValidAccessToken(userId = COMPANY) {
+  const row = getStoredTokens(userId);
   if (!row) return null;
   if (row.expiry_date && row.expiry_date - 60000 > Date.now()) return row.access_token;
   if (!row.refresh_token) return row.access_token; // best effort
   const refreshed = await refreshAccessToken(row.refresh_token);
-  saveTokens(refreshed, row.connected_email);
+  saveTokens(refreshed, row.connected_email, userId);
   return refreshed.access_token;
 }
 
@@ -104,8 +110,8 @@ async function fetchUserInfo(accessToken) {
   return res.json();
 }
 
-async function calendarRequest(path, options = {}) {
-  const token = await getValidAccessToken();
+async function calendarRequest(path, options = {}, userId = COMPANY) {
+  const token = await getValidAccessToken(userId);
   if (!token) throw new Error('not connected');
   const res = await fetch(`${CALENDAR_API}${path}`, {
     ...options,
@@ -116,12 +122,12 @@ async function calendarRequest(path, options = {}) {
   return res.json();
 }
 
-function calendarId() {
-  const row = getStoredTokens();
+function calendarId(userId = COMPANY) {
+  const row = getStoredTokens(userId);
   return (row && row.calendar_id) || 'primary';
 }
 
-async function listEvents({ timeMin, timeMax }) {
+async function listEvents({ timeMin, timeMax } = {}, userId = COMPANY) {
   const params = new URLSearchParams({
     timeMin: timeMin || new Date(Date.now() - 30 * 86400000).toISOString(),
     timeMax: timeMax || new Date(Date.now() + 180 * 86400000).toISOString(),
@@ -129,29 +135,29 @@ async function listEvents({ timeMin, timeMax }) {
     orderBy: 'startTime',
     maxResults: '250',
   });
-  const data = await calendarRequest(`/calendars/${encodeURIComponent(calendarId())}/events?${params.toString()}`);
+  const data = await calendarRequest(`/calendars/${encodeURIComponent(calendarId(userId))}/events?${params.toString()}`, {}, userId);
   return data.items || [];
 }
 
-async function createEvent(event) {
-  return calendarRequest(`/calendars/${encodeURIComponent(calendarId())}/events`, {
+async function createEvent(event, userId = COMPANY) {
+  return calendarRequest(`/calendars/${encodeURIComponent(calendarId(userId))}/events`, {
     method: 'POST',
     body: JSON.stringify(event),
-  });
+  }, userId);
 }
 
-async function updateEvent(eventId, event) {
-  return calendarRequest(`/calendars/${encodeURIComponent(calendarId())}/events/${encodeURIComponent(eventId)}`, {
+async function updateEvent(eventId, event, userId = COMPANY) {
+  return calendarRequest(`/calendars/${encodeURIComponent(calendarId(userId))}/events/${encodeURIComponent(eventId)}`, {
     method: 'PATCH',
     body: JSON.stringify(event),
-  });
+  }, userId);
 }
 
-async function deleteEvent(eventId) {
+async function deleteEvent(eventId, userId = COMPANY) {
   try {
-    return await calendarRequest(`/calendars/${encodeURIComponent(calendarId())}/events/${encodeURIComponent(eventId)}`, {
+    return await calendarRequest(`/calendars/${encodeURIComponent(calendarId(userId))}/events/${encodeURIComponent(eventId)}`, {
       method: 'DELETE',
-    });
+    }, userId);
   } catch (err) {
     if (String(err.message).includes('404') || String(err.message).includes('410')) return null; // already gone
     throw err;
@@ -169,6 +175,7 @@ function toGoogleEvent(appt) {
 }
 
 module.exports = {
+  COMPANY,
   isConfigured,
   redirectUri,
   getAuthUrl,
