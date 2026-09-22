@@ -195,6 +195,7 @@ function redactJobMoney(job) {
       totalCharges: null, grossProfitAmount: null, grossProfitPercent: null, laborCost: null, laborPaid: null,
       laborBalance: null, laborCostPercent: null, allCustomerPayments: null, customerBalance: null,
       materialsCost: null, billable: null, notBillable: null,
+      projectedProfitAmount: null, projectedProfitPercent: null,
     },
     estimates: (job.estimates || []).map(redactEstimateMoney),
     invoices: (job.invoices || []).map(redactInvoiceMoney),
@@ -257,12 +258,34 @@ function getJobCosting(id, { estimates, invoices } = {}) {
   };
 }
 
+// Projected profit (Sept 2026): a profit figure available from the moment an estimate exists,
+// well before any real cost is logged against the job — so early on, when costing.cost is still
+// $0 and grossProfitAmount below would misleadingly show the *entire* contract as profit, there's
+// still a meaningful number to look at. It's read straight off the estimate's own markup: the
+// line-item subtotal stands in for the estimator's assumed cost, and markup_amount is the profit
+// they built in on top of it — no separate cost entry required. Prefers the approved estimate(s)
+// (matching getJobCosting's revenue-basis preference) and falls back to the most recent draft so
+// there's still a number while an estimate is being put together. Percent is against totalCharges
+// once there's a real contract amount to measure against; before that, against the estimate's own
+// total, since totalCharges is still $0.
+function getProjectedProfit(estimates, totalCharges) {
+  const ests = estimates || [];
+  const approved = ests.filter((e) => e.status === 'approved');
+  const basis = approved.length > 0 ? 'approved' : (ests.length > 0 ? 'draft' : 'none');
+  const relevant = approved.length > 0 ? approved : (ests.length > 0 ? [ests[ests.length - 1]] : []);
+  const amount = relevant.reduce((s, e) => s + (Number(e.markup_amount) || 0), 0);
+  const relevantTotal = relevant.reduce((s, e) => s + (Number(e.total) || 0), 0);
+  const denominator = totalCharges > 0 ? totalCharges : relevantTotal;
+  const percent = denominator > 0 ? +((amount / denominator) * 100).toFixed(1) : null;
+  return { amount: +amount.toFixed(2), percent, basis };
+}
+
 // Project billing (Sept 2026): the "what did we contract for, and what's the gross profit"
 // numbers from the paving-industry project-management tool we're matching, layered on top of
 // the job-costing engine above rather than duplicating it — contract_amount/change_order_amount/
 // sales_tax_amount are the job's own editable fields, while cost/labor figures are pulled straight
 // from the same real expense log job costing already uses, so there's one source of truth for cost.
-function getJobBilling(job, costing, invoices) {
+function getJobBilling(job, costing, invoices, estimates) {
   const contractAmount = Number(job.contract_amount) || 0;
   const changeOrderAmount = Number(job.change_order_amount) || 0;
   const salesTaxAmount = Number(job.sales_tax_amount) || 0;
@@ -276,6 +299,7 @@ function getJobBilling(job, costing, invoices) {
   const laborCostPercent = totalCharges > 0 ? +((laborCost / totalCharges) * 100).toFixed(1) : null;
   const allCustomerPayments = +(invoices.reduce((s, i) => s + (i.amount_paid || 0), 0)).toFixed(2);
   const customerBalance = +(totalCharges - allCustomerPayments).toFixed(2);
+  const projectedProfit = getProjectedProfit(estimates, totalCharges);
 
   return {
     contractAmount: +contractAmount.toFixed(2),
@@ -286,6 +310,9 @@ function getJobBilling(job, costing, invoices) {
     capitalImprovement: !!job.capital_improvement,
     grossProfitAmount: +grossProfitAmount.toFixed(2),
     grossProfitPercent,
+    projectedProfitAmount: projectedProfit.amount,
+    projectedProfitPercent: projectedProfit.percent,
+    projectedProfitBasis: projectedProfit.basis,
     laborCost,
     laborPaid: +laborPaid.toFixed(2),
     laborBalance,
@@ -307,7 +334,7 @@ function getJobFull(id) {
   const invoices = invoiceRows.map(r => getInvoiceFull(r.id));
   const photos = db.prepare(`SELECT * FROM job_photos WHERE job_id = ? ORDER BY created_at DESC`).all(id);
   const costing = getJobCosting(id, { estimates, invoices });
-  const billing = getJobBilling(job, costing, invoices);
+  const billing = getJobBilling(job, costing, invoices, estimates);
   // Crew attendance: who worked this job on which days. Each row already created its own
   // Labor-category job_expenses entry (see jobs.js's attendance routes), so this list is purely
   // the people-and-dates view — the dollar subtotal lives in costing.laborCost, same as any other
