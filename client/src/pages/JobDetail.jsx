@@ -530,6 +530,14 @@ export default function JobDetail() {
               {job.price_hidden ? '🔒 Hidden' : (job.billing.grossProfitPercent === null ? '—' : `${job.billing.grossProfitPercent}%`)}
             </span>
           </div>
+          {job.billing.projectedProfitBasis !== 'none' && (
+            <div>
+              <div className="kicker">Projected profit %</div>
+              <span className="mono" style={{ fontWeight: 600, color: marginColor(job.billing.projectedProfitPercent) }}>
+                {job.price_hidden ? '🔒 Hidden' : (job.billing.projectedProfitPercent === null ? '—' : `${job.billing.projectedProfitPercent}%`)}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -971,6 +979,19 @@ export default function JobDetail() {
                       {money(job.billing.grossProfitAmount)}{job.billing.grossProfitPercent === null ? '' : ` (${job.billing.grossProfitPercent}%)`}
                     </span>
                   </div>
+                  {job.billing.projectedProfitBasis !== 'none' && (
+                    <div className="row between">
+                      <span className="muted">
+                        Projected profit
+                        <span className="sub" style={{ display: 'block', fontSize: 11 }}>
+                          from markup on {job.billing.projectedProfitBasis === 'approved' ? 'the approved estimate' : 'the latest draft estimate'}
+                        </span>
+                      </span>
+                      <span className="mono" style={{ fontWeight: 600, color: marginColor(job.billing.projectedProfitPercent) }}>
+                        {money(job.billing.projectedProfitAmount)}{job.billing.projectedProfitPercent === null ? '' : ` (${job.billing.projectedProfitPercent}%)`}
+                      </span>
+                    </div>
+                  )}
                   <div className="row between"><span className="muted">Labor cost</span><span className="mono">{money(job.billing.laborCost)}</span></div>
                   <div className="row between"><span className="muted">Customer balance</span><span className="mono" style={{ color: job.billing.customerBalance > 0 ? 'var(--red)' : 'var(--accent-ink)' }}>{money(job.billing.customerBalance)}</span></div>
                 </div>
@@ -1012,7 +1033,7 @@ export default function JobDetail() {
 
           <div className="card">
             <div className="row between" style={{ alignItems: 'flex-start' }}>
-              <h2 style={{ marginBottom: 0 }}>Job costing</h2>
+              <h2 style={{ marginBottom: 4 }}>Job costing</h2>
               {canEdit && <button className="btn sm" onClick={() => setShowExpenseForm((v) => !v)}>+ Log expense</button>}
             </div>
             <p className="sub" style={{ margin: '4px 0 12px' }}>
