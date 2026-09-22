@@ -172,6 +172,11 @@ export const api = {
 
   googleStatus: () => request('/auth/google/status'),
   googleDisconnect: () => request('/auth/google/disconnect', { method: 'POST' }),
+  // The signed-in user's OWN Google Calendar connection (per-user sync) — separate from the
+  // shared company one above. Connecting is a redirect (window.location.href = '/api/auth/google/me'),
+  // not a fetch, same as the company flow.
+  googleMeStatus: () => request('/auth/google/me/status'),
+  googleMeDisconnect: () => request('/auth/google/me/disconnect', { method: 'POST' }),
 
   catalogItems: () => request('/catalog-items'),
   createCatalogItem: (data) => request('/catalog-items', { method: 'POST', body: JSON.stringify(data) }),
