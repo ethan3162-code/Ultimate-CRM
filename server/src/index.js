@@ -53,8 +53,11 @@ app.use('/api/insights', requireAuth, requirePage('dashboard'), require('./route
 // user can use it rather than tying it to one page's permission level.
 app.use('/api/ai', requireAuth, require('./routes/ai'));
 app.use('/api/appointments', requireAuth, requirePage('calendar'), require('./routes/appointments'));
-// Google Calendar OAuth connect/disconnect lives on the Integrations page.
-app.use('/api/auth', requireAuth, requirePage('integrations'), require('./routes/auth'));
+// Google Calendar OAuth connect/disconnect. The company-wide connection is admin-only (checked
+// inside routes/auth.js, same effective restriction the old requirePage('integrations') gate
+// gave); every signed-in user can also connect their OWN personal calendar here regardless of
+// their Integrations permission, since that's a personal action, not a company-wide setting.
+app.use('/api/auth', requireAuth, require('./routes/auth'));
 // Gated by requireAnyPage rather than a single requirePage, since one shared table serves two
 // permissions now (Items = calculator materials, Price book = sales items) — see
 // routes/catalogItems.js for the finer per-row filtering by which kind of item it is.
