@@ -15,6 +15,13 @@ function redactDealMoney(deal) {
 const router = express.Router();
 
 const STAGES = ['new', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
+// A lead (stage 'new') only ever becomes an Opportunity by having an appointment scheduled
+// against it — see routes/appointments.js's POST handler, which does that promotion itself the
+// moment a lead's first appointment is booked. So no other path (a manual stage edit here, a
+// Kanban drag, the old "+ New opportunity"/"Qualify" shortcuts) is allowed to take a lead
+// straight into one of these stages without an appointment already on file. 'lost' is exempt —
+// disqualifying a lead that never gets an appointment is still a normal, appointment-free path.
+const OPPORTUNITY_STAGES = ['qualified', 'proposal', 'negotiation', 'won'];
 
 // Deterministic deal score (Salesforce/HubSpot-style lead scoring, no ML) — a plain
 // 0-100 number plus a Hot/Warm/Cool label, so reps can tell at a glance what to work
@@ -128,8 +135,11 @@ router.get('/:id', (req, res) => {
   // has no project yet, the UI needs to know whether an estimate is out there pending a signature,
   // rather than offering any way to skip straight to a project.
   const estimates = db.prepare(`SELECT id, number, status, signed_at, declined_at, created_at FROM estimates WHERE deal_id = ? ORDER BY created_at DESC`).all(req.params.id);
+  // Whether this lead has an appointment on file at all — that's what the UI gates the
+  // Lead -> Opportunity stage buttons on (see OPPORTUNITY_STAGES above).
+  const appointments = db.prepare(`SELECT id, title, start_time, status FROM appointments WHERE deal_id = ? ORDER BY start_time DESC`).all(req.params.id);
   const full = withScore(withCustomerInfo(deal));
-  res.json({ ...(canSeePrices(req.user) ? full : redactDealMoney(full)), activities, jobs, estimates });
+  res.json({ ...(canSeePrices(req.user) ? full : redactDealMoney(full)), activities, jobs, estimates, appointments });
 });
 
 router.patch('/:id', (req, res) => {
@@ -137,6 +147,12 @@ router.patch('/:id', (req, res) => {
   if (!existing) return res.status(404).json({ error: 'not found' });
   if (req.body.stage && !STAGES.includes(req.body.stage)) {
     return res.status(400).json({ error: `stage must be one of ${STAGES.join(', ')}` });
+  }
+  if (req.body.stage && existing.stage === 'new' && OPPORTUNITY_STAGES.includes(req.body.stage)) {
+    const hasAppointment = db.prepare(`SELECT 1 FROM appointments WHERE deal_id = ? LIMIT 1`).get(existing.id);
+    if (!hasAppointment) {
+      return res.status(400).json({ error: 'Schedule an appointment for this lead before it can become an opportunity.' });
+    }
   }
   const pageLevel = (getPermissions(req.user).pipeline === 'edit' || getPermissions(req.user).leads === 'edit') ? 'edit' : 'view';
   const sectionError = checkSectionEdit(req.user, pageLevel, req.body);
