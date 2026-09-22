@@ -7,10 +7,16 @@ import {
   METHOD_OF_ENTRY, HA_MATCH_TYPES, LEAD_SOURCES,
 } from '../constants';
 import AiDraftModal from '../components/AiDraftModal';
+import AppointmentModal from '../components/AppointmentModal';
 import TaskList from '../components/TaskList';
 import { usePermission, useSection, usePriceVisibility } from '../auth';
 
 const STAGES = ['new', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
+// A lead only becomes an Opportunity by having an appointment scheduled against it (see
+// routes/appointments.js's POST handler, which does the promotion itself) — so jumping straight
+// from 'new' into any of these here is blocked, both by the server and by disabling the buttons
+// below, until an appointment exists. 'lost' stays open — disqualifying a lead needs no appointment.
+const OPPORTUNITY_STAGES = ['qualified', 'proposal', 'negotiation', 'won'];
 // Same idea as Estimates.jsx's own status pills, collapsed to the four states that matter here:
 // a project is created automatically the moment "signed" happens, so this card never needs to
 // distinguish "signed" further — that state is fleeting, replaced by an actual project a moment
@@ -45,6 +51,7 @@ export default function DealDetail() {
   const [editingContact, setEditingContact] = useState(false);
   const [contactInfo, setContactInfo] = useState({ phone: '', address: '' });
   const [savingContact, setSavingContact] = useState(false);
+  const [showApptModal, setShowApptModal] = useState(false);
 
   function blankDetails(d) {
     return {
@@ -124,7 +131,13 @@ export default function DealDetail() {
   }
 
   async function changeStage(stage) {
-    await api.updateDeal(id, { stage });
+    await api.updateDeal(id, { stage }).catch((err) => window.alert(err.message));
+    load();
+  }
+
+  async function saveAppointment(payload) {
+    await api.createAppointment({ ...payload, deal_id: deal.id, company_id: deal.company_id || null });
+    setShowApptModal(false);
     load();
   }
 
@@ -157,6 +170,7 @@ export default function DealDetail() {
   if (!deal) return <div className="loading">Loading…</div>;
 
   const links = deal.customer_address ? mapLinks(deal.customer_address) : null;
+  const hasAppointment = deal.appointments && deal.appointments.length > 0;
   // A project is only ever created once a customer signs an estimate (see routes/public.js) —
   // never at estimate creation — so while there's no project yet, show the most recent estimate's
   // own status instead of any way to jump straight to a project.
@@ -460,18 +474,32 @@ export default function DealDetail() {
           <div className="card">
             <h2>Stage</h2>
             <div className="stack" style={{ gap: 6 }}>
-              {STAGES.map((s) => (
-                <button
-                  key={s}
-                  className={'btn sm' + (deal.stage === s ? ' primary' : '')}
-                  style={{ justifyContent: 'flex-start', textTransform: 'capitalize' }}
-                  onClick={() => changeStage(s)}
-                  disabled={!canEdit}
-                >
-                  {s}
-                </button>
-              ))}
+              {STAGES.map((s) => {
+                const locked = deal.stage === 'new' && OPPORTUNITY_STAGES.includes(s) && !hasAppointment;
+                return (
+                  <button
+                    key={s}
+                    className={'btn sm' + (deal.stage === s ? ' primary' : '')}
+                    style={{ justifyContent: 'flex-start', textTransform: 'capitalize' }}
+                    onClick={() => changeStage(s)}
+                    disabled={!canEdit || locked}
+                    title={locked ? 'Schedule an appointment to convert this lead into an opportunity' : undefined}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
             </div>
+            {deal.stage === 'new' && (
+              hasAppointment ? (
+                <p className="sub" style={{ margin: '8px 0 0' }}>An appointment's on file — this lead is ready to move into Opportunities.</p>
+              ) : (
+                <>
+                  <p className="sub" style={{ margin: '8px 0 6px' }}>Scheduling an appointment is what turns this lead into an opportunity.</p>
+                  {canEdit && <button className="btn sm primary" onClick={() => setShowApptModal(true)}>Schedule appointment</button>}
+                </>
+              )
+            )}
           </div>
           <div className="card">
             <h2>Project</h2>
@@ -526,7 +554,6 @@ export default function DealDetail() {
                 <span className="muted">Last modified</span>
                 <span>{deal.updated_by_username || deal.created_by_username || 'system'} · {timeAgo(deal.updated_at || deal.created_at)}</span>
               </div>
-            </div>
           </div>
 
           <div className="card">
@@ -562,6 +589,14 @@ export default function DealDetail() {
       {draft && (
         <AiDraftModal title={draftTitle} initialDraft={draft} onClose={() => setDraft(null)} onLog={logDraft} />
       )}
+      {showApptModal && (
+        <AppointmentModal
+          appointment={{ title: `Consultation — ${deal.first_name ? `${deal.first_name} ${deal.last_name}` : deal.title}` }}
+          defaultDate={new Date().toISOString().slice(0, 10)}
+          onClose={() => setShowApptModal(false)}
+          onSubmit={saveAppointment}
+        />
+      )}
     </>
-  );
+   );
 }
