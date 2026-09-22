@@ -554,6 +554,7 @@ export default function DealDetail() {
                 <span className="muted">Last modified</span>
                 <span>{deal.updated_by_username || deal.created_by_username || 'system'} · {timeAgo(deal.updated_at || deal.created_at)}</span>
               </div>
+            </div>
           </div>
 
           <div className="card">
@@ -598,5 +599,5 @@ export default function DealDetail() {
         />
       )}
     </>
-   );
+  );
 }
