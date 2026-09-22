@@ -63,14 +63,21 @@ export default function Kanban() {
       if (!canEdit) return;
       const deal = (deals || []).find((d) => d.id === dragged.id);
       if (!deal || deal.stage === col.key) return;
+      // A lead only becomes an opportunity by having an appointment scheduled against it (see
+      // Leads/DealDetail) — dragging it straight to a later stage would skip that, so block it
+      // here too rather than let the server reject it after an optimistic move.
+      if (deal.stage === 'new' && col.key !== 'lost') {
+        window.alert('Schedule an appointment for this lead to convert it into an opportunity — open it from Leads or the deal page.');
+        return;
+      }
       setDeals((prev) => prev.map((d) => (d.id === deal.id ? { ...d, stage: col.key } : d)));
-      await api.updateDeal(deal.id, { stage: col.key });
+      await api.updateDeal(deal.id, { stage: col.key }).catch((err) => { window.alert(err.message); load(); });
     } else {
       if (!canEditJobs) return;
       const job = (jobs || []).find((j) => j.id === dragged.id);
       if (!job || job.status === col.key) return;
       setJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, status: col.key } : j)));
-      await api.updateJob(job.id, { status: col.key });
+      await api.updateJob(job.id, { status: col.key }).catch((err) => { window.alert(err.message); load(); });
     }
   }
 
