@@ -224,15 +224,22 @@ CREATE TABLE IF NOT EXISTS catalog_items (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
+-- One row per connected Google Calendar. user_id = 0 is the sentinel for the single shared
+-- "company" calendar (real users.id values start at 1) — every appointment's "our calendar" side
+-- lands there regardless of who it's assigned to. Any other user_id is that person's own,
+-- personally-connected Google Calendar (see "Per-user Google Calendar sync" below) — an
+-- appointment assigned to them lands there too, directly, when they've connected one.
 CREATE TABLE IF NOT EXISTS oauth_tokens (
-  provider TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  user_id INTEGER NOT NULL DEFAULT 0,
   access_token TEXT,
   refresh_token TEXT,
   expiry_date INTEGER,
   scope TEXT,
   connected_email TEXT,
   calendar_id TEXT NOT NULL DEFAULT 'primary',
-  updated_at TEXT DEFAULT (datetime('now'))
+  updated_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (provider, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -769,6 +776,45 @@ function migrateEstimatesJobOptional() {
   db.pragma('foreign_keys = ON');
 }
 migrateEstimatesJobOptional();
+
+// Per-user Google Calendar sync (Sept 2026) — appointments used to only ever reach one shared
+// company Google Calendar; the user asked that assigning an appointment to someone also puts it
+// on THAT PERSON's own Google Calendar, not just an emailed invite. oauth_tokens used to hold a
+// single row keyed only by provider (one company-wide connection); this rebuilds it with a
+// composite (provider, user_id) key so each login can separately connect their own Google account
+// alongside the existing company one — see the CREATE TABLE comment above for what user_id = 0
+// means. The existing company connection (if any) is preserved unchanged under that sentinel, so
+// nobody has to reconnect it after this migration runs. A no-op once migrated.
+function migrateOauthTokensPerUser() {
+  const hasUserId = db.prepare(`PRAGMA table_info(oauth_tokens)`).all().some((c) => c.name === 'user_id');
+  if (hasUserId) return;
+  db.pragma('foreign_keys = OFF');
+  db.exec(`
+    CREATE TABLE oauth_tokens_new (
+      provider TEXT NOT NULL,
+      user_id INTEGER NOT NULL DEFAULT 0,
+      access_token TEXT,
+      refresh_token TEXT,
+      expiry_date INTEGER,
+      scope TEXT,
+      connected_email TEXT,
+      calendar_id TEXT NOT NULL DEFAULT 'primary',
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (provider, user_id)
+    );
+    INSERT INTO oauth_tokens_new (provider, user_id, access_token, refresh_token, expiry_date, scope, connected_email, calendar_id, updated_at)
+      SELECT provider, 0, access_token, refresh_token, expiry_date, scope, connected_email, calendar_id, updated_at FROM oauth_tokens;
+    DROP TABLE oauth_tokens;
+    ALTER TABLE oauth_tokens_new RENAME TO oauth_tokens;
+  `);
+  db.pragma('foreign_keys = ON');
+}
+migrateOauthTokensPerUser();
+
+// The company calendar's event id already lived on `google_event_id`; this is the matching id for
+// whatever it's assigned to's OWN calendar, when they've connected one (see notify.js/google.js —
+// having this means the assignee's own calendar copy can be updated/deleted later, not just created).
+ensureColumn('appointments', 'assignee_google_event_id', 'assignee_google_event_id TEXT');
 
 // Customer-view display toggles + view tracking (Sept 2026) — three independent switches (not one
 // "show pricing" flag) matching Joist's own "Display Options": whether the customer-facing
