@@ -2,13 +2,23 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { money, timeAgo } from '../utils';
-import { TrendChart, ColumnChart, BarList, DonutChart } from '../components/charts';
 import FilterBar from '../components/FilterBar';
 
 const STAGE_LABELS = { new: 'New', qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
-const AGING_COLORS = ['var(--accent)', 'var(--amber)', 'var(--amber)', 'var(--red)'];
 const TASK_LINK = { contact: '/contacts', deal: '/pipeline', job: '/jobs', ticket: '/tickets' };
 const OPP_STAGES = ['qualified', 'proposal', 'negotiation', 'won', 'lost'];
+const REPORT_CATEGORY_ORDER = ['Financial', 'Sales', 'Leads', 'Jobs'];
+
+function groupReportsByCategory(list) {
+  const byCategory = new Map();
+  for (const r of list) {
+    if (!byCategory.has(r.category)) byCategory.set(r.category, []);
+    byCategory.get(r.category).push(r);
+  }
+  const ordered = REPORT_CATEGORY_ORDER.filter((c) => byCategory.has(c)).map((c) => [c, byCategory.get(c)]);
+  for (const [c, rows] of byCategory) if (!REPORT_CATEGORY_ORDER.includes(c)) ordered.push([c, rows]);
+  return ordered;
+}
 
 function attentionCount(insights) {
   if (!insights) return 0;
@@ -21,6 +31,7 @@ export default function Dashboard() {
   const [reports, setReports] = useState(null);
   const [tasks, setTasks] = useState(null);
   const [customReports, setCustomReports] = useState(null);
+  const [builtinReportsList, setBuiltinReportsList] = useState(null);
   const [attentionFilter, setAttentionFilter] = useState('');
 
   useEffect(() => {
@@ -29,6 +40,7 @@ export default function Dashboard() {
     api.reports().then(setReports);
     api.tasks({ open: '1' }).then(setTasks);
     api.customReports(5).then(setCustomReports).catch(() => setCustomReports([]));
+    api.builtinReports().then(setBuiltinReportsList).catch(() => setBuiltinReportsList([]));
   }, []);
 
   if (!data) return <div className="loading">Loading dashboard…</div>;
@@ -80,31 +92,31 @@ export default function Dashboard() {
         </div>
         {reports && (
           <>
-            <div className="kpi">
+            <Link to="/reports/system/sales-summary" className="kpi" style={{ textDecoration: 'none', color: 'inherit' }}>
               <div className="label">Sales</div>
               <div className="value">{money(reports.salesSummary.totalSales)}</div>
               <div className="delta">{reports.salesSummary.jobsWon} won</div>
-            </div>
-            <div className="kpi">
+            </Link>
+            <Link to="/reports/system/sales-summary" className="kpi" style={{ textDecoration: 'none', color: 'inherit' }}>
               <div className="label">Average job size</div>
               <div className="value">{money(reports.salesSummary.avgJobSize)}</div>
               <div className="delta">per won opportunity</div>
-            </div>
-            <div className="kpi">
+            </Link>
+            <Link to="/reports/system/sales-summary" className="kpi" style={{ textDecoration: 'none', color: 'inherit' }}>
               <div className="label">Close rate</div>
               <div className="value">{reports.salesSummary.closeRate === null ? '—' : `${reports.salesSummary.closeRate}%`}</div>
               <div className="delta">won ÷ (won + lost)</div>
-            </div>
-            <div className="kpi">
+            </Link>
+            <Link to="/reports/system/sales-summary" className="kpi" style={{ textDecoration: 'none', color: 'inherit' }}>
               <div className="label">Appointments booked</div>
               <div className="value">{reports.salesSummary.appointmentsBooked}</div>
               <div className="delta">all-time</div>
-            </div>
-            <div className="kpi">
+            </Link>
+            <Link to="/reports/system/job-profitability" className="kpi" style={{ textDecoration: 'none', color: 'inherit' }}>
               <div className="label">Gross profit</div>
               <div className="value" style={{ color: reports.jobProfitability.totalProfit < 0 ? 'var(--red)' : undefined }}>{money(reports.jobProfitability.totalProfit)}</div>
               <div className="delta">across jobs with logged expenses</div>
-            </div>
+            </Link>
           </>
         )}
       </div>
@@ -262,188 +274,33 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div className="page-head" style={{ marginTop: 28 }}>
-        <div>
-          <h2 style={{ margin: 0 }}>Reports</h2>
-          <p className="sub" style={{ margin: '2px 0 0' }}>Trends across the last 6 months, straight from your jobs, deals, and invoices.</p>
+      <div className="card" style={{ marginTop: 28 }}>
+        <div className="row between" style={{ alignItems: 'flex-start' }}>
+          <div>
+            <h2 style={{ marginBottom: 2 }}>Reports</h2>
+            <p className="sub" style={{ margin: 0 }}>The standard set, built in — click any one to open its full chart. Trends cover the last 6 months, straight from your jobs, deals, and invoices.</p>
+          </div>
+          <Link to="/reports" className="btn sm subtle">All reports →</Link>
         </div>
+        {builtinReportsList === null ? (
+          <div className="loading" style={{ marginTop: 10 }}>Loading…</div>
+        ) : (
+          <div style={{ marginTop: 10, display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+            {groupReportsByCategory(builtinReportsList).map(([category, rows]) => (
+              <div key={category}>
+                <div className="kicker">{category}</div>
+                <div className="stack" style={{ gap: 2 }}>
+                  {rows.map((r) => (
+                    <Link key={r.key} to={`/reports/system/${r.key}`} className="attention-row">
+                      <span>{r.title}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-
-      {!reports ? (
-        <div className="loading">Loading reports…</div>
-      ) : (
-        <div className="reports-grid">
-          <div className="card span-2">
-            <div className="report-card-head">
-              <h2>Revenue collected</h2>
-              <div className="report-card-total">{reports.price_hidden ? money(null) : money(reports.revenueByMonth.reduce((s, m) => s + m.total, 0))}</div>
-            </div>
-            {reports.price_hidden ? <p className="sub">🔒 Prices are hidden for your account.</p> : <TrendChart data={reports.revenueByMonth} valueKey="total" labelKey="month" formatValue={money} />}
-          </div>
-
-          <div className="card span-2">
-            <div className="report-card-head">
-              <h2>Revenue forecast</h2>
-              <div className="report-card-total">{reports.price_hidden ? money(null) : money(reports.revenueForecast.reduce((s, m) => s + m.total, 0))}</div>
-            </div>
-            <p className="sub" style={{ margin: '-4px 0 10px' }}>Open deals' value × probability, by expected close month — a weighted look at what's likely coming in next, not a guarantee.</p>
-            {reports.price_hidden ? <p className="sub">🔒 Prices are hidden for your account.</p> : <ColumnChart data={reports.revenueForecast} valueKey="total" labelKey="month" formatValue={money} color="var(--amber)" />}
-            {!reports.price_hidden && reports.undatedForecastValue > 0 && (
-              <p className="sub" style={{ margin: '10px 0 0' }}>Plus {money(reports.undatedForecastValue)} weighted in open deals with no expected close date set yet.</p>
-            )}
-          </div>
-
-          <div className="card">
-            <h2>New jobs by month</h2>
-            <ColumnChart data={reports.jobsByMonth} valueKey="count" labelKey="month" formatValue={(v) => v} />
-          </div>
-
-          <div className="card">
-            <h2>Jobs by status</h2>
-            <DonutChart data={reports.jobsByStatus} valueKey="count" labelKey="label" />
-          </div>
-
-          <div className="card">
-            <h2>Pipeline value by stage</h2>
-            <BarList data={reports.pipelineByStage} valueKey="value" labelKey="label" formatValue={money} />
-          </div>
-
-          <div className="card">
-            <h2>Invoice aging</h2>
-            <BarList
-              data={reports.invoiceAging.map((b, i) => ({ ...b, color: AGING_COLORS[i] }))}
-              valueKey="amount" labelKey="bucket" formatValue={money} colorKey="color"
-            />
-          </div>
-
-          <div className="card span-2">
-            <h2>Top customers by revenue</h2>
-            {reports.topCustomers.length === 0 ? (
-              <div className="empty">No paid invoices yet.</div>
-            ) : (
-              <BarList data={reports.topCustomers} valueKey="amount" labelKey="name" formatValue={money} />
-            )}
-          </div>
-
-          <div className="card">
-            <h2>Leads created this month, by source</h2>
-            {reports.leadsThisMonthBySource.length === 0 ? (
-              <div className="empty">No leads yet this month.</div>
-            ) : (
-              <BarList data={reports.leadsThisMonthBySource} valueKey="count" labelKey="label" formatValue={(v) => v} />
-            )}
-          </div>
-
-          <div className="card">
-            <h2>Leads by source (all-time)</h2>
-            {reports.leadsBySource.length === 0 ? (
-              <div className="empty">No leads yet.</div>
-            ) : (
-              <BarList data={reports.leadsBySource} valueKey="count" labelKey="label" formatValue={(v) => v} />
-            )}
-          </div>
-
-          <div className="card">
-            <h2>Booking rate by source</h2>
-            <p className="sub" style={{ margin: '-4px 0 10px' }}>Share of leads from each source that got at least one appointment on the calendar.</p>
-            {reports.bookingRateBySource.length === 0 ? (
-              <div className="empty">No leads yet.</div>
-            ) : (
-              <BarList data={reports.bookingRateBySource} valueKey="rate" labelKey="label" formatValue={(v) => `${v}%`} />
-            )}
-          </div>
-
-          <div className="card">
-            <h2>Sales by source</h2>
-            {reports.salesBySource.length === 0 ? (
-              <div className="empty">No won opportunities yet.</div>
-            ) : (
-              <BarList data={reports.salesBySource} valueKey="amount" labelKey="label" formatValue={money} />
-            )}
-          </div>
-
-          <div className="card">
-            <h2>Sales by estimator</h2>
-            {reports.salesByEstimator.length === 0 ? (
-              <div className="empty">No won opportunities with an estimator set yet.</div>
-            ) : (
-              <BarList data={reports.salesByEstimator} valueKey="amount" labelKey="label" formatValue={money} />
-            )}
-          </div>
-
-          <div className="card">
-            <h2>Sales by city</h2>
-            {reports.salesByCity.length === 0 ? (
-              <div className="empty">No won opportunities with a resolvable address yet.</div>
-            ) : (
-              <BarList data={reports.salesByCity} valueKey="amount" labelKey="label" formatValue={money} />
-            )}
-          </div>
-
-          <div className="card">
-            <h2>Sales by service type</h2>
-            {reports.salesByServiceType.length === 0 ? (
-              <div className="empty">No won opportunities with a service type set yet.</div>
-            ) : (
-              <BarList data={reports.salesByServiceType} valueKey="amount" labelKey="label" formatValue={money} />
-            )}
-          </div>
-
-          <div className="card">
-            <h2>Sales by property type</h2>
-            {reports.salesByType.length === 0 ? (
-              <div className="empty">No won opportunities yet.</div>
-            ) : (
-              <BarList data={reports.salesByType} valueKey="amount" labelKey="label" formatValue={money} />
-            )}
-          </div>
-
-          <div className="card">
-            <h2>Close rate by estimator</h2>
-            {reports.closeRateByPerson.length === 0 ? (
-              <div className="empty">No closed (won/lost) opportunities with an estimator set yet.</div>
-            ) : (
-              <BarList data={reports.closeRateByPerson} valueKey="rate" labelKey="label" formatValue={(v) => `${v}%`} />
-            )}
-          </div>
-
-          <div className="card">
-            <h2>Close rate by lead source</h2>
-            {reports.closeRateBySource.length === 0 ? (
-              <div className="empty">No closed (won/lost) opportunities yet.</div>
-            ) : (
-              <BarList data={reports.closeRateBySource} valueKey="rate" labelKey="label" formatValue={(v) => `${v}%`} />
-            )}
-          </div>
-
-          <div className="card span-2">
-            <div className="report-card-head">
-              <h2>Job profitability</h2>
-              <div className="report-card-total" style={{ color: reports.jobProfitability.totalProfit < 0 ? 'var(--red)' : undefined }}>
-                {money(reports.jobProfitability.totalProfit)}
-              </div>
-            </div>
-            <p className="sub" style={{ margin: '-4px 0 10px' }}>
-              Actual expenses logged against jobs, weighed against invoiced (or approved-estimate) revenue.
-              {reports.jobProfitability.margin !== null && ` Overall margin: ${reports.jobProfitability.margin}%.`}
-            </p>
-            {reports.jobProfitability.byJob.length === 0 ? (
-              <div className="empty">Log expenses on a job to see profitability here.</div>
-            ) : (
-              <div className="stack" style={{ gap: 2 }}>
-                {reports.jobProfitability.byJob.map((j) => (
-                  <Link key={j.id} to={`/jobs/${j.id}`} className="attention-row">
-                    <span>{j.title}</span>
-                    <span className="mono" style={{ color: j.profit < 0 ? 'var(--red)' : 'var(--accent-ink)' }}>
-                      {money(j.profit)}{j.margin !== null ? ` · ${j.margin}%` : ''}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </>
   );
 }
