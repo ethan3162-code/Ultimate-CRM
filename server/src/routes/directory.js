@@ -13,7 +13,13 @@ const router = express.Router();
 
 router.get('/users', (req, res) => {
   const rows = db.prepare(`SELECT id, username, role FROM users WHERE active = 1 ORDER BY username`).all();
-  res.json(rows.map((u) => ({ id: u.id, username: u.username, roleLabel: ROLE_LABEL[u.role] || u.role })));
+  // Who's personally connected their own Google Calendar (per-user sync, Sept 2026) — lets the
+  // "Assign to" dropdown on the appointment form show which assignees will get it added directly
+  // to their own calendar vs. only ever an emailed invite.
+  const connectedIds = new Set(
+    db.prepare(`SELECT user_id FROM oauth_tokens WHERE provider = 'google' AND user_id != 0`).all().map((r) => r.user_id)
+  );
+  res.json(rows.map((u) => ({ id: u.id, username: u.username, roleLabel: ROLE_LABEL[u.role] || u.role, googleConnected: connectedIds.has(u.id) })));
 });
 
 // Open estimate-approval requests this login can act on (empty for anyone not flagged as an
