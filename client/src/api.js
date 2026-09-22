@@ -162,6 +162,11 @@ export const api = {
 
   insights: () => request('/insights'),
   reports: () => request('/reports'),
+  // Fixed "built-in" reports (Sept 2026) — the old Dashboard reports-grid, now its own set of
+  // clickable report pages under /reports/system/:key. See customReports below for the separate,
+  // freely-editable report builder.
+  builtinReports: () => request('/builtin-reports'),
+  builtinReport: (key) => request(`/builtin-reports/${key}`),
   commissionPayouts: (period, anchor) => request(`/commissions?period=${period}&anchor=${anchor}`),
   aiDraft: (kind, id) => request('/ai/draft', { method: 'POST', body: JSON.stringify({ kind, id }) }),
 
