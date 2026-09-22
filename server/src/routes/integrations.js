@@ -85,49 +85,4 @@ router.post('/answerforce/backfill', (req, res) => {
   res.status(202).json({ started: true, since: sinceDate.toISOString().slice(0, 10) });
 });
 
-// One-time cleanup (Sept 2026) — removes the original Phase 1 seed/demo data: the 6 fictional
-// B2B companies (Acme Roofing, Brightline, Northwood Dental, Summit Retail, Harbor Logistics,
-// Graystone), the 10 fictional contacts and 10 fictional leads/opportunities tied to them
-// (including the two paving-flavored ones, Karen Whitfield and Greg Alvarez), and the 5 demo
-// jobs that came with them — plus their estimates/invoices/payments/photos/expenses (cascade at
-// the DB level from the job/deal delete) and their tickets/appointments and any activity-log
-// entries pointing at any of the above, none of which cascade from a job/deal delete and are
-// removed explicitly here instead. Hardcoded to the exact ids the original seed.js created — not
-// a general delete-any-record feature — so it can never touch a real lead, contact, or job no
-// matter when it's run. Idempotent: an id that's already gone is just a no-op delete.
-const DEMO_DEAL_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-const DEMO_JOB_IDS = [1, 2, 3, 4, 5];
-const DEMO_CONTACT_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-const DEMO_COMPANY_IDS = [1, 2, 3, 4, 5, 6];
-
-router.post('/demo-cleanup', (req, res) => {
-  const run = db.transaction(() => {
-    for (const jobId of DEMO_JOB_IDS) {
-      const ticketIds = db.prepare(`SELECT id FROM tickets WHERE job_id = ?`).all(jobId).map((r) => r.id);
-      for (const tid of ticketIds) db.prepare(`DELETE FROM activities WHERE related_type = 'ticket' AND related_id = ?`).run(tid);
-      db.prepare(`DELETE FROM tickets WHERE job_id = ?`).run(jobId);
-      db.prepare(`DELETE FROM appointments WHERE job_id = ?`).run(jobId);
-      db.prepare(`DELETE FROM activities WHERE related_type = 'job' AND related_id = ?`).run(jobId);
-    }
-    for (const id of DEMO_DEAL_IDS) {
-      db.prepare(`DELETE FROM appointments WHERE deal_id = ?`).run(id);
-      db.prepare(`DELETE FROM activities WHERE related_type = 'deal' AND related_id = ?`).run(id);
-    }
-    for (const id of DEMO_CONTACT_IDS) db.prepare(`DELETE FROM activities WHERE related_type = 'contact' AND related_id = ?`).run(id);
-    for (const id of DEMO_COMPANY_IDS) db.prepare(`DELETE FROM activities WHERE related_type = 'company' AND related_id = ?`).run(id);
-    for (const id of DEMO_JOB_IDS) db.prepare(`DELETE FROM jobs WHERE id = ?`).run(id);
-    for (const id of DEMO_DEAL_IDS) db.prepare(`DELETE FROM deals WHERE id = ?`).run(id);
-    for (const id of DEMO_CONTACT_IDS) db.prepare(`DELETE FROM contacts WHERE id = ?`).run(id);
-    for (const id of DEMO_COMPANY_IDS) db.prepare(`DELETE FROM companies WHERE id = ?`).run(id);
-  });
-  run();
-  res.json({
-    ok: true,
-    removed: {
-      deals: DEMO_DEAL_IDS.length, jobs: DEMO_JOB_IDS.length,
-      contacts: DEMO_CONTACT_IDS.length, companies: DEMO_COMPANY_IDS.length,
-    },
-  });
-});
-
 module.exports = router;
