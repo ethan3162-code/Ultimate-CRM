@@ -60,7 +60,10 @@ function nextMonths(count) {
   return out;
 }
 
-router.get('/', (req, res) => {
+// Computes the whole fixed-report payload, unredacted — pulled into its own function (Sept 2026)
+// so routes/builtinReports.js can reuse the exact same numbers for the individual built-in-report
+// pages, rather than duplicating any of this math. `/` below is unchanged; it just calls this.
+function buildReportsPayload(req) {
   // --- Revenue by month (collected payments, last 6 months) ---
   const months = lastMonths(6);
   const payments = db.prepare(`SELECT amount, paid_at FROM payments`).all();
@@ -264,12 +267,18 @@ router.get('/', (req, res) => {
     .map(([label, total]) => ({ label, rate: +(((bookingBooked.get(label) || 0) / total) * 100).toFixed(1), total }))
     .sort((a, b) => b.rate - a.rate);
 
-  const payload = {
+  return {
     revenueByMonth, jobsByMonth, pipelineByStage, jobsByStatus, invoiceAging, topCustomers, revenueForecast, undatedForecastValue, jobProfitability,
     salesSummary, salesBySource, salesByEstimator, salesByCity, salesByServiceType, salesByType,
     closeRateByPerson, closeRateBySource, leadsBySource, leadsThisMonthBySource, bookingRateBySource,
   };
+}
+
+router.get('/', (req, res) => {
+  const payload = buildReportsPayload(req);
   res.json(canSeePrices(req.user) ? payload : redactReportsMoney(payload));
 });
 
 module.exports = router;
+module.exports.buildReportsPayload = buildReportsPayload;
+module.exports.redactReportsMoney = redactReportsMoney;
