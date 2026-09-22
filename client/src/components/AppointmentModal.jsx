@@ -82,10 +82,10 @@ export default function AppointmentModal({ appointment, defaultDate, onClose, on
               <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
             <div className="field">
-              <label>Assign to <span className="muted" style={{ fontWeight: 400 }}>— emails them a calendar invite</span></label>
+              <label>Assign to <span className="muted" style={{ fontWeight: 400 }}>— goes on their own Google Calendar if connected, otherwise emails them an invite</span></label>
               <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>
                 <option value="">— unassigned —</option>
-                {directory.map((u) => <option key={u.id} value={u.id}>{u.username}</option>)}
+                {directory.map((u) => <option key={u.id} value={u.id}>{u.username}{u.googleConnected ? ' · Google connected' : ''}</option>)}
               </select>
             </div>
             {isEdit && (
