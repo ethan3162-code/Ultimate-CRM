@@ -1,26 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, dateTime, isoDate, accountName, mapLinks, splitWorkTypes, joinWorkTypes } from '../utils';
-import { WORK_TYPES, CUSTOMER_TYPES } from '../constants';
-import { usePermission } from '../auth';
+import { money, shortDate, dateTime, isoDate, accountName, mapLinks } from '../utils';
+import { CUSTOMER_TYPES } from '../constants';
 import FilterBar from '../components/FilterBar';
 
 const BLANK_FILTERS = { owner: '', customer_type: '', score: '' };
 const SCORE_OPTIONS = ['Hot', 'Warm', 'Cool', 'Won', 'Lost'];
 
-// Fresh, unqualified interest lives on the Leads page now — this list picks
-// up once a lead has been qualified, so 'new' is intentionally left out here.
-const STAGES = ['qualified', 'proposal', 'negotiation', 'won', 'lost'];
 const STAGE_LABELS = { new: 'New', qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
 const STAGE_TEXT = { new: 'muted', qualified: 'muted', proposal: 'amber', negotiation: 'amber', won: 'green', lost: 'red' };
 const SCORE_ROW_CLASS = { Hot: 'row-hot', Warm: 'row-warm', Cool: '' };
 
 export default function Pipeline() {
-  const { canEdit } = usePermission('pipeline');
   const [allDeals, setAllDeals] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: '', value: '', stage: 'qualified', rep: '', work_type: '', customer_type: 'Residential' });
   const [filters, setFilters] = useState(BLANK_FILTERS);
 
   function load() {
@@ -53,29 +46,17 @@ export default function Pipeline() {
   )), [qualifiedDeals, filters]);
   const filtersActive = Object.values(filters).some(Boolean);
 
-  async function submitDeal(e) {
-    e.preventDefault();
-    if (!form.title.trim()) return;
-    await api.createDeal({
-      title: form.title, value: Number(form.value) || 0, stage: form.stage,
-      rep: form.rep || null, work_type: form.work_type || null, customer_type: form.customer_type,
-    });
-    setForm({ title: '', value: '', stage: 'qualified', rep: '', work_type: '', customer_type: 'Residential' });
-    setShowForm(false);
-    load();
-  }
-
   return (
     <>
       <div className="page-head">
         <div>
           <h1>Opportunities</h1>
           <p className="sub">
-            Qualified deals only — scan everything here, or drag a card across the whole funnel on the <Link to="/kanban">Pipeline</Link> board.
+            Qualified deals only — an opportunity is created automatically once a lead gets an appointment scheduled, so there's
+            no way to add one directly here. Scan everything below, or drag a card across the whole funnel on the <Link to="/kanban">Pipeline</Link> board.
             {' '}<Link to="/leads">New, unqualified leads live here →</Link>
           </p>
         </div>
-        {canEdit && <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New opportunity</button>}
       </div>
 
       {filterDefs.length > 0 && (
@@ -84,62 +65,6 @@ export default function Pipeline() {
           onChange={(key, value) => setFilters((f) => ({ ...f, [key]: value }))}
           onClear={() => setFilters(BLANK_FILTERS)}
         />
-      )}
-
-      {showForm && canEdit && (
-        <div className="card" style={{ marginBottom: 18 }}>
-          <form onSubmit={submitDeal} className="form-grid">
-            <div className="field">
-              <label>Opportunity title</label>
-              <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Acme Corp — Annual renewal" required />
-            </div>
-            <div className="field">
-              <label>Value ($)</label>
-              <input type="number" min="0" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} />
-            </div>
-            <div className="field">
-              <label>Stage</label>
-              <select value={form.stage} onChange={(e) => setForm({ ...form, stage: e.target.value })}>
-                {STAGES.map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label>Rep / estimator</label>
-              <input value={form.rep} onChange={(e) => setForm({ ...form, rep: e.target.value })} placeholder="Who's working this deal?" />
-            </div>
-            <div className="field" style={{ gridColumn: '1 / -1' }}>
-              <label>Type of work</label>
-              <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-                {WORK_TYPES.map((w) => {
-                  const selected = splitWorkTypes(form.work_type);
-                  const checked = selected.includes(w);
-                  return (
-                    <label key={w} className="row" style={{ gap: 5, alignItems: 'center', fontWeight: 400 }}>
-                      <input
-                        type="checkbox" style={{ width: 'auto' }} checked={checked}
-                        onChange={(e) => {
-                          const next = e.target.checked ? [...selected, w] : selected.filter((v) => v !== w);
-                          setForm({ ...form, work_type: joinWorkTypes(WORK_TYPES.filter((t) => next.includes(t))) });
-                        }}
-                      />
-                      {w}
-                    </label>
-                  );
-                })}
-              </div>
-              <p className="sub" style={{ margin: '4px 0 0' }}>Pick as many as this project needs.</p>
-            </div>
-            <div className="field">
-              <label>Customer type</label>
-              <select value={form.customer_type} onChange={(e) => setForm({ ...form, customer_type: e.target.value })}>
-                {CUSTOMER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div className="field" style={{ justifyContent: 'flex-end' }}>
-              <button className="btn primary" type="submit">Create opportunity</button>
-            </div>
-          </form>
-        </div>
       )}
 
       <div className="table-wrap">
