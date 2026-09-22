@@ -26,6 +26,10 @@ const NAV = [
     items: [
       { to: '/leads', label: 'Leads', page: 'leads' },
       { to: '/pipeline', label: 'Opportunities', page: 'pipeline' },
+      // Sept 2026 — a unified kanban spanning Leads through Opportunities through Projects (two
+      // separate data models, one board). Gated on the same 'pipeline' permission as Opportunities
+      // itself, since it's the same sales-pipeline view just widened.
+      { to: '/kanban', label: 'Pipeline', page: 'pipeline' },
       { to: '/estimates', label: 'Estimates', page: 'estimates' },
       // Not a business-object page permission like the others here — shown only to a login an
       // admin flagged "Can approve estimates" (Users & permissions), the same personal capability
