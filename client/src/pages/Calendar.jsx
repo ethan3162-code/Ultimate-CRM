@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import AppointmentModal from '../components/AppointmentModal';
-import { usePermission } from '../auth';
+import { usePermission, useAuth } from '../auth';
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -16,6 +16,7 @@ function sameDay(a, b) {
 
 export default function Calendar() {
   const { canEdit } = usePermission('calendar');
+  const { user } = useAuth();
   const [params, setParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [status, setStatus] = useState(null);
@@ -23,20 +24,28 @@ export default function Calendar() {
   const [cursor, setCursor] = useState(() => { const d = new Date(); d.setDate(1); return d; });
   const [modal, setModal] = useState(null); // { appointment?, defaultDate? } | null
   const [banner, setBanner] = useState(null);
+  const [myStatus, setMyStatus] = useState(null);
 
   function load() {
     api.appointments().then(setData);
     api.googleStatus().then(setStatus);
+    api.googleMeStatus().then(setMyStatus);
   }
   useEffect(load, []);
 
   useEffect(() => {
+    const mine = Boolean(params.get('mine'));
     if (params.get('google_connected')) {
-      setBanner({ kind: 'ok', text: 'Google Calendar connected — your events are now syncing both ways.' });
-      params.delete('google_connected'); setParams(params, { replace: true });
+      setBanner({
+        kind: 'ok',
+        text: mine
+          ? 'Your Google Calendar is connected — appointments assigned to you will be added directly to it.'
+          : 'Google Calendar connected — your events are now syncing both ways.',
+      });
+      params.delete('google_connected'); params.delete('mine'); setParams(params, { replace: true });
     } else if (params.get('google_error')) {
       setBanner({ kind: 'err', text: `Google Calendar connection failed: ${params.get('google_error')}` });
-      params.delete('google_error'); setParams(params, { replace: true });
+      params.delete('google_error'); params.delete('mine'); setParams(params, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -88,6 +97,13 @@ export default function Calendar() {
     await api.googleDisconnect();
     load();
   }
+  function connectMyGoogle() {
+    window.location.href = '/api/auth/google/me';
+  }
+  async function disconnectMyGoogle() {
+    await api.googleMeDisconnect();
+    load();
+  }
 
   const today = new Date();
 
@@ -99,15 +115,34 @@ export default function Calendar() {
           <p className="sub">Every meeting, walkthrough, and site visit — synced both ways with Google Calendar when connected.</p>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          {canEdit && (status?.connected ? (
+          {canEdit && user?.role === 'admin' && (status?.connected ? (
             <>
-              <span className="pill green">Connected · {status.connectedEmail || 'Google'}</span>
+              <span className="pill green">Company: Connected · {status.connectedEmail || 'Google'}</span>
               <button className="btn sm" onClick={disconnectGoogle}>Disconnect</button>
             </>
-          ) : (
-            <button className="btn primary sm" onClick={connectGoogle}>Connect Google Calendar</button>
-          ))}
+          ) : canEdit ? (
+            <button className="btn primary sm" onClick={connectGoogle}>Connect company calendar</button>
+          ) : null)}
           {canEdit && <button className="btn primary sm" onClick={() => setModal({ defaultDate: ymd(new Date()) })}>+ New appointment</button>}
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="row between" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            <strong>My Google Calendar</strong>
+            <p className="sub" style={{ margin: '2px 0 0' }}>
+              Connect your own account so appointments assigned to you land directly on your calendar, instead of only an emailed invite.
+            </p>
+          </div>
+          {myStatus?.connected ? (
+            <div className="row" style={{ gap: 8 }}>
+              <span className="pill green">Connected · {myStatus.connectedEmail || 'Google'}</span>
+              <button className="btn sm" onClick={disconnectMyGoogle}>Disconnect</button>
+            </div>
+          ) : (
+            <button className="btn primary sm" onClick={connectMyGoogle} disabled={myStatus && !myStatus.configured}>Connect my Google Calendar</button>
+          )}
         </div>
       </div>
 
