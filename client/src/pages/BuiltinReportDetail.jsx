@@ -69,14 +69,46 @@ export default function BuiltinReportDetail() {
               <BarList data={report.rows} valueKey={report.valueKey} labelKey={report.labelKey} formatValue={formatValue} colorKey={report.colorKey} />
             )
           ) : report.chartType === 'stats' ? (
-            <div className="kpi-grid" style={{ marginBottom: 0 }}>
-              {report.stats.map((s) => (
-                <div className="kpi" key={s.label}>
-                  <div className="label">{s.label}</div>
-                  <div className="value">{formatterFor(s.format)(s.value)}</div>
-                </div>
-              ))}
-            </div>
+            <>
+              <div className="kpi-grid" style={{ marginBottom: report.rows ? 18 : 0 }}>
+                {report.stats.map((s) => (
+                  <div className="kpi" key={s.label}>
+                    <div className="label">{s.label}</div>
+                    <div className="value">{formatterFor(s.format)(s.value)}</div>
+                  </div>
+                ))}
+              </div>
+              {report.rows && (
+                <>
+                  <p className="sub" style={{ margin: '0 0 8px', fontWeight: 600 }}>{report.rowsLabel || 'Details'}</p>
+                  {report.rows.length === 0 ? (
+                    <div className="empty">No matching records for this report yet.</div>
+                  ) : (
+                    <div className="stack" style={{ gap: 2 }}>
+                      {report.rows.map((row) => (
+                        <Link key={row.id} to={row.link} className="attention-row">
+                          <span>{row.title}{row.customer ? ` · ${row.customer}` : ''}</span>
+                          <span className="mono">{row.right ?? formatValue(row.amount)}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          ) : report.chartType === 'recordlist' ? (
+            report.rows.length === 0 ? (
+              <div className="empty">No matching records for this report yet.</div>
+            ) : (
+              <div className="stack" style={{ gap: 2 }}>
+                {report.rows.map((row) => (
+                  <Link key={row.id} to={row.link} className="attention-row">
+                    <span>{row.title}{row.customer ? ` · ${row.customer}` : ''}</span>
+                    <span className="mono">{row.right ?? formatValue(row.amount)}</span>
+                  </Link>
+                ))}
+              </div>
+            )
           ) : report.chartType === 'joblist' ? (
             <>
               {report.extra?.margin !== null && report.extra?.margin !== undefined && (
