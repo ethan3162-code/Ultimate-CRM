@@ -70,26 +70,26 @@ export default function Dashboard() {
       </div>
 
       <div className="kpi-grid">
-        <div className="kpi">
+        <Link to="/reports/system/open-pipeline" className="kpi" style={{ textDecoration: 'none', color: 'inherit' }}>
           <div className="label">Open pipeline</div>
           <div className="value">{money(data.openPipelineValue)}</div>
           <div className="delta">{data.openDealCount} open deals · {money(data.weightedPipelineValue)} weighted</div>
-        </div>
-        <div className="kpi">
+        </Link>
+        <Link to="/reports/system/balance-owed" className="kpi" style={{ textDecoration: 'none', color: 'inherit' }}>
           <div className="label">Balance owed</div>
           <div className="value">{money(data.unpaidTotal)}</div>
           <div className={'delta' + (data.overdueTotal > 0 ? ' warn' : '')}>{money(data.overdueTotal)} overdue</div>
-        </div>
-        <div className="kpi">
+        </Link>
+        <Link to="/reports/system/payments-this-month" className="kpi" style={{ textDecoration: 'none', color: 'inherit' }}>
           <div className="label">Payments in (this month)</div>
           <div className="value">{money(data.paidThisMonth)}</div>
           <div className="delta">across all field jobs</div>
-        </div>
-        <div className="kpi">
+        </Link>
+        <Link to="/reports/system/jobs-in-motion" className="kpi" style={{ textDecoration: 'none', color: 'inherit' }}>
           <div className="label">Jobs in motion</div>
           <div className="value">{data.jobsInProgress + data.jobsScheduled}</div>
           <div className="delta">{data.jobsInProgress} in progress · {data.jobsScheduled} scheduled</div>
-        </div>
+        </Link>
         {reports && (
           <>
             <Link to="/reports/system/sales-summary" className="kpi" style={{ textDecoration: 'none', color: 'inherit' }}>
