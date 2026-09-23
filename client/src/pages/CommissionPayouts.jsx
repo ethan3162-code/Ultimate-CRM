@@ -93,7 +93,7 @@ export default function CommissionPayouts() {
               <div className="row between" style={{ marginBottom: 8 }}>
                 <div>
                   <div className="kicker">{row.salespersonUsername}</div>
-                  <p className="sub" style={{ margin: '2px 0 0' }}>{row.percent}% of gross profit, {row.jobs.length} project{row.jobs.length === 1 ? '' : 's'}</p>
+                  <p className="sub" style={{ margin: '2px 0 0' }}>{row.percent}% of projected profit, {row.jobs.length} project{row.jobs.length === 1 ? '' : 's'}</p>
                 </div>
                 <div className="mono" style={{ fontWeight: 700, fontSize: 18, color: 'var(--accent-ink)' }}>{money(row.totalCommission)}</div>
               </div>
@@ -103,7 +103,7 @@ export default function CommissionPayouts() {
                     <tr>
                       <th>Project</th>
                       <th>Paid off</th>
-                      <th style={{ textAlign: 'right' }}>Gross profit</th>
+                      <th style={{ textAlign: 'right' }}>Projected profit</th>
                       <th style={{ textAlign: 'right' }}>Commission</th>
                     </tr>
                   </thead>
@@ -115,7 +115,7 @@ export default function CommissionPayouts() {
                           {j.address && <div className="muted" style={{ fontSize: 12.5 }}>{j.address}</div>}
                         </td>
                         <td className="muted">{shortDate(j.payoutDate)}</td>
-                        <td className="mono" style={{ textAlign: 'right' }}>{money(j.grossProfitAmount)}</td>
+                        <td className="mono" style={{ textAlign: 'right' }}>{money(j.projectedProfitAmount)}</td>
                         <td className="mono" style={{ textAlign: 'right', fontWeight: 600 }}>{money(j.amount)}</td>
                       </tr>
                     ))}
