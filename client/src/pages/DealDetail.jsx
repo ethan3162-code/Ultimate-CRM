@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, timeAgo, mapLinks, splitWorkTypes, joinWorkTypes } from '../utils';
+import { money, shortDate, timeAgo, mapLinks, splitWorkTypes, joinWorkTypes, estimateTotal, estimateSubtotal } from '../utils';
 import {
   WORK_TYPES, CUSTOMER_TYPES, LEAD_STATUSES, LEAD_TYPES, JOB_TIMEFRAMES,
   METHOD_OF_ENTRY, HA_MATCH_TYPES, LEAD_SOURCES,
@@ -9,7 +9,13 @@ import {
 import AiDraftModal from '../components/AiDraftModal';
 import AppointmentModal from '../components/AppointmentModal';
 import TaskList from '../components/TaskList';
+import LineItemEditor from '../components/LineItemEditor';
+import PricingAdjustments from '../components/PricingAdjustments';
+import PaymentScheduleEditor from '../components/PaymentScheduleEditor';
+import DisplayOptions from '../components/DisplayOptions';
 import { usePermission, useSection, usePriceVisibility } from '../auth';
+
+const BLANK_ESTIMATE_ITEM = { description: '', notes: '', qty: 1, unit_price: 0 };
 
 const STAGES = ['new', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
 // A lead only becomes an Opportunity by having an appointment scheduled against it (see
@@ -53,6 +59,25 @@ export default function DealDetail() {
   const [savingContact, setSavingContact] = useState(false);
   const [showApptModal, setShowApptModal] = useState(false);
 
+  // Create Estimate, inline on the Opportunity itself (Sept 2026) — the same line-item/markup/
+  // discount/payment-schedule builder Estimates.jsx and JobDetail.jsx use, embedded directly on
+  // this page instead of sending someone off to the company-wide Estimates page just to start one.
+  // Submits through the same deal-anchored POST /api/estimates every "+ Create estimate" entry
+  // point already used (api.createEstimateForDeal) — nothing new server-side, just a closer door.
+  const [showEstimateForm, setShowEstimateForm] = useState(false);
+  const [catalog, setCatalog] = useState(null);
+  const [contracts, setContracts] = useState([]);
+  const [estimateItems, setEstimateItems] = useState([{ ...BLANK_ESTIMATE_ITEM }]);
+  const [estimateTaxRate, setEstimateTaxRate] = useState('0');
+  const [estimateMarkupPercent, setEstimateMarkupPercent] = useState('');
+  const [estimateDiscountType, setEstimateDiscountType] = useState(null);
+  const [estimateDiscountValue, setEstimateDiscountValue] = useState('');
+  const [estimateDepositPercent, setEstimateDepositPercent] = useState('');
+  const [estimatePaymentSchedule, setEstimatePaymentSchedule] = useState([]);
+  const [estimateContractId, setEstimateContractId] = useState('');
+  const [estimateDisplayOptions, setEstimateDisplayOptions] = useState({ show_rate: true, show_qty: true, show_item_total: true });
+  const [savingEstimate, setSavingEstimate] = useState(false);
+
   function blankDetails(d) {
     return {
       lead_status: d?.lead_status || 'New', lead_type: d?.lead_type || '', method_of_entry: d?.method_of_entry || '',
@@ -83,6 +108,44 @@ export default function DealDetail() {
   }
   useEffect(load, [id]);
   useEffect(() => { api.usersDirectory().then(setDirectory).catch(() => setDirectory([])); }, []);
+  useEffect(() => { api.catalogItems().then(setCatalog).catch(() => setCatalog([])); }, []);
+  useEffect(() => { api.contracts().then(setContracts).catch(() => setContracts([])); }, []);
+
+  async function submitEstimate(e) {
+    e.preventDefault();
+    const cleanItems = estimateItems.filter((it) => it.description.trim());
+    if (!cleanItems.length) return;
+    setSavingEstimate(true);
+    try {
+      await api.createEstimateForDeal({
+        deal_id: deal.id,
+        tax_rate: Number(estimateTaxRate) || 0,
+        markup_percent: Number(estimateMarkupPercent) || 0,
+        discount_type: estimateDiscountType,
+        discount_value: Number(estimateDiscountValue) || 0,
+        deposit_percent: Number(estimateDepositPercent) || 0,
+        items: cleanItems.map((it) => ({ description: it.description, notes: it.notes || '', qty: Number(it.qty) || 0, unit_price: Number(it.unit_price) || 0 })),
+        payment_schedule: estimatePaymentSchedule.filter((r) => r.name.trim()).map((r) => ({ name: r.name.trim(), percent: Number(r.percent) || 0 })),
+        contract_id: estimateContractId ? Number(estimateContractId) : null,
+        ...estimateDisplayOptions,
+      });
+      setEstimateItems([{ ...BLANK_ESTIMATE_ITEM }]);
+      setEstimateTaxRate('0');
+      setEstimateMarkupPercent('');
+      setEstimateDiscountType(null);
+      setEstimateDiscountValue('');
+      setEstimateDepositPercent('');
+      setEstimatePaymentSchedule([]);
+      setEstimateContractId('');
+      setEstimateDisplayOptions({ show_rate: true, show_qty: true, show_item_total: true });
+      setShowEstimateForm(false);
+      load();
+    } catch (err) {
+      window.alert(err.message);
+    } finally {
+      setSavingEstimate(false);
+    }
+  }
 
   async function saveOwner(e) {
     const owner_user_id = e.target.value ? Number(e.target.value) : null;
@@ -502,7 +565,20 @@ export default function DealDetail() {
             )}
           </div>
           <div className="card">
-            <h2>Project</h2>
+            <div className="row between" style={{ marginBottom: 6 }}>
+              <h2 style={{ margin: 0 }}>Project</h2>
+              {!showEstimateForm && canEdit && !(deal.jobs && deal.jobs.length > 0)
+                && (!latestEstimate || estimateStatusKey === 'declined') && (
+                <button
+                  className="btn primary sm"
+                  onClick={() => setShowEstimateForm(true)}
+                  disabled={!latestEstimate && deal.stage !== 'won'}
+                  title={!latestEstimate && deal.stage !== 'won' ? 'This opportunity needs to be Won first' : undefined}
+                >
+                  + Create estimate
+                </button>
+              )}
+            </div>
             {deal.jobs && deal.jobs.length > 0 ? (
               <div className="stack" style={{ gap: 2 }}>
                 {deal.jobs.map((j) => (
@@ -522,22 +598,58 @@ export default function DealDetail() {
                 </div>
                 <p className="sub" style={{ margin: '8px 0 10px' }}>
                   {estimateStatusKey === 'declined'
-                    ? 'The customer declined this estimate — send a new one to move this opportunity forward.'
-                    : 'A project is created automatically as soon as the customer signs this estimate — there’s nothing else to do here until then.'}
+                    ? 'The customer declined this estimate — create a new one below to move this opportunity forward.'
+                    : 'A project is created automatically as soon as the customer signs this estimate — the contract amount comes straight from its total. There’s nothing else to do here until then.'}
                 </p>
-                {estimateStatusKey === 'declined' && canEdit ? (
-                  <Link to={`/estimates?deal_id=${deal.id}`} className="btn primary sm">+ Create new estimate</Link>
-                ) : (
-                  <Link to="/estimates" className="btn sm">View estimates &rarr;</Link>
-                )}
+                <Link to="/estimates" className="btn sm">View estimates &rarr;</Link>
               </>
-            ) : deal.stage === 'won' && canEdit ? (
-              <>
-                <p className="sub" style={{ margin: '-4px 0 10px' }}>This opportunity is won — send the customer an estimate. A project is created automatically once they sign it.</p>
-                <Link to={`/estimates?deal_id=${deal.id}`} className="btn primary sm">+ Create estimate</Link>
-              </>
+            ) : deal.stage === 'won' ? (
+              <p className="sub" style={{ margin: '-4px 0 10px' }}>This opportunity is won — create an estimate below. A project is created automatically once the customer signs it, with the contract amount taken straight from the estimate's total.</p>
             ) : (
               <div className="empty">Projects start once this opportunity is won and the customer signs an estimate.</div>
+            )}
+
+            {showEstimateForm && canEdit && (
+              <form onSubmit={submitEstimate} style={{ marginTop: 12, borderTop: '1px solid var(--line-soft)', paddingTop: 12 }}>
+                <LineItemEditor
+                  items={estimateItems} setItems={setEstimateItems} taxRate={estimateTaxRate} setTaxRate={setEstimateTaxRate}
+                  catalog={(catalog || []).filter((c) => !c.material_key)}
+                  markupPercent={estimateMarkupPercent} discountType={estimateDiscountType} discountValue={estimateDiscountValue}
+                />
+                <PricingAdjustments
+                  subtotal={estimateSubtotal(estimateItems)}
+                  markupPercent={estimateMarkupPercent} setMarkupPercent={setEstimateMarkupPercent}
+                  discountType={estimateDiscountType} setDiscountType={setEstimateDiscountType}
+                  discountValue={estimateDiscountValue} setDiscountValue={setEstimateDiscountValue}
+                />
+                <p className="sub" style={{ margin: '4px 0 10px' }}>
+                  Projected cost (before markup): <strong>{money(estimateSubtotal(estimateItems))}</strong>
+                  {' · '}Projected profit (the markup above): <strong>{money(estimateSubtotal(estimateItems) * ((Number(estimateMarkupPercent) || 0) / 100))}</strong>
+                  {' — '}both feed the project's billing and commission once this becomes a project.
+                </p>
+                <div className="field" style={{ margin: '10px 0', maxWidth: 200 }}>
+                  <label>Deposit required upfront (%)</label>
+                  <input type="number" min="0" max="100" placeholder="e.g. 30" value={estimateDepositPercent} onChange={(e) => setEstimateDepositPercent(e.target.value)} />
+                </div>
+                <PaymentScheduleEditor
+                  rows={estimatePaymentSchedule} setRows={setEstimatePaymentSchedule}
+                  total={estimateTotal(estimateItems, estimateTaxRate, estimateMarkupPercent, estimateDiscountType, estimateDiscountValue)}
+                />
+                <div className="field" style={{ margin: '10px 0', maxWidth: 320 }}>
+                  <label>Contract <span className="muted" style={{ fontWeight: 400 }}>— terms &amp; conditions this estimate carries</span></label>
+                  <select value={estimateContractId} onChange={(e) => setEstimateContractId(e.target.value)}>
+                    <option value="">— default for customer type —</option>
+                    {contracts.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <DisplayOptions value={estimateDisplayOptions} onChange={setEstimateDisplayOptions} />
+                <div className="row" style={{ gap: 8, marginTop: 10 }}>
+                  <button className="btn primary sm" type="submit" disabled={savingEstimate}>{savingEstimate ? 'Saving…' : 'Save estimate'}</button>
+                  <button className="btn subtle sm" type="button" onClick={() => setShowEstimateForm(false)}>Cancel</button>
+                </div>
+              </form>
             )}
           </div>
         </div>
