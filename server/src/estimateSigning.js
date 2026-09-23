@@ -27,7 +27,7 @@ function signEstimateRecord(estimate, { signed_name, signature_data_url }) {
     const deal = db.prepare(`SELECT * FROM deals WHERE id = ?`).get(estimate.deal_id);
     if (deal) {
       const { address } = resolveEstimateParty(estimate);
-      jobId = createProjectFromDeal(deal, address, 'pending_schedule');
+      jobId = createProjectFromDeal(deal, estimate.total, address, 'pending_schedule');
       db.prepare(`UPDATE estimates SET job_id = ? WHERE id = ?`).run(jobId, estimate.id);
       const freshEstimate = getEstimateFull(estimate.id);
       createInvoiceFromEstimate(freshEstimate, jobId);
