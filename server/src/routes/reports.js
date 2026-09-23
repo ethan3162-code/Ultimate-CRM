@@ -22,12 +22,25 @@ function redactReportsMoney(r) {
       ...r.jobProfitability, totalRevenue: null, totalCost: null, totalProfit: null,
       byJob: r.jobProfitability.byJob.map((j) => ({ ...j, revenue: null, cost: null, profit: null })),
     },
-    salesSummary: { ...r.salesSummary, totalSales: null, avgJobSize: null },
+    salesSummary: {
+      ...r.salesSummary, totalSales: null, avgJobSize: null,
+      deals: r.salesSummary.deals.map((d) => ({ ...d, amount: null })),
+    },
     salesBySource: r.salesBySource.map((s) => ({ ...s, amount: null })),
     salesByEstimator: r.salesByEstimator.map((s) => ({ ...s, amount: null })),
     salesByCity: r.salesByCity.map((s) => ({ ...s, amount: null })),
     salesByServiceType: r.salesByServiceType.map((s) => ({ ...s, amount: null })),
     salesByType: r.salesByType.map((s) => ({ ...s, amount: null })),
+    balanceOwedByJob: r.balanceOwedByJob.map((j) => ({ ...j, amount: null })),
+    totalBalanceOwed: null,
+    openPipeline: {
+      ...r.openPipeline, total: null,
+      rows: r.openPipeline.rows.map((d) => ({ ...d, amount: null })),
+    },
+    paymentsThisMonth: {
+      ...r.paymentsThisMonth, total: null,
+      rows: r.paymentsThisMonth.rows.map((j) => ({ ...j, amount: null })),
+    },
     price_hidden: true,
   };
 }
@@ -183,6 +196,23 @@ function buildReportsPayload(req) {
   const closeRate = closedDealCount > 0 ? +((wonDeals.length / closedDealCount) * 100).toFixed(1) : null;
   const avgJobSize = wonDeals.length > 0 ? +(totalSales / wonDeals.length).toFixed(2) : 0;
   const appointmentsBooked = db.prepare(`SELECT COUNT(*) c FROM appointments`).get().c;
+
+  // Customer display name for a job (company name, falling back to the linked contact's name)
+  // — same resolution the Dashboard's own "Top customers" card already does, pulled out here so
+  // the new drill-down report rows below (balance owed, payments this month) can reuse it rather
+  // than re-deriving it per row.
+  function customerNameForJob(jobId) {
+    const job = db.prepare(`SELECT title, company_id, contact_id FROM jobs WHERE id = ?`).get(jobId);
+    if (!job) return { title: `Job #${jobId}`, customer: null };
+    let customer = null;
+    if (job.company_id) customer = db.prepare(`SELECT name FROM companies WHERE id = ?`).get(job.company_id)?.name || null;
+    if (!customer && job.contact_id) {
+      const c = db.prepare(`SELECT first_name, last_name FROM contacts WHERE id = ?`).get(job.contact_id);
+      if (c) customer = `${c.first_name} ${c.last_name}`.trim();
+    }
+    return { title: job.title, customer };
+  }
+
   const salesSummary = {
     totalSales: +totalSales.toFixed(2), avgJobSize, jobsWon: wonDeals.length, closeRate, appointmentsBooked,
   };
@@ -196,11 +226,19 @@ function buildReportsPayload(req) {
   }
 
   const dealRows = db.prepare(`
-    SELECT d.*, c.address AS contact_address, co.address AS company_address
+    SELECT d.*, c.first_name, c.last_name, c.address AS contact_address, co.name AS company_name, co.address AS company_address
     FROM deals d
     LEFT JOIN contacts c ON c.id = d.contact_id
     LEFT JOIN companies co ON co.id = d.company_id
   `).all().map((d) => ({ ...d, resolved_address: d.contact_address || d.company_address || null }));
+
+  // Display name for a deal's customer — company name, falling back to the linked contact's
+  // name — reused below for the "which project" drill-down rows (Sales, Open pipeline).
+  function dealCustomerName(d) {
+    if (d.company_name) return d.company_name;
+    if (d.first_name || d.last_name) return `${d.first_name || ''} ${d.last_name || ''}`.trim();
+    return null;
+  }
 
   function groupSum(rows, keyFn, valueFn) {
     const map = new Map();
@@ -241,6 +279,74 @@ function buildReportsPayload(req) {
   const salesByServiceType = groupSum(wonDealRows, (d) => d.work_type, (d) => d.value);
   const salesByType = groupSum(wonDealRows, (d) => d.customer_type, (d) => d.value);
 
+  // The individual won deals behind the Sales summary number — "what project got sold" — so
+  // the Sales report page can drill down into the actual opportunities, not just the total.
+  salesSummary.deals = wonDealRows
+    .map((d) => ({ id: d.id, title: d.title, customer: dealCustomerName(d), amount: d.value, link: `/pipeline/${d.id}` }))
+    .sort((a, b) => b.amount - a.amount);
+
+  // --- Open pipeline: every still-open opportunity, by value — "what's in the pipeline"
+  // drill-down behind the Dashboard's Open pipeline tile (matches routes/dashboard.js's own
+  // openPipelineValue exactly: every deal not yet won or lost).
+  const openDealRows = dealRows.filter((d) => d.stage !== 'won' && d.stage !== 'lost');
+  const openPipeline = {
+    total: +openDealRows.reduce((s, d) => s + d.value, 0).toFixed(2),
+    rows: openDealRows
+      .map((d) => ({ id: d.id, title: d.title, customer: dealCustomerName(d), amount: d.value, link: `/pipeline/${d.id}` }))
+      .sort((a, b) => b.amount - a.amount),
+  };
+
+  // --- Balance owed: unpaid invoice balance, per project — "what project owed money" drill-down
+  // behind the Dashboard's Balance owed tile (matches routes/dashboard.js's own unpaidTotal
+  // exactly: every invoice not yet fully paid, from the same openInvoices list the Invoice
+  // aging report above already computed).
+  const balanceByJob = new Map();
+  for (const inv of openInvoices) {
+    if (!inv.job_id) continue;
+    balanceByJob.set(inv.job_id, (balanceByJob.get(inv.job_id) || 0) + inv.balance);
+  }
+  const balanceOwedByJob = [...balanceByJob.entries()]
+    .map(([jobId, amount]) => {
+      const { title, customer } = customerNameForJob(jobId);
+      return { id: jobId, title, customer, amount: +amount.toFixed(2), link: `/jobs/${jobId}` };
+    })
+    .sort((a, b) => b.amount - a.amount);
+  const totalBalanceOwed = +[...balanceByJob.values()].reduce((s, v) => s + v, 0).toFixed(2);
+
+  // --- Payments in this month, per project — matches routes/dashboard.js's own paidThisMonth.
+  const paidThisMonthKey = monthKey(new Date());
+  const paymentsThisMonthRows = db.prepare(`
+    SELECT p.amount, p.paid_at, i.job_id
+    FROM payments p LEFT JOIN invoices i ON i.id = p.invoice_id
+    WHERE p.paid_at IS NOT NULL AND substr(p.paid_at, 1, 7) = ?
+  `).all(paidThisMonthKey);
+  const paidByJobThisMonth = new Map();
+  for (const p of paymentsThisMonthRows) {
+    if (!p.job_id) continue;
+    paidByJobThisMonth.set(p.job_id, (paidByJobThisMonth.get(p.job_id) || 0) + p.amount);
+  }
+  const paymentsThisMonth = {
+    total: +[...paidByJobThisMonth.values()].reduce((s, v) => s + v, 0).toFixed(2),
+    rows: [...paidByJobThisMonth.entries()]
+      .map(([jobId, amount]) => {
+        const { title, customer } = customerNameForJob(jobId);
+        return { id: jobId, title, customer, amount: +amount.toFixed(2), link: `/jobs/${jobId}` };
+      })
+      .sort((a, b) => b.amount - a.amount),
+  };
+
+  // --- Jobs in motion: every job currently scheduled or in progress — matches
+  // routes/dashboard.js's own jobsInProgress + jobsScheduled count. No dollar figure of its
+  // own, so each row shows its status instead of an amount.
+  const JOB_IN_MOTION_STATUS_LABEL = { in_progress: 'In progress', scheduled: 'Scheduled' };
+  const jobsInMotion = {
+    rows: db.prepare(`SELECT id, title, status, company_id, contact_id FROM jobs WHERE status IN ('in_progress','scheduled') ORDER BY created_at DESC`).all()
+      .map((j) => {
+        const { customer } = customerNameForJob(j.id);
+        return { id: j.id, title: j.title, customer, right: JOB_IN_MOTION_STATUS_LABEL[j.status] || j.status, link: `/jobs/${j.id}` };
+      }),
+  };
+
   const closedDealRows = dealRows.filter((d) => d.stage === 'won' || d.stage === 'lost');
   const closeRateByPerson = closeRateGroup(closedDealRows, (d) => d.rep);
   const closeRateBySource = closeRateGroup(closedDealRows, (d) => d.source);
@@ -271,6 +377,7 @@ function buildReportsPayload(req) {
     revenueByMonth, jobsByMonth, pipelineByStage, jobsByStatus, invoiceAging, topCustomers, revenueForecast, undatedForecastValue, jobProfitability,
     salesSummary, salesBySource, salesByEstimator, salesByCity, salesByServiceType, salesByType,
     closeRateByPerson, closeRateBySource, leadsBySource, leadsThisMonthBySource, bookingRateBySource,
+    balanceOwedByJob, totalBalanceOwed, openPipeline, paymentsThisMonth, jobsInMotion,
   };
 }
 
