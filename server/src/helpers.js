@@ -195,14 +195,14 @@ function redactJobMoney(job) {
       totalCharges: null, grossProfitAmount: null, grossProfitPercent: null, laborCost: null, laborPaid: null,
       laborBalance: null, laborCostPercent: null, allCustomerPayments: null, customerBalance: null,
       materialsCost: null, billable: null, notBillable: null,
-      projectedProfitAmount: null, projectedProfitPercent: null,
+      projectedProfitAmount: null, projectedProfitPercent: null, projectedCostAmount: null,
     },
     estimates: (job.estimates || []).map(redactEstimateMoney),
     invoices: (job.invoices || []).map(redactInvoiceMoney),
     attendance: (job.attendance || []).map((a) => ({ ...a, daily_rate: null })),
     // No general price visibility means no commission figures either — commission is derived
-    // straight from gross profit, so showing it would leak a dollar figure through the back door.
-    commission: job.commission && { ...job.commission, grossProfitAmount: null, amount: null },
+    // straight from projected profit, so showing it would leak a dollar figure through the back door.
+    commission: job.commission && { ...job.commission, projectedProfitAmount: null, amount: null },
   };
 }
 
@@ -262,22 +262,26 @@ function getJobCosting(id, { estimates, invoices } = {}) {
 // well before any real cost is logged against the job — so early on, when costing.cost is still
 // $0 and grossProfitAmount below would misleadingly show the *entire* contract as profit, there's
 // still a meaningful number to look at. It's read straight off the estimate's own markup: the
-// line-item subtotal stands in for the estimator's assumed cost, and markup_amount is the profit
+// line-item subtotal stands in for the estimator's assumed cost (returned here as `cost`, and
+// surfaced on the job as "Projected cost" — see getJobBilling), and markup_amount is the profit
 // they built in on top of it — no separate cost entry required. Prefers the approved estimate(s)
 // (matching getJobCosting's revenue-basis preference) and falls back to the most recent draft so
 // there's still a number while an estimate is being put together. Percent is against totalCharges
 // once there's a real contract amount to measure against; before that, against the estimate's own
-// total, since totalCharges is still $0.
+// total, since totalCharges is still $0. This is also the basis salesman commission is computed
+// from (see getJobCommission) — commission is meant to reflect what the deal was estimated to
+// earn, recomputed the instant the estimate/markup changes, not a snapshot taken at signing.
 function getProjectedProfit(estimates, totalCharges) {
   const ests = estimates || [];
   const approved = ests.filter((e) => e.status === 'approved');
   const basis = approved.length > 0 ? 'approved' : (ests.length > 0 ? 'draft' : 'none');
   const relevant = approved.length > 0 ? approved : (ests.length > 0 ? [ests[ests.length - 1]] : []);
   const amount = relevant.reduce((s, e) => s + (Number(e.markup_amount) || 0), 0);
+  const cost = relevant.reduce((s, e) => s + (Number(e.subtotal) || 0), 0);
   const relevantTotal = relevant.reduce((s, e) => s + (Number(e.total) || 0), 0);
   const denominator = totalCharges > 0 ? totalCharges : relevantTotal;
   const percent = denominator > 0 ? +((amount / denominator) * 100).toFixed(1) : null;
-  return { amount: +amount.toFixed(2), percent, basis };
+  return { amount: +amount.toFixed(2), percent, basis, cost: +cost.toFixed(2) };
 }
 
 // Project billing (Sept 2026): the "what did we contract for, and what's the gross profit"
@@ -313,6 +317,11 @@ function getJobBilling(job, costing, invoices, estimates) {
     projectedProfitAmount: projectedProfit.amount,
     projectedProfitPercent: projectedProfit.percent,
     projectedProfitBasis: projectedProfit.basis,
+    // The estimate's own pre-markup subtotal (Sept 2026) — what the job was budgeted to cost
+    // before the estimator's markup, straight from the same approved/draft estimate projectedProfit
+    // is based on. Lets a job show a budget-vs-actual comparison against costing.cost (real logged
+    // expenses) from the moment an estimate exists, long before anything's actually been spent.
+    projectedCostAmount: projectedProfit.cost,
     laborCost,
     laborPaid: +laborPaid.toFixed(2),
     laborBalance,
@@ -365,11 +374,15 @@ function getJobFull(id) {
   };
 }
 
-// Salesman commission (Sept 2026): the project's own salesperson_user_id (set from the
-// originating opportunity's owner when the project is created — see createProjectFromDeal —
-// but independently editable from the Project billing section) earns a percentage of gross
-// profit — not the total contract value — so a job that only broke even, or lost money, never
-// pays out a commission it didn't actually earn. The rate itself lives on the user
+// Salesman commission (Sept 2026, re-based off projected profit later that same month): the
+// project's own salesperson_user_id (set from the originating opportunity's owner when the
+// project is created — see createProjectFromDeal — but independently editable from the Project
+// billing section) earns a percentage of the job's projected profit — the same estimate-markup
+// figure billing.projectedProfitAmount shows (see getProjectedProfit) — rather than gross profit
+// off real logged costs. That makes commission available and correct from the moment an estimate
+// exists, and it recomputes automatically any time the projected profit changes (a line item, the
+// markup percent, or which estimate is approved) since nothing here is stored — it's derived at
+// read time same as every other billing figure. The rate itself lives on the user
 // (users.commission_percent, admin-set from Users & permissions), not on the job, since
 // "configurable per salesperson" means one rate that applies to everything that person is
 // credited with, not something re-typed per project. Deliberately keyed off salesperson_user_id
@@ -378,13 +391,14 @@ function getJobFull(id) {
 function getJobCommission(job, billing, salesperson) {
   if (!job.salesperson_user_id || !salesperson) return null;
   const percent = Number(salesperson.commission_percent) || 0;
-  const grossProfitAmount = billing.grossProfitAmount;
-  const amount = +((grossProfitAmount * percent) / 100).toFixed(2);
+  const projectedProfitAmount = billing.projectedProfitAmount;
+  const amount = +((projectedProfitAmount * percent) / 100).toFixed(2);
   return {
     ownerUserId: job.salesperson_user_id,
     ownerUsername: salesperson.username,
     percent,
-    grossProfitAmount,
+    projectedProfitAmount,
+    projectedProfitBasis: billing.projectedProfitBasis,
     amount,
   };
 }
@@ -430,7 +444,7 @@ function getCommissionPayouts(periodStart, periodEnd) {
     rows.push({
       jobId: job.id, title: job.title, address: job.address, payoutDate: payoutDay,
       salespersonUserId: salesperson.id, salespersonUsername: salesperson.username,
-      percent: commission.percent, grossProfitAmount: commission.grossProfitAmount, amount: commission.amount,
+      percent: commission.percent, projectedProfitAmount: commission.projectedProfitAmount, amount: commission.amount,
     });
   }
   return rows.sort((a, b) => (a.payoutDate < b.payoutDate ? -1 : a.payoutDate > b.payoutDate ? 1 : 0));
@@ -549,8 +563,13 @@ function createInvoiceFromEstimate(estimate, jobId, { dueDate } = {}) {
 // route with no req/res to hand to that Express handler. New status is 'pending_schedule' (not
 // the manual flow's 'accepted') per the requested pipeline: signed estimate -> invoice + project,
 // landing in the schedule queue rather than already-accepted.
-function createProjectFromDeal(deal, address, status) {
-  const contractAmount = Number(deal.value) || 0;
+// Project billing's contract amount (Sept 2026) seeds from the signed estimate's own total —
+// what the customer actually agreed to pay, markup included — rather than the deal's ballpark
+// `value` field; that stays as a fallback only for the rare case a deal has no estimate total to
+// hand in (shouldn't happen on this call path, but keeps a $0 signed estimate from ever silently
+// producing a $0 contract when the deal itself has a value on file).
+function createProjectFromDeal(deal, estimateTotal, address, status) {
+  const contractAmount = Number(estimateTotal) || Number(deal.value) || 0;
   const result = db.prepare(`
     INSERT INTO jobs (
       contact_id, company_id, deal_id, title, status, address,
