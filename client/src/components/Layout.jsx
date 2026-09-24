@@ -160,7 +160,11 @@ export default function Layout() {
         )}
       </aside>
       <div className="content-col">
-        <div className="global-search-bar"><GlobalSearch /></div>
+        <div className="global-search-bar">
+          <span aria-hidden="true" />
+          <GlobalSearch />
+          {user && <span className="global-search-bar-user" title={user.username}>{user.username}</span>}
+        </div>
         <main className="content">
           <Outlet />
         </main>
