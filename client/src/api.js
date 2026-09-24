@@ -40,6 +40,7 @@ export const api = {
   // Contacts/Leads/Opportunities (unlike api.users(), any signed-in role can call this).
   usersDirectory: () => request('/directory/users'),
   pendingEstimateApprovals: () => request('/directory/pending-approvals'),
+  myPendingEstimates: () => request('/directory/my-pending-estimates'),
 
   // Internal team chat.
   chatChannels: () => request('/chat/channels'),
