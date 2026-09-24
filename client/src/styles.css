@@ -725,13 +725,23 @@ table.list tbody tr.row-hot:hover td, table.list tbody tr.row-warm:hover td { ba
    centered; on mobile it lives right in the topbar next to the hamburger. Same component, same
    dropdown-of-results behavior, either place. */
 .content-col { display: flex; flex-direction: column; min-width: 0; }
+/* Sept 2026 — a third column was added at the right so the signed-in user's name shows "across
+   from" the search bar rather than only at the bottom of the sidebar; the empty left column keeps
+   the search box visually centered exactly as it was before. */
 .global-search-bar {
   position: sticky; top: 0; z-index: 25;
-  display: flex; justify-content: center;
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; gap: 12px;
   background: var(--paper-raised); border-bottom: 1px solid var(--line);
   padding: 12px clamp(18px, 3vw, 40px);
 }
 @media (max-width: 820px) { .global-search-bar { display: none; } }
+
+.global-search-bar-user {
+  justify-self: end;
+  font-weight: 600; font-size: 13px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
 
 .topbar-search { flex: 1; min-width: 0; }
 
