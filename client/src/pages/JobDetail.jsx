@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, timeAgo, splitWorkTypes, estimateTotal, estimateSubtotal } from '../utils';
+import { money, shortDate, dateTime, splitWorkTypes, estimateTotal, estimateSubtotal } from '../utils';
 import { EXPENSE_CATEGORIES, PROJECT_STATUSES, PROJECT_STATUS_LABEL } from '../constants';
 import LineItemEditor from '../components/LineItemEditor';
 import PricingAdjustments from '../components/PricingAdjustments';
@@ -1015,7 +1015,7 @@ export default function JobDetail() {
                   <div className="row between"><span className="muted">Labor paid</span><span className="mono">{money(job.billing.laborPaid)}</span></div>
                   <div className="row between"><span className="muted">Labor balance</span><span className="mono">{money(job.billing.laborBalance)}</span></div>
                   <div className="row between"><span className="muted">Labor cost %</span><span className="mono">{job.billing.laborCostPercent === null ? '—' : `${job.billing.laborCostPercent}%`}</span></div>
-                  <div className="row between"><span className="muted">Last updated</span><span>{job.updated_at ? timeAgo(job.updated_at) : '—'}</span></div>
+                  <div className="row between"><span className="muted">Last updated</span><span>{job.updated_at ? dateTime(job.updated_at) : '—'}</span></div>
                 </div>
                 {job.commission && (
                   <>
@@ -1272,7 +1272,7 @@ export default function JobDetail() {
                 {job.activities.map((a) => (
                   <div className="timeline-item" key={a.id}>
                     <div>
-                      <div className="when">{timeAgo(a.created_at)}</div>
+                      <div className="when">{dateTime(a.created_at)}</div>
                       {a.created_by_username && <div className="who">by {a.created_by_username}</div>}
                     </div>
                     <div className="body"><span className="type-tag">{a.type.replace('_', ' ')}</span>{a.note}</div>
