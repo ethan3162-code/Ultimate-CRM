@@ -254,23 +254,37 @@ export default function Dashboard() {
             )}
           </Link>
 
-          <Link to="/reports/system/leads-by-source-month" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <div className="card">
             <h2>Leads created this month, by source</h2>
             {reports.leadsThisMonthBySource.length === 0 ? (
               <div className="empty">No leads yet this month.</div>
             ) : (
-              <BarList data={reports.leadsThisMonthBySource} valueKey="count" labelKey="label" formatValue={(v) => v} />
+              <>
+                <BarList data={reports.leadsThisMonthBySource.slice(0, 5)} valueKey="count" labelKey="label" formatValue={(v) => v} />
+                {reports.leadsThisMonthBySource.length > 5 && (
+                  <div style={{ marginTop: 12 }}>
+                    <Link to="/reports/system/leads-by-source-month" className="btn sm subtle">See full list ({reports.leadsThisMonthBySource.length}) →</Link>
+                  </div>
+                )}
+              </>
             )}
-          </Link>
+          </div>
 
-          <Link to="/reports/system/leads-by-source-alltime" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <div className="card">
             <h2>Leads by source (all-time)</h2>
             {reports.leadsBySource.length === 0 ? (
               <div className="empty">No leads yet.</div>
             ) : (
-              <BarList data={reports.leadsBySource} valueKey="count" labelKey="label" formatValue={(v) => v} />
+              <>
+                <BarList data={reports.leadsBySource.slice(0, 5)} valueKey="count" labelKey="label" formatValue={(v) => v} />
+                {reports.leadsBySource.length > 5 && (
+                  <div style={{ marginTop: 12 }}>
+                    <Link to="/reports/system/leads-by-source-alltime" className="btn sm subtle">See full list ({reports.leadsBySource.length}) →</Link>
+                  </div>
+                )}
+              </>
             )}
-          </Link>
+          </div>
 
           <Link to="/reports/system/booking-rate-by-source" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
             <h2>Booking rate by source</h2>
