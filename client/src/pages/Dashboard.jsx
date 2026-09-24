@@ -2,27 +2,29 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { money, timeAgo } from '../utils';
-import FilterBar from '../components/FilterBar';
+import { TrendChart, ColumnChart, BarList, DonutChart } from '../components/charts';
 
 const STAGE_LABELS = { new: 'New', qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
+const AGING_COLORS = ['var(--accent)', 'var(--amber)', 'var(--amber)', 'var(--red)'];
 const TASK_LINK = { contact: '/contacts', deal: '/pipeline', job: '/jobs', ticket: '/tickets' };
 const OPP_STAGES = ['qualified', 'proposal', 'negotiation', 'won', 'lost'];
-const REPORT_CATEGORY_ORDER = ['Financial', 'Sales', 'Leads', 'Jobs'];
-
-function groupReportsByCategory(list) {
-  const byCategory = new Map();
-  for (const r of list) {
-    if (!byCategory.has(r.category)) byCategory.set(r.category, []);
-    byCategory.get(r.category).push(r);
-  }
-  const ordered = REPORT_CATEGORY_ORDER.filter((c) => byCategory.has(c)).map((c) => [c, byCategory.get(c)]);
-  for (const [c, rows] of byCategory) if (!REPORT_CATEGORY_ORDER.includes(c)) ordered.push([c, rows]);
-  return ordered;
-}
 
 function attentionCount(insights) {
   if (!insights) return 0;
   return insights.stalledDeals.length + insights.overdueInvoices.length + insights.overdueTickets.length + insights.staleJobs.length;
+}
+
+// A flat, most-urgent-first preview for the condensed "Needs attention" card — just enough to
+// glance at without opening the full list (see NeedsAttention.jsx for that). Same four rules,
+// same order they've always shown in, just capped to 3 total instead of every one of them.
+function attentionPreview(insights) {
+  if (!insights) return [];
+  return [
+    ...insights.stalledDeals.map((d) => ({ key: `deal-${d.id}`, to: `/pipeline/${d.id}`, label: d.title, badge: `${d.idle_days}d idle`, color: 'var(--amber)' })),
+    ...insights.overdueInvoices.map((inv) => ({ key: `inv-${inv.id}`, to: `/jobs/${inv.job_id}`, label: `${inv.number} · ${money(inv.balance)}`, badge: `${inv.days_overdue}d late`, color: 'var(--red)' })),
+    ...insights.overdueTickets.map((t) => ({ key: `tkt-${t.id}`, to: `/tickets/${t.id}`, label: t.subject, badge: `${t.hours_overdue}h over`, color: 'var(--red)' })),
+    ...insights.staleJobs.map((j) => ({ key: `job-${j.id}`, to: `/jobs/${j.id}`, label: j.title, badge: `${j.days_past}d past`, color: 'var(--amber)' })),
+  ].slice(0, 3);
 }
 
 export default function Dashboard() {
@@ -30,35 +32,18 @@ export default function Dashboard() {
   const [insights, setInsights] = useState(null);
   const [reports, setReports] = useState(null);
   const [tasks, setTasks] = useState(null);
-  const [customReports, setCustomReports] = useState(null);
-  const [builtinReportsList, setBuiltinReportsList] = useState(null);
-  const [attentionFilter, setAttentionFilter] = useState('');
 
   useEffect(() => {
     api.dashboard().then(setData);
     api.insights().then(setInsights);
     api.reports().then(setReports);
     api.tasks({ open: '1' }).then(setTasks);
-    api.customReports(5).then(setCustomReports).catch(() => setCustomReports([]));
-    api.builtinReports().then(setBuiltinReportsList).catch(() => setBuiltinReportsList([]));
   }, []);
 
   if (!data) return <div className="loading">Loading dashboard…</div>;
 
   const maxStageValue = Math.max(...OPP_STAGES.map((s) => data.stageCounts[s].v), 1);
   const newLeadsCount = data.stageCounts.new.c;
-
-  // Each attention rule surfaces a different record type, so "filter by type" here means
-  // narrowing to one rule's group rather than a shared field — same instant, clear-in-one-click
-  // pattern as the record-list filter bars, just scoped to this one card.
-  const attentionTypeDefs = insights ? [
-    { key: 'type', label: 'Type', options: [
-      insights.stalledDeals.length > 0 && { value: 'stalled', label: 'Stalled deals' },
-      insights.overdueInvoices.length > 0 && { value: 'invoices', label: 'Overdue invoices' },
-      insights.overdueTickets.length > 0 && { value: 'tickets', label: 'SLA breached' },
-      insights.staleJobs.length > 0 && { value: 'jobs', label: 'Jobs past scheduled date' },
-    ].filter(Boolean) },
-  ].filter((f) => f.options.length > 1) : [];
 
   return (
     <>
@@ -125,58 +110,16 @@ export default function Dashboard() {
         <div className="card" style={{ marginBottom: 18 }}>
           <h2>Needs attention <span className="muted" style={{ fontWeight: 400, fontSize: 13 }}>({attentionCount(insights)})</span></h2>
           <p className="sub" style={{ margin: '-4px 0 12px' }}>Deterministic rules over your own data — no model call, nothing hidden: stalled deals, overdue invoices, SLA-breached tickets, and jobs past their scheduled date.</p>
-          {attentionTypeDefs.length > 0 && (
-            <FilterBar
-              filters={attentionTypeDefs} values={{ type: attentionFilter }}
-              onChange={(_key, value) => setAttentionFilter(value)}
-              onClear={() => setAttentionFilter('')}
-            />
-          )}
-          <div className="attention-grid">
-            {(!attentionFilter || attentionFilter === 'stalled') && insights.stalledDeals.length > 0 && (
-              <div>
-                <div className="kicker">Stalled deals</div>
-                {insights.stalledDeals.map((d) => (
-                  <Link key={d.id} to={`/pipeline/${d.id}`} className="attention-row">
-                    <span>{d.title}</span>
-                    <span className="mono" style={{ color: 'var(--amber)' }}>{d.idle_days}d idle</span>
-                  </Link>
-                ))}
-              </div>
-            )}
-            {(!attentionFilter || attentionFilter === 'invoices') && insights.overdueInvoices.length > 0 && (
-              <div>
-                <div className="kicker">Overdue invoices</div>
-                {insights.overdueInvoices.map((inv) => (
-                  <Link key={inv.id} to={`/jobs/${inv.job_id}`} className="attention-row">
-                    <span>{inv.number} · {money(inv.balance)}</span>
-                    <span className="mono" style={{ color: 'var(--red)' }}>{inv.days_overdue}d late</span>
-                  </Link>
-                ))}
-              </div>
-            )}
-            {(!attentionFilter || attentionFilter === 'tickets') && insights.overdueTickets.length > 0 && (
-              <div>
-                <div className="kicker">SLA breached</div>
-                {insights.overdueTickets.map((t) => (
-                  <Link key={t.id} to={`/tickets/${t.id}`} className="attention-row">
-                    <span>{t.subject}</span>
-                    <span className="mono" style={{ color: 'var(--red)' }}>{t.hours_overdue}h over</span>
-                  </Link>
-                ))}
-              </div>
-            )}
-            {(!attentionFilter || attentionFilter === 'jobs') && insights.staleJobs.length > 0 && (
-              <div>
-                <div className="kicker">Jobs past scheduled date</div>
-                {insights.staleJobs.map((j) => (
-                  <Link key={j.id} to={`/jobs/${j.id}`} className="attention-row">
-                    <span>{j.title}</span>
-                    <span className="mono" style={{ color: 'var(--amber)' }}>{j.days_past}d past</span>
-                  </Link>
-                ))}
-              </div>
-            )}
+          <div className="stack" style={{ gap: 2 }}>
+            {attentionPreview(insights).map((item) => (
+              <Link key={item.key} to={item.to} className="attention-row">
+                <span>{item.label}</span>
+                <span className="mono" style={{ color: item.color }}>{item.badge}</span>
+              </Link>
+            ))}
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <Link to="/insights" className="btn sm subtle">See full list ({attentionCount(insights)}) →</Link>
           </div>
         </div>
       )}
@@ -247,60 +190,189 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 28, marginBottom: 18 }}>
-        <div className="row between" style={{ alignItems: 'flex-start' }}>
-          <div>
-            <h2 style={{ marginBottom: 2 }}>Your reports</h2>
-            <p className="sub" style={{ margin: 0 }}>Build your own report on any data below — pick what to group by, and keep adjusting it any time.</p>
-          </div>
-          <Link to="/reports" className="btn sm">+ New report</Link>
+      <div className="page-head" style={{ marginTop: 28 }}>
+        <div>
+          <h2 style={{ margin: 0 }}>Reports</h2>
+          <p className="sub" style={{ margin: '2px 0 0' }}>Trends across the last 6 months, straight from your jobs, deals, and invoices. Click any chart to open its full report page.</p>
         </div>
-        {customReports === null ? (
-          <div className="loading" style={{ marginTop: 10 }}>Loading…</div>
-        ) : customReports.length === 0 ? (
-          <div className="empty" style={{ marginTop: 10 }}>No custom reports yet — click "+ New report" to build one.</div>
-        ) : (
-          <div className="stack" style={{ gap: 2, marginTop: 10 }}>
-            {customReports.map((r) => (
-              <Link key={r.id} to={`/reports/${r.id}`} className="attention-row">
-                <span>{r.name}</span>
-                <span className="muted" style={{ fontSize: 12.5, textTransform: 'capitalize' }}>{r.data_source}</span>
-              </Link>
-            ))}
-            <div style={{ marginTop: 8 }}>
-              <Link to="/reports" className="btn sm subtle">View all reports →</Link>
-            </div>
-          </div>
-        )}
+        <Link to="/reports" className="btn sm subtle">All reports →</Link>
       </div>
 
-      <div className="card" style={{ marginTop: 28 }}>
-        <div className="row between" style={{ alignItems: 'flex-start' }}>
-          <div>
-            <h2 style={{ marginBottom: 2 }}>Reports</h2>
-            <p className="sub" style={{ margin: 0 }}>The standard set, built in — click any one to open its full chart. Trends cover the last 6 months, straight from your jobs, deals, and invoices.</p>
-          </div>
-          <Link to="/reports" className="btn sm subtle">All reports →</Link>
-        </div>
-        {builtinReportsList === null ? (
-          <div className="loading" style={{ marginTop: 10 }}>Loading…</div>
-        ) : (
-          <div style={{ marginTop: 10, display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
-            {groupReportsByCategory(builtinReportsList).map(([category, rows]) => (
-              <div key={category}>
-                <div className="kicker">{category}</div>
-                <div className="stack" style={{ gap: 2 }}>
-                  {rows.map((r) => (
-                    <Link key={r.key} to={`/reports/system/${r.key}`} className="attention-row">
-                      <span>{r.title}</span>
-                    </Link>
-                  ))}
-                </div>
+      {!reports ? (
+        <div className="loading">Loading reports…</div>
+      ) : (
+        <div className="reports-grid">
+          <Link to="/reports/system/revenue-by-month" className="card span-2" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="report-card-head">
+              <h2>Revenue collected</h2>
+              <div className="report-card-total">{reports.price_hidden ? money(null) : money(reports.revenueByMonth.reduce((s, m) => s + m.total, 0))}</div>
+            </div>
+            {reports.price_hidden ? <p className="sub">🔒 Prices are hidden for your account.</p> : <TrendChart data={reports.revenueByMonth} valueKey="total" labelKey="month" formatValue={money} />}
+          </Link>
+
+          <Link to="/reports/system/revenue-forecast" className="card span-2" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="report-card-head">
+              <h2>Revenue forecast</h2>
+              <div className="report-card-total">{reports.price_hidden ? money(null) : money(reports.revenueForecast.reduce((s, m) => s + m.total, 0))}</div>
+            </div>
+            <p className="sub" style={{ margin: '-4px 0 10px' }}>Open deals' value × probability, by expected close month — a weighted look at what's likely coming in next, not a guarantee.</p>
+            {reports.price_hidden ? <p className="sub">🔒 Prices are hidden for your account.</p> : <ColumnChart data={reports.revenueForecast} valueKey="total" labelKey="month" formatValue={money} color="var(--amber)" />}
+            {!reports.price_hidden && reports.undatedForecastValue > 0 && (
+              <p className="sub" style={{ margin: '10px 0 0' }}>Plus {money(reports.undatedForecastValue)} weighted in open deals with no expected close date set yet.</p>
+            )}
+          </Link>
+
+          <Link to="/reports/system/jobs-by-month" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>New jobs by month</h2>
+            <ColumnChart data={reports.jobsByMonth} valueKey="count" labelKey="month" formatValue={(v) => v} />
+          </Link>
+
+          <Link to="/reports/system/jobs-by-status" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>Jobs by status</h2>
+            <DonutChart data={reports.jobsByStatus} valueKey="count" labelKey="label" />
+          </Link>
+
+          <Link to="/reports/system/pipeline-by-stage" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>Pipeline value by stage</h2>
+            <BarList data={reports.pipelineByStage} valueKey="value" labelKey="label" formatValue={money} />
+          </Link>
+
+          <Link to="/reports/system/invoice-aging" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>Invoice aging</h2>
+            <BarList
+              data={reports.invoiceAging.map((b, i) => ({ ...b, color: AGING_COLORS[i] }))}
+              valueKey="amount" labelKey="bucket" formatValue={money} colorKey="color"
+            />
+          </Link>
+
+          <Link to="/reports/system/top-customers" className="card span-2" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>Top customers by revenue</h2>
+            {reports.topCustomers.length === 0 ? (
+              <div className="empty">No paid invoices yet.</div>
+            ) : (
+              <BarList data={reports.topCustomers} valueKey="amount" labelKey="name" formatValue={money} />
+            )}
+          </Link>
+
+          <Link to="/reports/system/leads-by-source-month" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>Leads created this month, by source</h2>
+            {reports.leadsThisMonthBySource.length === 0 ? (
+              <div className="empty">No leads yet this month.</div>
+            ) : (
+              <BarList data={reports.leadsThisMonthBySource} valueKey="count" labelKey="label" formatValue={(v) => v} />
+            )}
+          </Link>
+
+          <Link to="/reports/system/leads-by-source-alltime" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>Leads by source (all-time)</h2>
+            {reports.leadsBySource.length === 0 ? (
+              <div className="empty">No leads yet.</div>
+            ) : (
+              <BarList data={reports.leadsBySource} valueKey="count" labelKey="label" formatValue={(v) => v} />
+            )}
+          </Link>
+
+          <Link to="/reports/system/booking-rate-by-source" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>Booking rate by source</h2>
+            <p className="sub" style={{ margin: '-4px 0 10px' }}>Share of leads from each source that got at least one appointment on the calendar.</p>
+            {reports.bookingRateBySource.length === 0 ? (
+              <div className="empty">No leads yet.</div>
+            ) : (
+              <BarList data={reports.bookingRateBySource} valueKey="rate" labelKey="label" formatValue={(v) => `${v}%`} />
+            )}
+          </Link>
+
+          <Link to="/reports/system/sales-by-source" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>Sales by source</h2>
+            {reports.salesBySource.length === 0 ? (
+              <div className="empty">No won opportunities yet.</div>
+            ) : (
+              <BarList data={reports.salesBySource} valueKey="amount" labelKey="label" formatValue={money} />
+            )}
+          </Link>
+
+          <Link to="/reports/system/sales-by-estimator" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>Sales by estimator</h2>
+            {reports.salesByEstimator.length === 0 ? (
+              <div className="empty">No won opportunities with an estimator set yet.</div>
+            ) : (
+              <BarList data={reports.salesByEstimator} valueKey="amount" labelKey="label" formatValue={money} />
+            )}
+          </Link>
+
+          <Link to="/reports/system/sales-by-city" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>Sales by city</h2>
+            {reports.salesByCity.length === 0 ? (
+              <div className="empty">No won opportunities with a resolvable address yet.</div>
+            ) : (
+              <BarList data={reports.salesByCity} valueKey="amount" labelKey="label" formatValue={money} />
+            )}
+          </Link>
+
+          <Link to="/reports/system/sales-by-service-type" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>Sales by service type</h2>
+            {reports.salesByServiceType.length === 0 ? (
+              <div className="empty">No won opportunities with a service type set yet.</div>
+            ) : (
+              <BarList data={reports.salesByServiceType} valueKey="amount" labelKey="label" formatValue={money} />
+            )}
+          </Link>
+
+          <Link to="/reports/system/sales-by-property-type" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>Sales by property type</h2>
+            {reports.salesByType.length === 0 ? (
+              <div className="empty">No won opportunities yet.</div>
+            ) : (
+              <BarList data={reports.salesByType} valueKey="amount" labelKey="label" formatValue={money} />
+            )}
+          </Link>
+
+          <Link to="/reports/system/close-rate-by-estimator" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>Close rate by estimator</h2>
+            {reports.closeRateByPerson.length === 0 ? (
+              <div className="empty">No closed (won/lost) opportunities with an estimator set yet.</div>
+            ) : (
+              <BarList data={reports.closeRateByPerson} valueKey="rate" labelKey="label" formatValue={(v) => `${v}%`} />
+            )}
+          </Link>
+
+          <Link to="/reports/system/close-rate-by-source" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>Close rate by lead source</h2>
+            {reports.closeRateBySource.length === 0 ? (
+              <div className="empty">No closed (won/lost) opportunities yet.</div>
+            ) : (
+              <BarList data={reports.closeRateBySource} valueKey="rate" labelKey="label" formatValue={(v) => `${v}%`} />
+            )}
+          </Link>
+
+          <div className="card span-2">
+            <div className="report-card-head">
+              <h2>Job profitability</h2>
+              <div className="report-card-total" style={{ color: reports.jobProfitability.totalProfit < 0 ? 'var(--red)' : undefined }}>
+                {money(reports.jobProfitability.totalProfit)}
               </div>
-            ))}
+            </div>
+            <p className="sub" style={{ margin: '-4px 0 10px' }}>
+              Actual expenses logged against jobs, weighed against invoiced (or approved-estimate) revenue.
+              {reports.jobProfitability.margin !== null && ` Overall margin: ${reports.jobProfitability.margin}%.`}
+            </p>
+            {reports.jobProfitability.byJob.length === 0 ? (
+              <div className="empty">Log expenses on a job to see profitability here.</div>
+            ) : (
+              <div className="stack" style={{ gap: 2 }}>
+                {reports.jobProfitability.byJob.map((j) => (
+                  <Link key={j.id} to={`/jobs/${j.id}`} className="attention-row">
+                    <span>{j.title}</span>
+                    <span className="mono" style={{ color: j.profit < 0 ? 'var(--red)' : 'var(--accent-ink)' }}>
+                      {money(j.profit)}{j.margin !== null ? ` · ${j.margin}%` : ''}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </>
   );
 }
