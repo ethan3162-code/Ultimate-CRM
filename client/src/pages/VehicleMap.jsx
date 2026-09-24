@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { timeAgo, minutesSince, mapLinksForCoords } from '../utils';
+import { dateTime, minutesSince, mapLinksForCoords } from '../utils';
 import LeafletMap from '../components/LeafletMap';
 
 // Green while a check-in is fresh enough to trust as "roughly where the vehicle is now", amber
@@ -38,7 +38,7 @@ export default function VehicleMap() {
 
   const markers = located.map((v) => ({
     lat: v.location.lat, lng: v.location.lng, color: freshnessColor(v.location.recorded_at),
-    popupHtml: `<div class="vehicle-map-popup"><strong>${v.name}</strong>${v.assigned_employee_name ? `${v.assigned_employee_name} · ` : ''}${timeAgo(v.location.recorded_at)}</div>`,
+    popupHtml: `<div class="vehicle-map-popup"><strong>${v.name}</strong>${v.assigned_employee_name ? `${v.assigned_employee_name} · ` : ''}${dateTime(v.location.recorded_at)}</div>`,
   }));
 
   return (
@@ -69,7 +69,7 @@ export default function VehicleMap() {
                 <div className="attention-row" key={v.id}>
                   <Link to={`/vehicles/${v.id}`} className="link-strong">{v.name}</Link>
                   <span className="row" style={{ gap: 10 }}>
-                    <span className="muted" style={{ fontSize: 12.5 }}>{timeAgo(v.location.recorded_at)}</span>
+                    <span className="muted" style={{ fontSize: 12.5 }}>{dateTime(v.location.recorded_at)}</span>
                     <a href={mapLinksForCoords(v.location.lat, v.location.lng).view} target="_blank" rel="noreferrer" className="link-strong" style={{ fontSize: 12.5 }}>Maps ↗</a>
                   </span>
                 </div>
