@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { timeAgo } from '../utils';
+import { dateTime } from '../utils';
 
 const POLL_MS = 5000;
 
@@ -157,7 +157,7 @@ export default function Conversations() {
                           {mine && !m.automation_name && m.created_by_username && <div className="chat-bubble-sender">{m.created_by_username}</div>}
                           <div className="chat-bubble-body">{m.body}</div>
                           <div className="chat-bubble-time">
-                            {timeAgo(m.created_at)}
+                            {dateTime(m.created_at)}
                             {mine && m.status === 'simulated' && ' · not delivered (Twilio not connected)'}
                             {mine && m.status === 'failed' && ' · delivery failed'}
                           </div>
