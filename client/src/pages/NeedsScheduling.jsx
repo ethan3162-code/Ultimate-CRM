@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { shortDate, timeAgo, accountName, money } from '../utils';
+import { shortDate, dateTime, accountName, money } from '../utils';
 
 export default function NeedsScheduling() {
   const [jobs, setJobs] = useState(null);
@@ -57,7 +57,7 @@ export default function NeedsScheduling() {
               </div>
               <p className="sub" style={{ margin: '4px 0 0' }}>
                 {job.address || 'No address on file'}
-                {' · '}Created {timeAgo(job.created_at)}
+                {' · '}Created {dateTime(job.created_at)}
                 {job.desired_start_date && <> · Customer asked for <strong>{shortDate(job.desired_start_date)}</strong></>}
               </p>
               {!job.price_hidden && job.contract_amount > 0 && (
