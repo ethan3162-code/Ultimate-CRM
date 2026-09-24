@@ -259,4 +259,7 @@ export const api = {
   updateCustomReport: (id, data) => request(`/custom-reports/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteCustomReport: (id) => request(`/custom-reports/${id}`, { method: 'DELETE' }),
   customReportData: (id) => request(`/custom-reports/${id}/data`),
+
+  // Home page weather panel (Sept 2026) — location is either 'nyc' or 'long_island'.
+  weather: (location) => request(`/weather?location=${location}`),
 };
