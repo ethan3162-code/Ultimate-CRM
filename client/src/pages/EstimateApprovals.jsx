@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { money, timeAgo } from '../utils';
+import { money, dateTime } from '../utils';
 import { useAuth } from '../auth';
 
 // A dedicated queue for the internal-approval workflow (Sept 2026) — separate from the small
@@ -83,7 +83,7 @@ export default function EstimateApprovals() {
                 <span className="pill amber">Pending approval</span>
               </div>
               <p className="sub" style={{ margin: '2px 0 10px' }}>
-                Requested{a.requested_by ? ` by ${a.requested_by}` : ''} · {timeAgo(a.requested_at)}
+                Requested{a.requested_by ? ` by ${a.requested_by}` : ''} · {dateTime(a.requested_at)}
               </p>
 
               <ul style={{ margin: '8px 0', paddingLeft: 18, fontSize: 13 }}>
