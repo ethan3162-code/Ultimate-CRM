@@ -4,6 +4,7 @@ import { api } from '../api';
 import { money, shortDate, dateTime } from '../utils';
 import { BarList } from '../components/charts';
 import FilterBar from '../components/FilterBar';
+import WeatherPanel from '../components/WeatherPanel';
 import { useAuth } from '../auth';
 
 const LEAD_STATUS_ORDER = ['New', 'Follow Up', 'Unresponsive', 'Restart', 'Converted', 'Lost'];
@@ -127,6 +128,7 @@ export default function Home() {
               : "What's yours right now — your schedule, your open leads, opportunities and projects, and what needs your attention."}
           </p>
         </div>
+        <WeatherPanel />
       </div>
 
       <div className="card" style={{ marginBottom: 18 }}>
