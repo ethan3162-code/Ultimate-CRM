@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { timeAgo } from '../utils';
+import { dateTime } from '../utils';
 
 const CATEGORY_ORDER = ['Financial', 'Sales', 'Leads', 'Jobs'];
 
@@ -109,7 +109,7 @@ export default function Reports() {
                   <td><Link to={`/reports/${r.id}`} className="link-strong">{r.name}</Link></td>
                   <td className="muted" style={{ textTransform: 'capitalize' }}>{r.data_source}</td>
                   <td className="muted" style={{ textTransform: 'capitalize' }}>{r.chart_type}</td>
-                  <td className="muted">{timeAgo(r.updated_at)}</td>
+                  <td className="muted">{dateTime(r.updated_at)}</td>
                   <td style={{ textAlign: 'right' }}>
                     <button type="button" className="btn subtle sm" onClick={(e) => removeReport(r.id, e)}>Delete</button>
                   </td>
