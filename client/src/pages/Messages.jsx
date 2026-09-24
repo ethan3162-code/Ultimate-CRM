@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../auth';
-import { timeAgo } from '../utils';
+import { dateTime } from '../utils';
 
 const POLL_MS = 4000;
 
@@ -175,7 +175,7 @@ export default function Messages() {
                         <div className={'chat-bubble' + (mine ? ' mine' : '')}>
                           {!mine && <div className="chat-bubble-sender">{m.username}</div>}
                           <div className="chat-bubble-body">{m.body}</div>
-                          <div className="chat-bubble-time">{timeAgo(m.created_at)}</div>
+                          <div className="chat-bubble-time">{dateTime(m.created_at)}</div>
                         </div>
                       </div>
                     );
