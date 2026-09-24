@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { shortDate, timeAgo } from '../utils';
+import { shortDate, dateTime } from '../utils';
 import AiDraftModal from '../components/AiDraftModal';
 import { usePermission } from '../auth';
 
@@ -91,7 +91,7 @@ export default function TicketDetail() {
               <div className="timeline">
                 {ticket.activities.map((a) => (
                   <div className="timeline-item" key={a.id}>
-                    <div className="when">{timeAgo(a.created_at)}</div>
+                    <div className="when">{dateTime(a.created_at)}</div>
                     <div className="body"><span className="type-tag">{a.type.replace('_', ' ')}</span>{a.note}</div>
                   </div>
                 ))}
