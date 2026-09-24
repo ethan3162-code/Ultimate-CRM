@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, timeAgo, initials, mapLinks } from '../utils';
+import { money, shortDate, dateTime, initials, mapLinks } from '../utils';
 import { LEAD_SOURCES } from '../constants';
 import TaskList from '../components/TaskList';
 import AppointmentModal from '../components/AppointmentModal';
@@ -191,7 +191,7 @@ export default function ContactDetail() {
               </div>
               <div className="row between">
                 <span className="muted">Last modified</span>
-                <span>{contact.updated_by_username || contact.created_by_username || 'system'} · {timeAgo(contact.updated_at || contact.created_at)}</span>
+                <span>{contact.updated_by_username || contact.created_by_username || 'system'} · {dateTime(contact.updated_at || contact.created_at)}</span>
               </div>
             </div>
           </div>
@@ -208,7 +208,7 @@ export default function ContactDetail() {
               <div className="timeline">
                 {contact.activities.map((a) => (
                   <div className="timeline-item" key={`${a.related_type}-${a.id}`}>
-                    <div className="when">{timeAgo(a.created_at)}</div>
+                    <div className="when">{dateTime(a.created_at)}</div>
                     <div className="body">
                       <span className="type-tag">{a.type.replace('_', ' ')}</span>
                       {a.note}
