@@ -1,5 +1,33 @@
 const BASE = '/api';
 
+// Server-stored usernames are always lowercase (see server/src/routes/session.js and
+// server/src/routes/users.js — a login is normalized to lowercase on creation, and re-lowercased
+// again at sign-in, so sign-in stays case-insensitive), but every place the app *shows* one to a
+// person reads better with a capital first letter (Sept 2026). Rather than touching every render
+// site across the app individually (the sidebar, Users & permissions, every "assigned to"/"owner"
+// picker, chat, estimate-approval notices, and so on), this recursively capitalizes the first
+// letter of any string found under a key named `username` or ending in `_username`
+// (owner_username, created_by_username, updated_by_username, approved_by_username,
+// assigned_username, reported_by_username, ...) on every API response, right where every one of
+// them already passes through on its way back to a caller. Purely a display transform — no route
+// in this app accepts a username on update (only at creation, where it's normalized back to
+// lowercase), so nothing here can ever drift the stored value.
+function capitalizeUsernames(value) {
+  if (Array.isArray(value)) {
+    for (const item of value) capitalizeUsernames(item);
+  } else if (value && typeof value === 'object') {
+    for (const key of Object.keys(value)) {
+      const v = value[key];
+      if (typeof v === 'string' && v && (key === 'username' || key.endsWith('_username'))) {
+        value[key] = v.charAt(0).toUpperCase() + v.slice(1);
+      } else if (v && typeof v === 'object') {
+        capitalizeUsernames(v);
+      }
+    }
+  }
+  return value;
+}
+
 async function request(path, options = {}) {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -21,7 +49,7 @@ async function request(path, options = {}) {
     throw new Error(body.error || `Request failed: ${res.status}`);
   }
   if (res.status === 204) return null;
-  return res.json();
+  return capitalizeUsernames(await res.json());
 }
 
 export const api = {
