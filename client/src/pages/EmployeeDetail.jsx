@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, timeAgo, initials, fileToDataUrl } from '../utils';
+import { money, shortDate, dateTime, initials, fileToDataUrl } from '../utils';
 import { usePermission } from '../auth';
 
 export default function EmployeeDetail() {
@@ -188,7 +188,7 @@ export default function EmployeeDetail() {
               <div className="timeline">
                 {employee.activities.map((a) => (
                   <div className="timeline-item" key={a.id}>
-                    <div className="when">{timeAgo(a.created_at)}</div>
+                    <div className="when">{dateTime(a.created_at)}</div>
                     <div className="body"><span className="type-tag">{a.type.replace('_', ' ')}</span>{a.note}</div>
                   </div>
                 ))}
