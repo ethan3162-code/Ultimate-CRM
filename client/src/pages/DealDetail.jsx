@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, timeAgo, mapLinks, splitWorkTypes, joinWorkTypes, estimateTotal, estimateSubtotal } from '../utils';
+import { money, shortDate, dateTime, mapLinks, splitWorkTypes, joinWorkTypes, estimateTotal, estimateSubtotal } from '../utils';
 import {
   WORK_TYPES, CUSTOMER_TYPES, LEAD_STATUSES, LEAD_TYPES, JOB_TIMEFRAMES,
   METHOD_OF_ENTRY, HA_MATCH_TYPES, LEAD_SOURCES,
@@ -664,7 +664,7 @@ export default function DealDetail() {
               </div>
               <div className="row between">
                 <span className="muted">Last modified</span>
-                <span>{deal.updated_by_username || deal.created_by_username || 'system'} · {timeAgo(deal.updated_at || deal.created_at)}</span>
+                <span>{deal.updated_by_username || deal.created_by_username || 'system'} · {dateTime(deal.updated_at || deal.created_at)}</span>
               </div>
             </div>
           </div>
@@ -687,7 +687,7 @@ export default function DealDetail() {
                 {deal.activities.map((a) => (
                   <div className="timeline-item" key={a.id}>
                     <div>
-                      <div className="when">{timeAgo(a.created_at)}</div>
+                      <div className="when">{dateTime(a.created_at)}</div>
                       {a.created_by_username && <div className="who">by {a.created_by_username}</div>}
                     </div>
                     <div className="body"><span className="type-tag">{a.type.replace('_', ' ')}</span>{a.note}</div>
