@@ -992,6 +992,17 @@ export default function JobDetail() {
                       </span>
                     </div>
                   )}
+                  {job.billing.projectedProfitBasis !== 'none' && (
+                    <div className="row between">
+                      <span className="muted">
+                        Projected cost
+                        <span className="sub" style={{ display: 'block', fontSize: 11 }}>
+                          the same estimate's subtotal, before markup — budget vs. actual cost below
+                        </span>
+                      </span>
+                      <span className="mono">{money(job.billing.projectedCostAmount)}</span>
+                    </div>
+                  )}
                   <div className="row between"><span className="muted">Labor cost</span><span className="mono">{money(job.billing.laborCost)}</span></div>
                   <div className="row between"><span className="muted">Customer balance</span><span className="mono" style={{ color: job.billing.customerBalance > 0 ? 'var(--red)' : 'var(--accent-ink)' }}>{money(job.billing.customerBalance)}</span></div>
                 </div>
@@ -1015,13 +1026,13 @@ export default function JobDetail() {
                       <div className="stack" style={{ gap: 6, marginTop: 6 }}>
                         <div className="row between"><span className="muted">Salesperson</span><span>{job.commission.ownerUsername}</span></div>
                         <div className="row between"><span className="muted">Commission rate</span><span className="mono">{job.commission.percent}%</span></div>
-                        <div className="row between"><span className="muted">Basis (gross profit)</span><span className="mono">{money(job.commission.grossProfitAmount)}</span></div>
+                        <div className="row between"><span className="muted">Basis (projected profit)</span><span className="mono">{money(job.commission.projectedProfitAmount)}</span></div>
                         <div className="row between" style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 6 }}>
                           <span className="muted" style={{ fontWeight: 600 }}>Commission earned</span>
                           <span className="mono" style={{ fontWeight: 700, color: 'var(--accent-ink)' }}>{money(job.commission.amount)}</span>
                         </div>
                         <p className="sub" style={{ margin: '2px 0 0' }}>
-                          Set from this person's rate in Users &amp; permissions — a percentage of gross profit above, not the total contract amount.
+                          Set from this person's rate in Users &amp; permissions — a percentage of projected profit above (the estimate's markup), not gross profit or the total contract amount. Changes automatically whenever the projected profit does.
                         </p>
                       </div>
                     )}
