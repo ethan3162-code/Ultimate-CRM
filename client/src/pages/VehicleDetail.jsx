@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, timeAgo, fileToDataUrl, mapLinksForCoords } from '../utils';
+import { money, shortDate, dateTime, fileToDataUrl, mapLinksForCoords } from '../utils';
 import { usePermission } from '../auth';
 import LeafletMap from '../components/LeafletMap';
 
@@ -281,7 +281,7 @@ export default function VehicleDetail() {
               </button>
               {vehicle.location && (
                 <span className="muted" style={{ fontSize: 12.5 }}>
-                  Last check-in {timeAgo(vehicle.location.recorded_at)}
+                  Last check-in {dateTime(vehicle.location.recorded_at)}
                   {vehicle.location.reported_by_username ? ` · by ${vehicle.location.reported_by_username}` : ''}
                 </span>
               )}
@@ -292,7 +292,7 @@ export default function VehicleDetail() {
                 <LeafletMap
                   markers={[{
                     lat: vehicle.location.lat, lng: vehicle.location.lng, color: 'var(--accent)',
-                    popupHtml: `<div class="vehicle-map-popup"><strong>${vehicle.name}</strong>${timeAgo(vehicle.location.recorded_at)}</div>`,
+                    popupHtml: `<div class="vehicle-map-popup"><strong>${vehicle.name}</strong>${dateTime(vehicle.location.recorded_at)}</div>`,
                   }]}
                 />
                 <div className="row" style={{ marginTop: 8 }}>
@@ -344,7 +344,7 @@ export default function VehicleDetail() {
               <div className="timeline">
                 {vehicle.activities.map((a) => (
                   <div className="timeline-item" key={a.id}>
-                    <div className="when">{timeAgo(a.created_at)}</div>
+                    <div className="when">{dateTime(a.created_at)}</div>
                     <div className="body"><span className="type-tag">{a.type.replace('_', ' ')}</span>{a.note}</div>
                   </div>
                 ))}
