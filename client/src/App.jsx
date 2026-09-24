@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Reports from './pages/Reports';
 import ReportDetail from './pages/ReportDetail';
 import BuiltinReportDetail from './pages/BuiltinReportDetail';
+import NeedsAttention from './pages/NeedsAttention';
 import Messages from './pages/Messages';
 import Conversations from './pages/Conversations';
 import Leads from './pages/Leads';
@@ -77,6 +78,9 @@ function AuthedApp() {
               broken out into their own page, so clicking one from there must not need an
               admin-only permission it was never gated on before. */}
           <Route path="/reports/system/:key" element={<Protected page="dashboard"><BuiltinReportDetail /></Protected>} />
+          {/* Full "Needs attention" list — linked from the Dashboard's condensed preview card,
+              same admin-only gate as Dashboard itself since that's the only place it's reached from. */}
+          <Route path="/insights" element={<Protected page="dashboard"><NeedsAttention /></Protected>} />
           <Route path="/leads" element={<Protected page="leads"><Leads /></Protected>} />
           <Route path="/pipeline" element={<Protected page="pipeline"><Pipeline /></Protected>} />
           <Route path="/pipeline/:id" element={<Protected page="pipeline"><DealDetail /></Protected>} />
