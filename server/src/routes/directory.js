@@ -7,7 +7,7 @@ const express = require('express');
 const db = require('../db');
 const { ROLE_LABEL } = require('../permissionsConfig');
 const { canSeePrices } = require('../auth');
-const { getPendingEstimateApprovals } = require('../helpers');
+const { getPendingEstimateApprovals, getMyPendingEstimateRequests } = require('../helpers');
 
 const router = express.Router();
 
@@ -28,6 +28,13 @@ router.get('/users', (req, res) => {
 // access. Any signed-in login can hit this; the response is just empty for everyone else.
 router.get('/pending-approvals', (req, res) => {
   res.json(getPendingEstimateApprovals(req.user, !canSeePrices(req.user)));
+});
+
+// This login's OWN estimates currently sitting with someone else waiting on sign-off — the flip
+// side of pending-approvals above (see getMyPendingEstimateRequests). Every signed-in login can
+// hit this; it's just empty for anyone who hasn't submitted anything pending.
+router.get('/my-pending-estimates', (req, res) => {
+  res.json(getMyPendingEstimateRequests(req.user, !canSeePrices(req.user)));
 });
 
 module.exports = router;
