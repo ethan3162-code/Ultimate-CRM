@@ -92,6 +92,9 @@ app.use('/api/public', require('./routes/public'));
 // canSeeCommissions capability (or being the salesperson on a job), same as commission figures
 // on the Project page itself, checked inside the route.
 app.use('/api/commissions', requireAuth, require('./routes/commissions'));
+// Home page's weather panel (Sept 2026) — every active login can see it regardless of their
+// individual page permissions, same reasoning as tasks/chat above.
+app.use('/api/weather', requireAuth, require('./routes/weather'));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
