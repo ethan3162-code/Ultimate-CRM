@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { timeAgo } from '../utils';
+import { dateTime } from '../utils';
 
 export default function Integrations() {
   const [webhook, setWebhook] = useState(null);
@@ -281,7 +281,7 @@ export default function Integrations() {
                       {r.deal_id ? <Link to={`/pipeline/${r.deal_id}`}>{r.subject || 'AnswerForce email'}</Link> : (r.subject || 'AnswerForce email')}
                       {r.template === 'forwarded' || r.template === 'unknown' ? <span className="pill amber" style={{ marginLeft: 6 }}>needs review</span> : null}
                     </span>
-                    <span className="muted">{r.status === 'failed' ? (r.note || 'failed') : timeAgo(r.processed_at)}</span>
+                    <span className="muted">{r.status === 'failed' ? (r.note || 'failed') : dateTime(r.processed_at)}</span>
                   </div>
                 ))}
               </div>
