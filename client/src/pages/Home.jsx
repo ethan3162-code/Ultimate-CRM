@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { money, shortDate, timeAgo } from '../utils';
+import { money, shortDate, dateTime } from '../utils';
 import { BarList } from '../components/charts';
 import FilterBar from '../components/FilterBar';
 import { useAuth } from '../auth';
@@ -156,7 +156,7 @@ export default function Home() {
             {pendingApprovals.map((a) => (
               <Link key={a.id} to={a.linked_type === 'opportunity' ? `/pipeline/${a.linked_id}` : `/jobs/${a.linked_id}`} className="attention-row">
                 <span>{a.number} — {a.linked_title}{a.requested_by ? ` · requested by ${a.requested_by}` : ''}</span>
-                <span className="mono" style={{ color: 'var(--amber)' }}>{a.total !== null ? money(a.total) : ''} {timeAgo(a.requested_at)}</span>
+                <span className="mono" style={{ color: 'var(--amber)' }}>{a.total !== null ? money(a.total) : ''} {dateTime(a.requested_at)}</span>
               </Link>
             ))}
           </div>
@@ -171,7 +171,7 @@ export default function Home() {
             {myPendingEstimates.map((e) => (
               <Link key={e.id} to={e.linked_type === 'opportunity' ? `/pipeline/${e.linked_id}` : `/jobs/${e.linked_id}`} className="attention-row">
                 <span>{e.number} — {e.linked_title}</span>
-                <span className="mono" style={{ color: 'var(--amber)' }}>{e.total !== null ? money(e.total) : ''} {timeAgo(e.requested_at)}</span>
+                <span className="mono" style={{ color: 'var(--amber)' }}>{e.total !== null ? money(e.total) : ''} {dateTime(e.requested_at)}</span>
               </Link>
             ))}
           </div>
@@ -228,7 +228,7 @@ export default function Home() {
               {recentRecords.map((r, i) => (
                 <Link key={i} to={r.to} className="attention-row">
                   <span><span className="pill" style={{ marginRight: 8 }}>{r.type}</span>{r.label}</span>
-                  <span className="muted">{timeAgo(r.at)}</span>
+                  <span className="muted">{dateTime(r.at)}</span>
                 </Link>
               ))}
             </div>
