@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
-import { money, timeAgo } from '../utils';
+import { money, dateTime } from '../utils';
 import { TrendChart, ColumnChart, BarList, DonutChart } from '../components/charts';
 
 const STAGE_LABELS = { new: 'New', qualified: 'Qualified', proposal: 'Proposal', negotiation: 'Negotiation', won: 'Won', lost: 'Lost' };
@@ -179,7 +179,7 @@ export default function Dashboard() {
           <div className="timeline">
             {data.recentActivity.map((a) => (
               <div className="timeline-item" key={a.id}>
-                <div className="when">{timeAgo(a.created_at)}</div>
+                <div className="when">{dateTime(a.created_at)}</div>
                 <div className="body">
                   <span className="type-tag">{a.type.replace('_', ' ')}</span>
                   {a.note}
