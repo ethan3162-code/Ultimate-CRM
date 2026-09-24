@@ -140,6 +140,26 @@ function getPendingEstimateApprovals(user, hidePrices) {
   });
 }
 
+// The flip side of getPendingEstimateApprovals above — a login's OWN estimates that are
+// currently sitting with someone else waiting on sign-off, rather than requests this login can
+// act on. Used by the personalized Home page (Sept 2026) so a salesperson can see at a glance
+// what they've submitted and are still waiting to hear back on, regardless of whether they can
+// approve anything themselves.
+function getMyPendingEstimateRequests(user, hidePrices) {
+  const rows = db.prepare(`SELECT id FROM estimates WHERE created_by_user_id = ? AND approval_status = 'pending' ORDER BY approval_requested_at ASC`).all(user.id);
+  return rows.map((r) => {
+    const est = getEstimateFull(r.id);
+    const party = resolveEstimateParty(est);
+    return {
+      id: est.id, number: est.number, total: hidePrices ? null : est.total,
+      requested_at: est.approval_requested_at,
+      linked_type: est.job_id ? 'project' : (est.deal_id ? 'opportunity' : null),
+      linked_id: est.job_id || est.deal_id || null,
+      linked_title: party.title, linked_address: party.address,
+    };
+  });
+}
+
 function getInvoiceFull(id) {
   const inv = db.prepare(`SELECT * FROM invoices WHERE id = ?`).get(id);
   if (!inv) return null;
@@ -647,5 +667,5 @@ module.exports = {
   readDisplayFlags, getEstimateScheduleRows, saveEstimateScheduleRows,
   STAGE_KEYS, STAGE_LABEL, STAGE_DAY_FIELD, stageDays, totalDays, computeProgress, addDays, computeEndDate, getJobMilestones,
   redactEstimateMoney, redactInvoiceMoney, redactJobMoney, redactJobCommission, getPendingEstimateApprovals,
-  getContractForEstimate, getCommissionPayouts,
+  getMyPendingEstimateRequests, getContractForEstimate, getCommissionPayouts,
 };
