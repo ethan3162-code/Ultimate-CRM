@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { timeAgo } from '../utils';
+import { dateTime } from '../utils';
 
 const STAGES = ['new', 'qualified', 'proposal', 'negotiation', 'won', 'lost'];
 
@@ -210,7 +210,7 @@ export default function Automations() {
             <div className="timeline">
               {runs.map((r) => (
                 <div className="timeline-item" key={r.id}>
-                  <div className="when">{timeAgo(r.ran_at)}</div>
+                  <div className="when">{dateTime(r.ran_at)}</div>
                   <div className="body"><span className="type-tag">{r.automation_name}</span>{r.note}</div>
                 </div>
               ))}
