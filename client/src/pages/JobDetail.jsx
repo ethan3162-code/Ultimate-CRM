@@ -112,8 +112,9 @@ export default function JobDetail() {
   // In-person signing (Sept 2026) — which estimate the Sign modal is open for, if any.
   const [signingEstimate, setSigningEstimate] = useState(null);
   const [payingInvoice, setPayingInvoice] = useState(null);
-  const [schedule, setSchedule] = useState({ start_date: '', demo_days: 1, site_prep_days: 2, installation_days: 5, final_walkthrough_days: 1, owner_user_id: '' });
+  const [schedule, setSchedule] = useState({ start_date: '', demo_days: 1, site_prep_days: 2, installation_days: 5, final_walkthrough_days: 1, owner_user_id: '', subcontractor_id: '' });
   const [directory, setDirectory] = useState([]);
+  const [subcontractors, setSubcontractors] = useState([]);
   const [savingStage, setSavingStage] = useState(false);
   const [photoLabel, setPhotoLabel] = useState('progress');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -171,6 +172,7 @@ export default function JobDetail() {
         installation_days: j.installation_days ?? 5,
         final_walkthrough_days: j.final_walkthrough_days ?? 1,
         owner_user_id: j.owner_user_id || '',
+        subcontractor_id: j.subcontractor_id || '',
       });
       setInfoForm(blankInfo(j));
       setBillingForm(blankBilling(j));
@@ -178,6 +180,7 @@ export default function JobDetail() {
   }
   useEffect(load, [id]);
   useEffect(() => { api.usersDirectory().then(setDirectory).catch(() => setDirectory([])); }, []);
+  useEffect(() => { api.subcontractors().then((rows) => setSubcontractors(rows.filter((s) => s.active))).catch(() => setSubcontractors([])); }, []);
   useEffect(() => { api.employees().then(setEmployees).catch(() => setEmployees([])); }, []);
 
   async function saveInfo(e) {
@@ -246,6 +249,7 @@ export default function JobDetail() {
       installation_days: Number(schedule.installation_days) || 0,
       final_walkthrough_days: Number(schedule.final_walkthrough_days) || 0,
       owner_user_id: schedule.owner_user_id ? Number(schedule.owner_user_id) : null,
+      subcontractor_id: schedule.subcontractor_id ? Number(schedule.subcontractor_id) : null,
     });
     load();
   }
@@ -629,6 +633,17 @@ export default function JobDetail() {
                 >
                   <option value="">— unassigned —</option>
                   {directory.map((u) => <option key={u.id} value={u.id}>{u.username}</option>)}
+                </select>
+              </div>
+              <div className="field">
+                <label>Subcontractor</label>
+                <select
+                  value={schedule.subcontractor_id || ''}
+                  onChange={(e) => setSchedule({ ...schedule, subcontractor_id: e.target.value })}
+                  disabled={!canEditSchedule}
+                >
+                  <option value="">— none —</option>
+                  {subcontractors.map((s) => <option key={s.id} value={s.id}>{s.name}{s.trade ? ` (${s.trade})` : ''}</option>)}
                 </select>
               </div>
               {STAGES.map((s) => (
