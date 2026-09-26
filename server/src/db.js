@@ -217,6 +217,24 @@ CREATE TABLE IF NOT EXISTS campaign_enrollments (
   enrolled_at TEXT DEFAULT (datetime('now'))
 );
 
+-- A multi-touch sequence's individual steps (Sept 2026) — the Hatch-style template library in
+-- campaignTemplates.js expands into rows here when a campaign is created from a template: each
+-- row is one send, at day_offset days after enrollment, over its own channel (a sequence mixes
+-- sms and email step to step, e.g. a "Launch" text followed by a "Launch" email). A campaign
+-- created the older, plain way (a single message repeated times_per_day for duration_days) has
+-- no rows here at all — campaignEngine.js checks for that to decide which of the two send
+-- styles to run for a given campaign, so both keep working side by side.
+CREATE TABLE IF NOT EXISTS campaign_steps (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  step_order INTEGER NOT NULL,
+  day_offset INTEGER NOT NULL DEFAULT 0,
+  channel TEXT NOT NULL DEFAULT 'sms',
+  subject TEXT,
+  message TEXT NOT NULL,
+  label TEXT
+);
+
 CREATE TABLE IF NOT EXISTS tickets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
@@ -995,6 +1013,17 @@ ensureColumn('campaigns', 'duration_days', 'duration_days INTEGER NOT NULL DEFAU
 // contact from their deal stage. Defaults to 'lead' for any campaign created before this column
 // existed, rather than leaving old rows to guess.
 ensureColumn('campaigns', 'audience', "audience TEXT NOT NULL DEFAULT 'lead'");
+  // A per-campaign custom link (Sept 2026) — a couple of the built-in sequence templates (see
+  // campaignTemplates.js) reference {{link}} — an Accounts Receivable payment link, a Reviews
+  // review-site link — that a rep types in once when creating the campaign; unused otherwise.
+  ensureColumn('campaigns', 'custom_link', 'custom_link TEXT');
+  // Which built-in sequence template a campaign was created from, for display only — its actual
+  // steps live in campaign_steps below, copied at creation time, so this never changes them.
+  ensureColumn('campaigns', 'template_key', 'template_key TEXT');
+  // How far a given enrollment has gotten through a sequence campaign's steps (see
+  // campaign_steps below and campaignEngine.js's processSequenceEnrollment) — unused for a plain
+  // single-message campaign, which tracks its own progress via sends_count/last_sent_at instead.
+  ensureColumn('campaign_enrollments', 'next_step_index', 'next_step_index INTEGER NOT NULL DEFAULT 0');
 // Who logged this note/activity (Sept 2026) — nullable because plenty of activity rows are
 // system-generated (automation engine, stage-change side effects) with no logged-in user behind
 // them at all; those keep reading as unattributed. Notes a person types through the UI (the
