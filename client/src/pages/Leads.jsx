@@ -21,15 +21,16 @@ const BLANK_FORM = {
   lead_owner: '', rep: '', ha_lead_fee: '', ha_match_type: '',
 };
 
-const LEAD_STATUS_TEXT = { New: 'muted', 'Follow Up': 'amber', Unresponsive: 'red', Restart: 'amber', Lost: 'red', Converted: 'green' };
+const LEAD_STATUS_TEXT = { New: 'muted', 'Follow Up': 'amber', 'Follow Up AI': 'blue', Unresponsive: 'red', Restart: 'amber', Lost: 'red', Converted: 'green' };
 const SCORE_ROW_CLASS = { Hot: 'row-hot', Warm: 'row-warm', Cool: '' };
 
 export default function Leads() {
   const { canEdit } = usePermission('leads');
-  // "Add to campaign" right from the Lead Status cell (Sept 2026) — same enrollment API the
-  // Conversations thread header already uses (enrolls by contact_id, which every lead already
-  // has), just reachable without leaving the Leads list. Only shown to whoever can already see
-  // the Campaigns page.
+  // Campaign enrollment on this page (Sept 2026) is automatic, not manual — setting a lead's
+  // status to "Follow Up", "Follow Up AI", "Unresponsive", or "Restart" auto-enrolls its contact
+  // server-side in the active campaign of that exact name (see server/src/routes/deals.js's
+  // PATCH /:id). This cell just shows what happened: the enrolled campaign(s) as pills, with an
+  // "x" to back out of one manually if needed. Only shown to whoever can already see Campaigns.
   const { canView: canUseCampaigns } = usePermission('campaigns');
   const [deals, setDeals] = useState(null);
   const [companies, setCompanies] = useState([]);
@@ -39,22 +40,28 @@ export default function Leads() {
   const [filters, setFilters] = useState(BLANK_FILTERS);
   // Which lead the "Schedule appointment" button was clicked for — null means the modal is closed.
   const [apptFor, setApptFor] = useState(null);
-  const [campaigns, setCampaigns] = useState([]);
-  // contact_id -> that contact's campaign_enrollments rows, loaded lazily (only once its row's
-  // picker is opened) rather than for every lead up front — there can be hundreds of these.
+  // contact_id -> that contact's campaign_enrollments rows — loaded for every visible lead (not
+  // lazily) since the pills below the Lead Status select are always-on feedback, not something a
+  // click reveals.
   const [rowEnrollments, setRowEnrollments] = useState({});
-  const [openCampaignFor, setOpenCampaignFor] = useState(null); // a deal id, or null
   const [campaignBusyId, setCampaignBusyId] = useState(null); // a deal id, or null
 
   function load() {
     api.deals().then((all) => setDeals(all.filter((d) => d.stage === 'new')));
   }
   useEffect(() => { load(); api.companies().then(setCompanies); }, []);
-  useEffect(() => {
-    if (canUseCampaigns) api.campaigns().then((rows) => setCampaigns(rows.filter((c) => c.status === 'active')));
-  }, [canUseCampaigns]);
 
   const allLeads = (deals || []).slice().sort((a, b) => b.score - a.score);
+
+  // Populate rowEnrollments for every lead's contact as the list loads — a plain fetch per
+  // not-yet-seen contact_id, skipped for ones already cached (a status-change refetch overwrites
+  // its own entry directly, see setLeadStatus below, so this effect never needs to re-run for it).
+  useEffect(() => {
+    if (!canUseCampaigns) return;
+    const ids = [...new Set(allLeads.map((d) => d.contact_id).filter(Boolean))];
+    ids.filter((id) => !(id in rowEnrollments)).forEach((id) => loadRowEnrollments(id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canUseCampaigns, deals]);
 
   // Owner list is whatever's actually present on today's leads (free-form per company), rather
   // than a fixed constant — so the dropdown never shows an owner nobody's been assigned yet.
@@ -113,6 +120,9 @@ export default function Leads() {
   async function setLeadStatus(deal, lead_status) {
     setBusyId(deal.id);
     await api.updateDeal(deal.id, { lead_status });
+    // The status change may have just auto-enrolled this contact in a matching campaign
+    // server-side — refetch its enrollments so the pill shows up without a page reload.
+    if (canUseCampaigns && deal.contact_id) await loadRowEnrollments(deal.contact_id);
     setBusyId(null);
     load();
   }
@@ -125,18 +135,6 @@ export default function Leads() {
     return api.contactCampaignEnrollments(contactId).then((rows) => {
       setRowEnrollments((prev) => ({ ...prev, [contactId]: rows }));
     });
-  }
-  function toggleCampaignPicker(deal) {
-    if (openCampaignFor === deal.id) { setOpenCampaignFor(null); return; }
-    if (!rowEnrollments[deal.contact_id]) loadRowEnrollments(deal.contact_id);
-    setOpenCampaignFor(deal.id);
-  }
-  async function addToCampaign(deal, campaignId) {
-    setCampaignBusyId(deal.id);
-    await api.enrollInCampaign(campaignId, deal.contact_id);
-    await loadRowEnrollments(deal.contact_id);
-    setCampaignBusyId(null);
-    setOpenCampaignFor(null);
   }
   async function removeFromCampaign(deal, enrollmentId) {
     setCampaignBusyId(deal.id);
@@ -298,7 +296,7 @@ export default function Leads() {
                   <tr key={deal.id} className={SCORE_ROW_CLASS[deal.label] || ''}>
                     <td className="title-cell"><Link to={`/pipeline/${deal.id}`} className="link-strong">{name}</Link></td>
                     <td className="muted">{accountName(deal, deal.title)}</td>
-                    <td style={{ position: 'relative' }}>
+                    <td>
                       <select
                         value={deal.lead_status || 'New'}
                         disabled={busyId === deal.id || !canEdit}
@@ -307,46 +305,20 @@ export default function Leads() {
                       >
                         {LEAD_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
-                      {canUseCampaigns && (
-                        <div style={{ marginTop: 4 }}>
-                          <div className="row" style={{ gap: 4, flexWrap: 'wrap' }}>
-                            {activeEnrollments.map((e) => (
-                              <span key={e.id} className="pill green" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                {e.campaign_name}
-                                <button
-                                  type="button"
-                                  title="Remove from this campaign"
-                                  disabled={campaignBusyId === deal.id}
-                                  onClick={() => removeFromCampaign(deal, e.id)}
-                                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: 'inherit' }}
-                                >×</button>
-                              </span>
-                            ))}
-                            <button type="button" className="btn subtle sm" onClick={() => toggleCampaignPicker(deal)}>+ Campaign</button>
-                          </div>
-                          {openCampaignFor === deal.id && (
-                            <div className="modal-card" style={{ position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 5, minWidth: 220, padding: 8 }}>
-                              {(() => {
-                                const enrolledIds = new Set(activeEnrollments.map((e) => e.campaign_id));
-                                const available = campaigns.filter((c) => !enrolledIds.has(c.id));
-                                if (available.length === 0) {
-                                  return <div className="empty" style={{ padding: '6px 4px', fontSize: 13 }}>{campaigns.length === 0 ? 'No active campaigns yet — create one on the Campaigns page.' : 'Already in every active campaign.'}</div>;
-                                }
-                                return available.map((c) => (
-                                  <button
-                                    key={c.id}
-                                    type="button"
-                                    className="chat-channel-row"
-                                    disabled={campaignBusyId === deal.id}
-                                    onClick={() => addToCampaign(deal, c.id)}
-                                    style={{ width: '100%', textAlign: 'left' }}
-                                  >
-                                    <span className="chat-channel-info"><span className="chat-channel-name">{c.name}</span></span>
-                                  </button>
-                                ));
-                              })()}
-                            </div>
-                          )}
+                      {canUseCampaigns && activeEnrollments.length > 0 && (
+                        <div className="row" style={{ gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                          {activeEnrollments.map((e) => (
+                            <span key={e.id} className="pill green" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                              {e.campaign_name}
+                              <button
+                                type="button"
+                                title="Remove from this campaign"
+                                disabled={campaignBusyId === deal.id}
+                                onClick={() => removeFromCampaign(deal, e.id)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: 'inherit' }}
+                              >×</button>
+                            </span>
+                          ))}
                         </div>
                       )}
                     </td>
