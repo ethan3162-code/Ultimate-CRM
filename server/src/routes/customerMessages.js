@@ -17,12 +17,20 @@ function contactPhone(contact) {
 // One row per contact that has at least one message, newest thread first. "needs_reply" is true
 // when the thread's most recent message is inbound — a lightweight stand-in for an unread badge
 // that needs no separate read-state table, since this is a shared team inbox, not a per-login one.
+//
+// "status" (Sept 2026, Hatch-style Leads/Opportunities split) — a contact still has a deal in the
+// 'new' stage is a Lead; one with a deal past that (qualified/proposal/negotiation) is an
+// Opportunity; a 'new'-stage deal wins the tie if a contact somehow has both (an unqualified
+// inquiry still needs attention first). A contact with no open deal at all (won/lost only, or no
+// deal ever) gets null — the "All" tab still shows them, they just don't sort into either split.
 router.get('/conversations', (req, res) => {
   const rows = db.prepare(`
     SELECT c.id AS contact_id, c.first_name, c.last_name, c.phone, c.mobile_phone,
            (SELECT body FROM customer_messages m WHERE m.contact_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_body,
            (SELECT direction FROM customer_messages m WHERE m.contact_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_direction,
-           (SELECT created_at FROM customer_messages m WHERE m.contact_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_at
+           (SELECT created_at FROM customer_messages m WHERE m.contact_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_at,
+           EXISTS (SELECT 1 FROM deals d WHERE d.contact_id = c.id AND d.stage = 'new') AS has_lead,
+           EXISTS (SELECT 1 FROM deals d WHERE d.contact_id = c.id AND d.stage IN ('qualified','proposal','negotiation')) AS has_opportunity
     FROM contacts c
     WHERE EXISTS (SELECT 1 FROM customer_messages m WHERE m.contact_id = c.id)
     ORDER BY last_at DESC
@@ -34,6 +42,7 @@ router.get('/conversations', (req, res) => {
     last_message: r.last_body,
     last_at: r.last_at,
     needs_reply: r.last_direction === 'inbound',
+    status: r.has_lead ? 'lead' : r.has_opportunity ? 'opportunity' : null,
   })));
 });
 
