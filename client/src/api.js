@@ -180,6 +180,12 @@ export const api = {
   createAutomation: (data) => request('/automations', { method: 'POST', body: JSON.stringify(data) }),
   updateAutomation: (id, data) => request(`/automations/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteAutomation: (id) => request(`/automations/${id}`, { method: 'DELETE' }),
+  automationCampaignGate: () => request('/automations/campaign-gate'),
+
+  campaigns: () => request('/campaigns'),
+  createCampaign: (data) => request('/campaigns', { method: 'POST', body: JSON.stringify(data) }),
+  updateCampaign: (id, data) => request(`/campaigns/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteCampaign: (id) => request(`/campaigns/${id}`, { method: 'DELETE' }),
 
   tickets: () => request('/tickets'),
   ticket: (id) => request(`/tickets/${id}`),
