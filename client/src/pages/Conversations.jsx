@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { dateTime } from '../utils';
+import { usePermission } from '../auth';
 
 const POLL_MS = 5000;
 
@@ -23,6 +24,7 @@ function avatarLetters(name) {
 export default function Conversations() {
   const { contactId } = useParams();
   const navigate = useNavigate();
+  const { canView: canUseCampaigns } = usePermission('campaigns');
   const [conversations, setConversations] = useState(null);
   const [thread, setThread] = useState(null);
   const [draft, setDraft] = useState('');
@@ -32,6 +34,14 @@ export default function Conversations() {
   const [pickable, setPickable] = useState([]);
   const [tab, setTab] = useState('all');
   const threadRef = useRef(null);
+
+  // "Add to campaign" (Sept 2026) — a rep enrolling this specific contact into one of their own
+  // campaigns' drip schedules (see Campaigns.jsx), always a deliberate per-contact action from
+  // right here, never automatic. Only relevant to someone who can already see the Campaigns page.
+  const [campaigns, setCampaigns] = useState([]);
+  const [contactEnrollments, setContactEnrollments] = useState([]);
+  const [showCampaignPicker, setShowCampaignPicker] = useState(false);
+  const [campaignBusy, setCampaignBusy] = useState(false);
 
   const activeId = contactId ? Number(contactId) : null;
 
@@ -53,6 +63,36 @@ export default function Conversations() {
     if (activeId != null) { setThread(null); loadThread(activeId); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
+
+  useEffect(() => {
+    if (canUseCampaigns) api.campaigns().then((rows) => setCampaigns(rows.filter((c) => c.status === 'active')));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canUseCampaigns]);
+
+  function loadContactEnrollments(id) {
+    return api.contactCampaignEnrollments(id).then(setContactEnrollments);
+  }
+  useEffect(() => {
+    setShowCampaignPicker(false);
+    if (canUseCampaigns && activeId != null) loadContactEnrollments(activeId);
+    else setContactEnrollments([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, canUseCampaigns]);
+
+  async function addToCampaign(campaignId) {
+    setCampaignBusy(true);
+    await api.enrollInCampaign(campaignId, activeId);
+    await loadContactEnrollments(activeId);
+    setCampaignBusy(false);
+    setShowCampaignPicker(false);
+  }
+
+  async function removeFromCampaign(enrollmentId) {
+    setCampaignBusy(true);
+    await api.removeCampaignEnrollment(enrollmentId);
+    await loadContactEnrollments(activeId);
+    setCampaignBusy(false);
+  }
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -180,6 +220,46 @@ export default function Conversations() {
                     <div style={{ fontWeight: 600 }}>{active.name}</div>
                     <div className="sub" style={{ margin: 0, fontSize: 12 }}>{active.phone || 'No phone number on file'}</div>
                   </div>
+                  {canUseCampaigns && (
+                    <div className="row" style={{ gap: 6, flexWrap: 'wrap', position: 'relative' }}>
+                      {contactEnrollments.filter((e) => e.status === 'active').map((e) => (
+                        <span key={e.id} className="pill green" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          {e.campaign_name}
+                          <button
+                            type="button"
+                            title="Remove from this campaign"
+                            disabled={campaignBusy}
+                            onClick={() => removeFromCampaign(e.id)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: 'inherit' }}
+                          >×</button>
+                        </span>
+                      ))}
+                      <button type="button" className="btn subtle sm" onClick={() => setShowCampaignPicker((v) => !v)}>+ Add to campaign</button>
+                      {showCampaignPicker && (
+                        <div className="modal-card" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 6, zIndex: 5, minWidth: 220, padding: 8 }}>
+                          {(() => {
+                            const enrolledIds = new Set(contactEnrollments.filter((e) => e.status === 'active').map((e) => e.campaign_id));
+                            const available = campaigns.filter((c) => !enrolledIds.has(c.id));
+                            if (available.length === 0) {
+                              return <div className="empty" style={{ padding: '6px 4px', fontSize: 13 }}>{campaigns.length === 0 ? 'No active campaigns yet — create one on the Campaigns page.' : 'Already in every active campaign.'}</div>;
+                            }
+                            return available.map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                className="chat-channel-row"
+                                disabled={campaignBusy}
+                                onClick={() => addToCampaign(c.id)}
+                                style={{ width: '100%', textAlign: 'left' }}
+                              >
+                                <span className="chat-channel-info"><span className="chat-channel-name">{c.name}</span></span>
+                              </button>
+                            ));
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="chat-thread" ref={threadRef}>
