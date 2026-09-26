@@ -596,6 +596,7 @@ table.list tbody tr.row-hot:hover td, table.list tbody tr.row-warm:hover td { ba
   background-repeat: no-repeat; background-position: right center; appearance: none; -webkit-appearance: none;
 }
 .status-select.amber { color: var(--amber); }
+.status-select.blue { color: var(--blue); }
 .status-select.red { color: var(--red); }
 .status-select.green { color: var(--success-ink); }
 .status-select.muted { color: var(--ink-soft); }
