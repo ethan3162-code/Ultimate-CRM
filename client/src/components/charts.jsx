@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+
 // Small hand-rolled chart primitives — no charting library, consistent with
 // the rest of the app (the Gantt/segmented-progress bars are hand-built too).
 // Every chart is plain SVG + CSS so it themes with the app's existing tokens
@@ -7,7 +9,21 @@ const PALETTE = ['var(--accent)', 'var(--amber)', 'var(--red)', 'var(--muted)', 
 
 /** Smooth-ish area/line trend chart (e.g. revenue by month). */
 export function TrendChart({ data, valueKey = 'value', labelKey = 'label', formatValue = (v) => v, height = 180 }) {
-  const width = 560;
+  const containerRef = useRef(null);
+  const [width, setWidth] = useState(560);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const w = el.clientWidth;
+      if (w) setWidth(w);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const padTop = 20, padBottom = 28, padX = 8;
   const max = Math.max(1, ...data.map((d) => d[valueKey]));
   const innerW = width - padX * 2;
@@ -22,28 +38,30 @@ export function TrendChart({ data, valueKey = 'value', labelKey = 'label', forma
   const areaPath = `${linePath} L ${points[points.length - 1]?.x ?? padX} ${padTop + innerH} L ${padX} ${padTop + innerH} Z`;
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} className="chart-trend" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.28" />
-          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {[0.25, 0.5, 0.75].map((f) => (
-        <line key={f} x1={padX} x2={width - padX} y1={padTop + innerH * f} y2={padTop + innerH * f} className="chart-gridline" />
-      ))}
-      {points.length > 1 && <path d={areaPath} fill="url(#trendFill)" stroke="none" />}
-      {points.length > 1 && <path d={linePath} fill="none" className="chart-line" />}
-      {points.map((p, i) => (
-        <g key={i}>
-          <circle cx={p.x} cy={p.y} r="3.5" className="chart-dot" />
-          {p.d[valueKey] > 0 && (
-            <text x={p.x} y={p.y - 10} textAnchor="middle" className="chart-value-label">{formatValue(p.d[valueKey])}</text>
-          )}
-          <text x={p.x} y={height - 8} textAnchor="middle" className="chart-axis-label">{p.d[labelKey]}</text>
-        </g>
-      ))}
-    </svg>
+    <div ref={containerRef} style={{ width: '100%' }}>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} className="chart-trend">
+        <defs>
+          <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75].map((f) => (
+          <line key={f} x1={padX} x2={width - padX} y1={padTop + innerH * f} y2={padTop + innerH * f} className="chart-gridline" />
+        ))}
+        {points.length > 1 && <path d={areaPath} fill="url(#trendFill)" stroke="none" />}
+        {points.length > 1 && <path d={linePath} fill="none" className="chart-line" vectorEffect="non-scaling-stroke" />}
+        {points.map((p, i) => (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r="3.5" className="chart-dot" />
+            {p.d[valueKey] > 0 && (
+              <text x={p.x} y={p.y - 10} textAnchor="middle" className="chart-value-label">{formatValue(p.d[valueKey])}</text>
+            )}
+            <text x={p.x} y={height - 8} textAnchor="middle" className="chart-axis-label">{p.d[labelKey]}</text>
+          </g>
+        ))}
+      </svg>
+    </div>
   );
 }
 
