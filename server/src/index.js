@@ -47,6 +47,7 @@ app.use('/api/contracts', requireAuth, require('./routes/contracts'));
 app.use('/api/transactions', requireAuth, requirePage('transactions'), require('./routes/transactions'));
 app.use('/api/dashboard', requireAuth, requirePage('dashboard'), require('./routes/dashboard'));
 app.use('/api/automations', requireAuth, requirePage('automations'), require('./routes/automations'));
+app.use('/api/campaigns', requireAuth, requirePage('campaigns'), require('./routes/campaigns'));
 app.use('/api/tickets', requireAuth, requirePage('tickets'), require('./routes/tickets'));
 app.use('/api/insights', requireAuth, requirePage('dashboard'), require('./routes/insights'));
 // AI draft assistant — used from both Tickets and Deals; it only generates text, so any signed-in
