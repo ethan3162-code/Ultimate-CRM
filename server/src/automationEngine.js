@@ -31,6 +31,14 @@ function recordRun(automationId, relatedType, relatedId, note) {
     .run(automationId, relatedType, relatedId, note);
 }
 
+// The Campaigns gate (Sept 2026, Hatch-style) — send_sms/send_email below check this before ever
+// reaching a real customer. Automations themselves can ship "enabled" from day one (as the four
+// seeded auto-texts do), but nothing customer-facing actually goes out until the business has
+// created at least one active Campaign — see db.js's campaigns table and the Campaigns page.
+function hasActiveCampaign() {
+  return !!db.prepare(`SELECT 1 FROM campaigns WHERE status = 'active' LIMIT 1`).get();
+}
+
 // --- action executors ---
 // ctx always includes: related_type, related_id (the record the activity timeline should attach to)
 function runAction(automation, ctx) {
@@ -48,6 +56,14 @@ function runAction(automation, ctx) {
     case 'send_email': {
       const subject = render(config.subject || '', ctx);
       const body = render(config.body || '', ctx);
+      // Campaigns gate (Sept 2026) — no auto-email reaches a customer until the business has
+      // created its first active Campaign. Still logged, so it's clear on the record *why*
+      // nothing went out rather than looking like the automation silently failed.
+      if (!hasActiveCampaign()) {
+        note = `Auto-email "${subject}" NOT sent${ctx.contact_name ? ` to ${ctx.contact_name}` : ''} — create a campaign to start sending automated messages.`;
+        logActivity(relatedType, relatedId, 'email', note);
+        break;
+      }
       note = `Auto-email "${subject}" sent${ctx.contact_name ? ` to ${ctx.contact_name}` : ''}: ${body}`;
       logActivity(relatedType, relatedId, 'email', note);
       // Best-effort real delivery via Gmail (see mailer.js) — never blocks the automation,
@@ -61,6 +77,13 @@ function runAction(automation, ctx) {
     }
     case 'send_sms': {
       const body = render(config.message || '', ctx);
+      // Campaigns gate (Sept 2026) — same as send_email above: no auto-text reaches a customer,
+      // real or simulated, until at least one active Campaign exists.
+      if (!hasActiveCampaign()) {
+        note = `Auto-SMS NOT sent${ctx.contact_name ? ` to ${ctx.contact_name}` : ''} — create a campaign to start sending automated messages.`;
+        logActivity(relatedType, relatedId, 'sms', note);
+        break;
+      }
       // Best-effort real delivery via Twilio (see sms.js) — a row always lands in the customer's
       // conversation thread (Messages > Conversations) so the auto-text shows up the same place a
       // rep's own texts do, whether or not Twilio is actually configured yet. Needs a contact_id
