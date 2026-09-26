@@ -12,6 +12,7 @@ import { dateTime } from '../utils';
 // you author the message/schedule and see who's currently in each campaign.
 const CHANNEL_LABEL = { sms: 'SMS', email: 'Email', both: 'SMS + Email' };
 const STATUS_LABEL = { active: 'Sending', completed: 'Completed', stopped: 'Stopped' };
+const AUDIENCE_LABEL = { lead: 'Leads', opportunity: 'Opportunities' };
 
 // A few starting points for the message body, grouped by where a contact is in the pipeline
 // (see Conversations.jsx's own lead/opportunity split, driven by their deal's stage) — picking
@@ -29,7 +30,7 @@ const PRESETS = {
   ],
 };
 
-const BLANK_FORM = { name: '', notes: '', message: '', channel: 'sms', times_per_day: 1, duration_days: 7 };
+const BLANK_FORM = { name: '', notes: '', message: '', channel: 'sms', audience: 'lead', times_per_day: 1, duration_days: 7 };
 
 export default function Campaigns() {
   const [campaigns, setCampaigns] = useState(null);
@@ -56,6 +57,7 @@ export default function Campaigns() {
       notes: form.notes || null,
       message: form.message || null,
       channel: form.channel,
+      audience: form.audience,
       times_per_day: Number(form.times_per_day) || 1,
       duration_days: Number(form.duration_days) || 1,
     });
@@ -86,6 +88,7 @@ export default function Campaigns() {
       notes: c.notes || '',
       message: c.message || '',
       channel: c.channel || 'sms',
+      audience: c.audience || 'lead',
       times_per_day: c.times_per_day || 1,
       duration_days: c.duration_days || 7,
     });
@@ -105,6 +108,7 @@ export default function Campaigns() {
       notes: editForm.notes || null,
       message: editForm.message || null,
       channel: editForm.channel,
+      audience: editForm.audience,
       times_per_day: Number(editForm.times_per_day) || 1,
       duration_days: Number(editForm.duration_days) || 1,
     });
@@ -159,6 +163,13 @@ export default function Campaigns() {
           <form onSubmit={submit} className="form-grid">
             <div className="field"><label>Campaign name</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Restart a cold conversation" required /></div>
             <div className="field">
+              <label>Audience</label>
+              <select value={form.audience} onChange={(e) => setForm({ ...form, audience: e.target.value })}>
+                <option value="lead">Leads</option>
+                <option value="opportunity">Opportunities</option>
+              </select>
+            </div>
+            <div className="field">
               <label>Channel</label>
               <select value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value })}>
                 <option value="sms">SMS</option>
@@ -170,12 +181,7 @@ export default function Campaigns() {
               <label>Start from a preset <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
               <select value="" onChange={(e) => { if (e.target.value) setForm({ ...form, message: e.target.value }); }}>
                 <option value="">— Choose a preset —</option>
-                <optgroup label="For leads">
-                  {PRESETS.lead.map((p) => <option key={p.label} value={p.text}>{p.label}</option>)}
-                </optgroup>
-                <optgroup label="For opportunities">
-                  {PRESETS.opportunity.map((p) => <option key={p.label} value={p.text}>{p.label}</option>)}
-                </optgroup>
+                {(PRESETS[form.audience] || []).map((p) => <option key={p.label} value={p.text}>{p.label}</option>)}
               </select>
             </div>
             <div className="field" style={{ gridColumn: '1 / -1' }}>
@@ -228,6 +234,13 @@ export default function Campaigns() {
                   <form onSubmit={(e) => saveEdit(e, c.id)} className="form-grid" style={{ marginTop: 10 }}>
                     <div className="field"><label>Campaign name</label><input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required /></div>
                     <div className="field">
+                      <label>Audience</label>
+                      <select value={editForm.audience} onChange={(e) => setEditForm({ ...editForm, audience: e.target.value })}>
+                        <option value="lead">Leads</option>
+                        <option value="opportunity">Opportunities</option>
+                      </select>
+                    </div>
+                    <div className="field">
                       <label>Channel</label>
                       <select value={editForm.channel} onChange={(e) => setEditForm({ ...editForm, channel: e.target.value })}>
                         <option value="sms">SMS</option>
@@ -239,12 +252,7 @@ export default function Campaigns() {
                       <label>Start from a preset <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
                       <select value="" onChange={(e) => { if (e.target.value) setEditForm({ ...editForm, message: e.target.value }); }}>
                         <option value="">— Choose a preset —</option>
-                        <optgroup label="For leads">
-                          {PRESETS.lead.map((p) => <option key={p.label} value={p.text}>{p.label}</option>)}
-                        </optgroup>
-                        <optgroup label="For opportunities">
-                          {PRESETS.opportunity.map((p) => <option key={p.label} value={p.text}>{p.label}</option>)}
-                        </optgroup>
+                        {(PRESETS[editForm.audience] || []).map((p) => <option key={p.label} value={p.text}>{p.label}</option>)}
                       </select>
                     </div>
                     <div className="field" style={{ gridColumn: '1 / -1' }}>
@@ -277,6 +285,7 @@ export default function Campaigns() {
                   <div className="muted" style={{ fontSize: 13, marginTop: 6, whiteSpace: 'pre-wrap' }}>&ldquo;{c.message}&rdquo;</div>
                 )}
                 <div className="row" style={{ gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                  <span className="pill" style={{ fontSize: 12 }}>{AUDIENCE_LABEL[c.audience] || 'Leads'}</span>
                   <span className="muted" style={{ fontSize: 12 }}>{CHANNEL_LABEL[c.channel] || c.channel}</span>
                   <span className="muted" style={{ fontSize: 12 }}>{c.times_per_day}×/day for {c.duration_days} day{c.duration_days === 1 ? '' : 's'}</span>
                   <button type="button" className="link-strong" style={{ fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => toggleEnrollments(c)}>
