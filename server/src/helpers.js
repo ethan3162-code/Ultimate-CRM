@@ -384,12 +384,15 @@ function getJobFull(id) {
   const leadSource = (deal && deal.source) || (contact && contact.source) || null;
   const owner = job.owner_user_id ? db.prepare(`SELECT username FROM users WHERE id = ?`).get(job.owner_user_id) : null;
   const salesperson = job.salesperson_user_id ? db.prepare(`SELECT username, commission_percent FROM users WHERE id = ?`).get(job.salesperson_user_id) : null;
+  const subcontractor = job.subcontractor_id ? db.prepare(`SELECT name, trade FROM subcontractors WHERE id = ?`).get(job.subcontractor_id) : null;
   const commission = getJobCommission(job, billing, salesperson);
 
   return {
     ...job, estimates, invoices, photos, costing, billing, attendance, account, opportunity: deal, lead_source: leadSource,
     owner_username: owner ? owner.username : null,
     salesperson_username: salesperson ? salesperson.username : null,
+    subcontractor_name: subcontractor ? subcontractor.name : null,
+    subcontractor_trade: subcontractor ? subcontractor.trade : null,
     commission,
   };
 }
