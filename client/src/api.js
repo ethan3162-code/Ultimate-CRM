@@ -183,6 +183,7 @@ export const api = {
   automationCampaignGate: () => request('/automations/campaign-gate'),
 
   campaigns: () => request('/campaigns'),
+  campaignCompanyName: () => request('/campaigns/company-name'),
   createCampaign: (data) => request('/campaigns', { method: 'POST', body: JSON.stringify(data) }),
   updateCampaign: (id, data) => request(`/campaigns/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteCampaign: (id) => request(`/campaigns/${id}`, { method: 'DELETE' }),
