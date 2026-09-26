@@ -22,6 +22,8 @@ export default function Campaigns() {
   const [busyId, setBusyId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [enrollments, setEnrollments] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState(BLANK_FORM);
 
   function load() {
     api.campaigns().then(setCampaigns);
@@ -56,6 +58,40 @@ export default function Campaigns() {
     await api.deleteCampaign(c.id);
     setBusyId(null);
     if (expandedId === c.id) setExpandedId(null);
+    load();
+  }
+
+  function startEdit(c) {
+    setEditingId(c.id);
+    setEditForm({
+      name: c.name,
+      notes: c.notes || '',
+      message: c.message || '',
+      channel: c.channel || 'sms',
+      times_per_day: c.times_per_day || 1,
+      duration_days: c.duration_days || 7,
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditForm(BLANK_FORM);
+  }
+
+  async function saveEdit(e, id) {
+    e.preventDefault();
+    if (!editForm.name.trim()) return;
+    setBusyId(id);
+    await api.updateCampaign(id, {
+      name: editForm.name,
+      notes: editForm.notes || null,
+      message: editForm.message || null,
+      channel: editForm.channel,
+      times_per_day: Number(editForm.times_per_day) || 1,
+      duration_days: Number(editForm.duration_days) || 1,
+    });
+    setBusyId(null);
+    setEditingId(null);
     load();
   }
 
@@ -147,11 +183,49 @@ export default function Campaigns() {
                     <span className={'pill' + (c.status === 'active' ? ' green' : '')}>{c.status}</span>
                   </span>
                   <div className="row" style={{ gap: 6 }}>
+                    {editingId !== c.id && (
+                      <button className="btn subtle sm" disabled={busyId === c.id} onClick={() => startEdit(c)}>Edit</button>
+                    )}
                     <button className="btn sm" disabled={busyId === c.id} onClick={() => toggle(c)}>{c.status === 'active' ? 'Pause' : 'Activate'}</button>
                     <button className="btn subtle sm" disabled={busyId === c.id} onClick={() => remove(c)}>Delete</button>
                   </div>
                 </div>
-                {c.message && (
+
+                {editingId === c.id ? (
+                  <form onSubmit={(e) => saveEdit(e, c.id)} className="form-grid" style={{ marginTop: 10 }}>
+                    <div className="field"><label>Campaign name</label><input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required /></div>
+                    <div className="field">
+                      <label>Channel</label>
+                      <select value={editForm.channel} onChange={(e) => setEditForm({ ...editForm, channel: e.target.value })}>
+                        <option value="sms">SMS</option>
+                        <option value="email">Email</option>
+                        <option value="both">Both — SMS and email</option>
+                      </select>
+                    </div>
+                    <div className="field" style={{ gridColumn: '1 / -1' }}>
+                      <label>Message <span className="muted" style={{ fontWeight: 400 }}>— use {'{{first_name}}'} to personalize</span></label>
+                      <textarea rows={3} value={editForm.message} onChange={(e) => setEditForm({ ...editForm, message: e.target.value })} />
+                    </div>
+                    <div className="field">
+                      <label>Times per day</label>
+                      <input type="number" min="1" value={editForm.times_per_day} onChange={(e) => setEditForm({ ...editForm, times_per_day: e.target.value })} />
+                    </div>
+                    <div className="field">
+                      <label>For how many days</label>
+                      <input type="number" min="1" value={editForm.duration_days} onChange={(e) => setEditForm({ ...editForm, duration_days: e.target.value })} />
+                    </div>
+                    <div className="field" style={{ gridColumn: '1 / -1' }}>
+                      <label>Notes (optional)</label>
+                      <textarea rows={2} value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
+                    </div>
+                    <div className="field" style={{ gridColumn: '1 / -1', justifyContent: 'flex-end', flexDirection: 'row', gap: 8 }}>
+                      <button type="button" className="btn subtle" disabled={busyId === c.id} onClick={cancelEdit}>Cancel</button>
+                      <button className="btn primary" type="submit" disabled={busyId === c.id}>Save changes</button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    {c.message && (
                   <div className="muted" style={{ fontSize: 13, marginTop: 6, whiteSpace: 'pre-wrap' }}>&ldquo;{c.message}&rdquo;</div>
                 )}
                 <div className="row" style={{ gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
@@ -165,6 +239,8 @@ export default function Campaigns() {
                 <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
                   Created {dateTime(c.created_at)}{c.created_by_username ? ` by ${c.created_by_username}` : ''}
                 </div>
+                  </>
+                )}
 
                 {expandedId === c.id && (
                   <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--line-soft)' }}>
