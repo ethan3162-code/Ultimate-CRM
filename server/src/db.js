@@ -178,13 +178,16 @@ CREATE TABLE IF NOT EXISTS automation_runs (
   ran_at TEXT DEFAULT (datetime('now'))
 );
 
--- Hatch-style campaigns (Sept 2026) — deliberately a thin record (name + status), not a
--- message-authoring tool of its own: the actual wording for auto-texts/emails still lives on the
--- send_sms/send_email automations above. A campaign's only job here is to be an explicit, visible
--- "yes, we're really doing automated outbound now" switch the business has to flip — see
--- automationEngine.js's hasActiveCampaign() gate, which blocks every send_sms/send_email
--- automation from actually reaching a customer until at least one campaign exists with
--- status = 'active'.
+-- Hatch-style campaigns (Sept 2026; extended later that month to actually send). A campaign is
+-- still the explicit, visible "yes, we're really doing automated outbound now" switch — see
+-- automationEngine.js's hasActiveCampaign() gate, which blocks every trigger-based send_sms/
+-- send_email automation from reaching a customer until at least one campaign exists with
+-- status = 'active' — but it now ALSO owns its own message (message/channel/times_per_day/
+-- duration_days, added via ensureColumn below) and can run its own drip send to whichever
+-- contacts a rep enrolls in it, independent of the trigger-based automations. Enrollment is
+-- always a deliberate per-contact action (the "Add to campaign" control on a Conversations
+-- thread — see campaign_enrollments below and campaignEngine.js), never an automatic segment
+-- rule, so a campaign never reaches someone a rep didn't choose to add.
 CREATE TABLE IF NOT EXISTS campaigns (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -192,6 +195,26 @@ CREATE TABLE IF NOT EXISTS campaigns (
   status TEXT NOT NULL DEFAULT 'active',
   created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Who's currently being sent a given campaign's drip, and how far along they are. One row per
+-- (campaign, contact) — see campaignEngine.js's processCampaignSends(), which runs every minute
+-- (same polling pattern as index.js's other periodic checks) and, for every 'active' enrollment,
+-- sends the next message once enough time has passed (24h / times_per_day since the last one, or
+-- immediately on enrollment), until either duration_days has elapsed since enrolled_at, the
+-- times_per_day * duration_days send budget is used up, or the contact replies — whichever comes
+-- first. status: 'active' (still sending), 'completed' (ran its full course), 'stopped'
+-- (replied, manually removed, or had no usable phone/email for the campaign's channel).
+CREATE TABLE IF NOT EXISTS campaign_enrollments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  contact_id INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'active',
+  sends_count INTEGER NOT NULL DEFAULT 0,
+  last_sent_at TEXT,
+  stopped_reason TEXT,
+  enrolled_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  enrolled_at TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS tickets (
@@ -957,6 +980,16 @@ ensureColumn('tasks', 'assigned_user_id', 'assigned_user_id INTEGER REFERENCES u
 // default. Lets the Project schedule page show each subcontractor's current job load alongside
 // the existing Gantt so office staff can see who has room to take more work.
 ensureColumn('jobs', 'subcontractor_id', 'subcontractor_id INTEGER REFERENCES subcontractors(id) ON DELETE SET NULL');
+// A campaign's own drip message + send schedule (Sept 2026) — added after campaigns shipped as a
+// pure on/off switch. message is a {{first_name}}-style template (same renderer as automations,
+// see automationEngine.js's render()); channel picks which of sms/email/both campaignEngine.js
+// sends through; times_per_day and duration_days together set each enrollment's total send
+// budget (times_per_day * duration_days messages, spaced 24h/times_per_day apart) before it
+// completes on its own.
+ensureColumn('campaigns', 'message', 'message TEXT');
+ensureColumn('campaigns', 'channel', "channel TEXT NOT NULL DEFAULT 'sms'");
+ensureColumn('campaigns', 'times_per_day', 'times_per_day INTEGER NOT NULL DEFAULT 1');
+ensureColumn('campaigns', 'duration_days', 'duration_days INTEGER NOT NULL DEFAULT 7');
 // Who logged this note/activity (Sept 2026) — nullable because plenty of activity rows are
 // system-generated (automation engine, stage-change side effects) with no logged-in user behind
 // them at all; those keep reading as unattributed. Notes a person types through the UI (the
