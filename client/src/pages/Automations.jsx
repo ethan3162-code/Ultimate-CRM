@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { dateTime } from '../utils';
 
@@ -98,10 +99,14 @@ export default function Automations() {
   const [actionType, setActionType] = useState(ACTIONS[0].key);
   const [triggerConfig, setTriggerConfig] = useState({});
   const [actionConfig, setActionConfig] = useState({});
+  // Campaigns gate (Sept 2026) — see automationEngine.js's hasActiveCampaign(): send_sms/
+  // send_email automations stay quiet (logged, not delivered) until a campaign is active.
+  const [campaignGate, setCampaignGate] = useState(null);
 
   function load() {
     api.automations().then(setAutomations);
     api.automationRuns().then(setRuns);
+    api.automationCampaignGate().then(setCampaignGate).catch(() => setCampaignGate(null));
   }
   useEffect(load, []);
 
@@ -135,6 +140,17 @@ export default function Automations() {
         </div>
         <button className="btn primary" onClick={() => setShowForm((v) => !v)}>+ New automation</button>
       </div>
+
+      {campaignGate && !campaignGate.active && (
+        <div className="card" style={{ marginBottom: 18, borderLeft: '3px solid var(--amber)' }}>
+          <h2>Auto-messaging is paused</h2>
+          <p className="sub" style={{ margin: '-4px 0 12px' }}>
+            None of the "text the customer" or "send an email" automations below will actually reach anyone yet — each run logs a
+            "not sent" note instead. Create a campaign to start sending.
+          </p>
+          <Link to="/campaigns" className="btn sm">Create a campaign →</Link>
+        </div>
+      )}
 
       {showForm && (
         <div className="card" style={{ marginBottom: 18 }}>
