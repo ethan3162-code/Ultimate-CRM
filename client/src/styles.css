@@ -488,6 +488,9 @@ table.list tbody tr:last-child td { border-bottom: none; }
   content: 'today'; position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
   font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; color: var(--red); white-space: nowrap;
 }
+/* Day-column separators on the "By subcontractor" week grid — same idea as .gantt-scale .tick's
+   border, just undecorated (no label) and repeated down every row, not only the header. */
+.week-gridline { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line-soft); }
 .table-wrap.gantt-wrap { overflow-x: auto; }
 @media (max-width: 820px) {
   .gantt-header .gantt-label-col, .gantt-row .gantt-label-col { width: 130px; padding: 8px; }
