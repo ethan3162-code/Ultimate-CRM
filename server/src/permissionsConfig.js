@@ -61,6 +61,11 @@ const PAGES = {
   subcontractors: 'Subcontractors',
   vehicles: 'Vehicles',
   automations: 'Automations',
+  // Hatch-style outbound texting campaigns (Sept 2026) — see automationEngine.js's campaign gate:
+  // a separate permission from 'automations' itself, since one team might want a rep managing
+  // campaigns without also handing them the full automation builder (deal-stage changes, job
+  // creation, etc.), or vice versa.
+  campaigns: 'Campaigns',
   integrations: 'Integrations',
 };
 
