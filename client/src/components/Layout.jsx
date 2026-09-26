@@ -46,6 +46,9 @@ const NAV = [
       // Customer texting (Sept 2026, Hatch-style) — gated on the same 'contacts' permission as
       // the Contacts page itself, since it's the same customer data.
       { to: '/conversations', label: 'Conversations', page: 'contacts' },
+      // The switch that unlocks auto-texting/auto-email from Automations (Sept 2026, Hatch-style)
+      // — its own permission, separate from 'automations', see permissionsConfig.js.
+      { to: '/campaigns', label: 'Campaigns', page: 'campaigns' },
     ],
   },
   {
