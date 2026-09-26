@@ -178,9 +178,11 @@ router.get('/:id/enrollments', (req, res) => {
   res.json(rows.map((r) => ({ ...r, contact_name: `${r.first_name} ${r.last_name}` })));
 });
 
-// Enroll one contact — always a deliberate, per-contact action (the "Add to campaign" control on
-// a Conversations thread), never an automatic segment rule. A contact already actively enrolled
-// in this same campaign isn't re-enrolled (their existing progress/schedule is left alone).
+// Enroll one contact — either a deliberate, per-contact action (the "Add to campaign" control on
+// a Conversations thread) or the Leads page's automatic status-match enroll (see
+// routes/deals.js's PATCH /:id) — never a broad segment rule that sweeps in contacts on its own.
+// A contact already actively enrolled in this same campaign isn't re-enrolled (their existing
+// progress/schedule is left alone).
 router.post('/:id/enroll', (req, res) => {
   const campaign = db.prepare(`SELECT * FROM campaigns WHERE id = ?`).get(req.params.id);
   if (!campaign) return res.status(404).json({ error: 'campaign not found' });
