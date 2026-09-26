@@ -42,6 +42,15 @@ router.delete('/:id', (req, res) => {
   res.status(204).end();
 });
 
+// Lets the Automations page show a banner explaining why send_sms/send_email automations aren't
+// actually reaching customers yet — see automationEngine.js's hasActiveCampaign(), the same check
+// that gates the real sends. Mounted here (rather than under /api/campaigns) so anyone with view
+// access to Automations can see the gate state even if they don't separately have Campaigns access.
+router.get('/campaign-gate', (req, res) => {
+  const active = !!db.prepare(`SELECT 1 FROM campaigns WHERE status = 'active' LIMIT 1`).get();
+  res.json({ active });
+});
+
 router.get('/runs', (req, res) => {
   const rows = db.prepare(`
     SELECT r.*, a.name AS automation_name, a.trigger_type, a.action_type
