@@ -15,7 +15,7 @@ const LOCATIONS = {
   long_island: { label: 'Long Island, NY', lat: 40.7268, lon: -73.6343 },
 };
 
-const CACHE_MS = 30 * 60 * 1000; // 30 min — plenty fresh for a 6-day outlook, keeps well under Open-Meteo's fair-use rate limit
+const CACHE_MS = 30 * 60 * 1000; // 30 min — plenty fresh for a 5-day outlook, keeps well under Open-Meteo's fair-use rate limit
 const cache = new Map(); // locationKey -> { at, data }
 
 function isConfigured() {
@@ -77,7 +77,7 @@ async function fetchDaily(locKey) {
   const cached = cache.get(locKey);
   if (cached && Date.now() - cached.at < CACHE_MS) return cached.data;
 
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&hourly=temperature_2m,weather_code,precipitation_probability&temperature_unit=fahrenheit&timezone=America%2FNew_York&forecast_days=6`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&hourly=temperature_2m,weather_code,precipitation_probability&temperature_unit=fahrenheit&timezone=America%2FNew_York&forecast_days=5`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`weather API responded ${res.status}`);
   const body = await res.json();
