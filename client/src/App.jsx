@@ -28,6 +28,7 @@ import Vehicles from './pages/Vehicles';
 import VehicleDetail from './pages/VehicleDetail';
 import VehicleMap from './pages/VehicleMap';
 import Automations from './pages/Automations';
+import Campaigns from './pages/Campaigns';
 import Tickets from './pages/Tickets';
 import TicketDetail from './pages/TicketDetail';
 import Calendar from './pages/Calendar';
@@ -106,6 +107,7 @@ function AuthedApp() {
           <Route path="/vehicles/map" element={<Protected page="vehicles"><VehicleMap /></Protected>} />
           <Route path="/vehicles/:id" element={<Protected page="vehicles"><VehicleDetail /></Protected>} />
           <Route path="/automations" element={<Protected page="automations"><Automations /></Protected>} />
+          <Route path="/campaigns" element={<Protected page="campaigns"><Campaigns /></Protected>} />
           <Route path="/tickets" element={<Protected page="tickets"><Tickets /></Protected>} />
           <Route path="/tickets/:id" element={<Protected page="tickets"><TicketDetail /></Protected>} />
           <Route path="/calendar" element={<Protected page="calendar"><Calendar /></Protected>} />
