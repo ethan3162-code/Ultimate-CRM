@@ -178,6 +178,22 @@ CREATE TABLE IF NOT EXISTS automation_runs (
   ran_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Hatch-style campaigns (Sept 2026) — deliberately a thin record (name + status), not a
+-- message-authoring tool of its own: the actual wording for auto-texts/emails still lives on the
+-- send_sms/send_email automations above. A campaign's only job here is to be an explicit, visible
+-- "yes, we're really doing automated outbound now" switch the business has to flip — see
+-- automationEngine.js's hasActiveCampaign() gate, which blocks every send_sms/send_email
+-- automation from actually reaching a customer until at least one campaign exists with
+-- status = 'active'.
+CREATE TABLE IF NOT EXISTS campaigns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS tickets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
@@ -1016,6 +1032,11 @@ for (const uid of allNonAdminUserIds) {
 // sms.js) — safe to ship enabled from day one. An admin can edit the wording, disable, or delete
 // any of these from the Automations page like any other rule; this only ever runs once (a name
 // already in the table is left untouched, even if it was edited or deleted since).
+//
+// Update (Sept 2026): "enabled" alone no longer means these can actually text a real customer —
+// automationEngine.js's send_sms/send_email actions also check hasActiveCampaign() and stay
+// silent (just a logged "blocked" note) until the business has created its first Campaign on the
+// new Campaigns page. So these ship enabled, but dormant, from day one.
 function seedAutomation(name, trigger_type, trigger_config, action_type, action_config) {
   const exists = db.prepare(`SELECT 1 FROM automations WHERE name = ?`).get(name);
   if (exists) return;
