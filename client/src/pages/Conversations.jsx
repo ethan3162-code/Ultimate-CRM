@@ -5,6 +5,17 @@ import { dateTime } from '../utils';
 
 const POLL_MS = 5000;
 
+// Hatch-style Leads/Opportunities split (Sept 2026) — each conversation's contact carries a
+// `status` from the server (see routes/customerMessages.js): 'lead' when they still have a
+// deal in the 'new' stage, 'opportunity' once it's past that, or null for anyone with neither
+// (a past won/lost deal, or no deal at all) — the "All" tab is the only place those show up.
+const TABS = [
+  { key: 'all', label: 'All' },
+  { key: 'lead', label: 'Leads' },
+  { key: 'opportunity', label: 'Opportunities' },
+];
+const STATUS_PILL = { lead: 'Lead', opportunity: 'Opportunity' };
+
 function avatarLetters(name) {
   return (name || '?').slice(0, 2).toUpperCase();
 }
@@ -19,6 +30,7 @@ export default function Conversations() {
   const [sending, setSending] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [pickable, setPickable] = useState([]);
+  const [tab, setTab] = useState('all');
   const threadRef = useRef(null);
 
   const activeId = contactId ? Number(contactId) : null;
@@ -68,6 +80,18 @@ export default function Conversations() {
     return null;
   }, [conversations, activeId, thread]);
 
+  // Tab counts always reflect the full list, even while a narrower tab is selected, so switching
+  // to "Leads" doesn't hide the fact that "Opportunities" still has messages waiting.
+  const tabCounts = useMemo(() => {
+    const c = { all: conversations ? conversations.length : 0, lead: 0, opportunity: 0 };
+    (conversations || []).forEach((row) => { if (row.status) c[row.status] += 1; });
+    return c;
+  }, [conversations]);
+
+  const visibleConversations = useMemo(() => (
+    tab === 'all' ? (conversations || []) : (conversations || []).filter((c) => c.status === tab)
+  ), [conversations, tab]);
+
   async function send(e) {
     e.preventDefault();
     const body = draft.trim();
@@ -110,9 +134,23 @@ export default function Conversations() {
       ) : (
         <div className="chat-shell">
           <div className="chat-sidebar">
+            <div className="tabs" style={{ padding: '0 8px', marginBottom: 8 }}>
+              {TABS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  className={'tab' + (tab === t.key ? ' active' : '')}
+                  onClick={() => setTab(t.key)}
+                >
+                  {t.label} <span className="muted">({tabCounts[t.key]})</span>
+                </button>
+              ))}
+            </div>
             {conversations.length === 0 ? (
               <div className="empty" style={{ padding: '24px 12px' }}>No conversations yet — start one with "+ New conversation".</div>
-            ) : conversations.map((c) => (
+            ) : visibleConversations.length === 0 ? (
+              <div className="empty" style={{ padding: '24px 12px' }}>No {TABS.find((t) => t.key === tab).label.toLowerCase()} conversations right now.</div>
+            ) : visibleConversations.map((c) => (
               <button
                 key={c.contact_id}
                 type="button"
@@ -121,7 +159,10 @@ export default function Conversations() {
               >
                 <span className="chat-avatar">{avatarLetters(c.name)}</span>
                 <span className="chat-channel-info">
-                  <span className="chat-channel-name">{c.name}</span>
+                  <span className="chat-channel-name">
+                    {c.name}
+                    {STATUS_PILL[c.status] && <span className="pill" style={{ marginLeft: 6 }}>{STATUS_PILL[c.status]}</span>}
+                  </span>
                   <span className="chat-channel-preview">{c.last_message || 'No messages yet'}</span>
                 </span>
                 {c.needs_reply && <span className="chat-unread-badge" title="Waiting on a reply">•</span>}
