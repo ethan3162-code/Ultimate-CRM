@@ -1,119 +1,87 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api';
 
 // Home page weather panel (Sept 2026) — sits in the page-head, across from the "Home" title
-// (same spot Layout.jsx's search bar puts the signed-in user's name). Two fixed locations only,
-// picked by the user: New York City and Long Island, NY — see server/src/weather.js for the
-// coordinates and the free Open-Meteo API this calls server-side. A 6-day forecast, shown 3 days
-// at a time with a slide control for the next 3, per the user's own ask. Pressing a day opens its
-// hour-by-hour breakdown (also the user's own ask) in a modal, reusing the app's existing
-// modal-overlay/modal-card pattern.
+// (same spot Layout.jsx's search bar puts the signed-in user's name). Two fixed locations, per
+// the user's own ask — New York City on top, Long Island, NY on the bottom, both always shown at
+// once in the same widget (no more location toggle) — see server/src/weather.js for the
+// coordinates and the free Open-Meteo API this calls server-side. A 5-day forecast per location,
+// all shown at once, per the user's own ask. Pressing a day opens its hour-by-hour breakdown
+// (also the user's own ask) in a modal, reusing the app's existing modal-overlay/modal-card
+// pattern.
 const LOCATIONS = [
   { key: 'nyc', label: 'NYC' },
   { key: 'long_island', label: 'Long Island' },
 ];
 
 export default function WeatherPanel() {
-  const [location, setLocation] = useState('nyc');
-  const [data, setData] = useState(null); // null = loading; {configured:false} = no API key set; {error} = call failed
-  const [page, setPage] = useState(0);
-  const [openDay, setOpenDay] = useState(null); // the clicked day's own object, or null when the hourly modal is closed
-  const scrollRef = useRef(null);
+  const [data, setData] = useState({}); // locationKey -> undefined (loading) | {location,days} | {error}
+  const [openDay, setOpenDay] = useState(null); // { locationLabel, day } for the clicked day, or null when the hourly modal is closed
 
   useEffect(() => {
-    setData(null);
-    setPage(0);
-    setOpenDay(null);
-    api.weather(location)
-      .then(setData)
-      .catch(() => setData({ configured: true, error: 'unavailable' }));
-  }, [location]);
-
-  function slide(dir) {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollBy({ left: dir * el.clientWidth, behavior: 'smooth' });
-  }
-
-  function onScroll(e) {
-    const el = e.currentTarget;
-    if (!el.clientWidth) return;
-    setPage(Math.round(el.scrollLeft / el.clientWidth));
-  }
-
-  // Nothing on file yet — no dead space in the header while the key isn't set up.
-  if (data && data.configured === false) return null;
+    let cancelled = false;
+    LOCATIONS.forEach((l) => {
+      api.weather(l.key)
+        .then((d) => { if (!cancelled) setData((prev) => ({ ...prev, [l.key]: d })); })
+        .catch(() => { if (!cancelled) setData((prev) => ({ ...prev, [l.key]: { error: 'unavailable' } })); });
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <div className="weather-panel">
-      <div className="weather-head">
-        <span className="weather-title">{(data && data.location) || 'Weather'}</span>
-        <div className="weather-toggle">
-          {LOCATIONS.map((l) => (
-            <button
-              key={l.key}
-              type="button"
-              className={'weather-toggle-btn' + (location === l.key ? ' active' : '')}
-              onClick={() => setLocation(l.key)}
-            >
-              {l.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {data === null ? (
-        <div className="weather-empty">Loading…</div>
-      ) : data.error ? (
-        <div className="weather-empty">Weather unavailable right now.</div>
-      ) : (
-        <div className="weather-scroll-wrap">
-          {page > 0 && (
-            <button type="button" className="weather-nav-btn prev" onClick={() => slide(-1)} aria-label="Show previous days">‹</button>
-          )}
-          <div className="weather-scroll" ref={scrollRef} onScroll={onScroll}>
-            {data.days.map((d, i) => (
-              <button
-                type="button"
-                className="weather-day"
-                key={i}
-                title={(d.narrative ? d.narrative + ' — ' : '') + 'see the hour-by-hour forecast'}
-                onClick={() => setOpenDay(d)}
-              >
-                <div className="weather-day-name">{i === 0 ? 'Today' : (d.dayOfWeek || '').slice(0, 3)}</div>
-                <div className="weather-day-icon">{d.icon}</div>
-                <div className="weather-day-temps">
-                  <span className="weather-hi">{d.high ?? '–'}°</span>
-                  <span className="weather-lo">{d.low ?? '–'}°</span>
-                </div>
-                {d.precipChance != null && d.precipChance > 0 && (
-                  <div className="weather-precip">💧{d.precipChance}%</div>
-                )}
-              </button>
-            ))}
+      {LOCATIONS.map((l) => {
+        const d = data[l.key];
+        return (
+          <div className="weather-row" key={l.key}>
+            <div className="weather-title">{(d && d.location) || l.label}</div>
+            {!d ? (
+              <div className="weather-empty">Loading…</div>
+            ) : d.error ? (
+              <div className="weather-empty">Weather unavailable right now.</div>
+            ) : (
+              <div className="weather-days-row">
+                {d.days.map((day, i) => (
+                  <button
+                    type="button"
+                    className="weather-day"
+                    key={i}
+                    title={(day.narrative ? day.narrative + ' — ' : '') + 'see the hour-by-hour forecast'}
+                    onClick={() => setOpenDay({ locationLabel: d.location || l.label, day })}
+                  >
+                    <div className="weather-day-name">{i === 0 ? 'Today' : (day.dayOfWeek || '').slice(0, 3)}</div>
+                    <div className="weather-day-icon">{day.icon}</div>
+                    <div className="weather-day-temps">
+                      <span className="weather-hi">{day.high ?? '–'}°</span>
+                      <span className="weather-lo">{day.low ?? '–'}°</span>
+                    </div>
+                    {day.precipChance != null && day.precipChance > 0 && (
+                      <div className="weather-precip">💧{day.precipChance}%</div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          {data.days.length > 3 && page === 0 && (
-            <button type="button" className="weather-nav-btn next" onClick={() => slide(1)} aria-label="Show next 3 days">›</button>
-          )}
-        </div>
-      )}
+        );
+      })}
 
       {openDay && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setOpenDay(null)}>
           <div className="modal-card wide">
             <div className="row between" style={{ alignItems: 'flex-start' }}>
               <div>
-                <h3>{openDay.dayOfWeek}</h3>
+                <h3>{openDay.day.dayOfWeek}</h3>
                 <p className="sub" style={{ margin: 0 }}>
-                  {(data && data.location) || ''}{openDay.narrative ? ` · ${openDay.narrative}` : ''}
-                  {openDay.high != null ? ` · ${openDay.high}°/${openDay.low}°` : ''}
+                  {openDay.locationLabel}{openDay.day.narrative ? ` · ${openDay.day.narrative}` : ''}
+                  {openDay.day.high != null ? ` · ${openDay.day.high}°/${openDay.day.low}°` : ''}
                 </p>
               </div>
               <button type="button" className="btn sm subtle" onClick={() => setOpenDay(null)}>Close</button>
             </div>
-            {openDay.hours && openDay.hours.length > 0 ? (
+            {openDay.day.hours && openDay.day.hours.length > 0 ? (
               <div className="weather-hourly-scroll">
-                {openDay.hours.map((h, i) => (
+                {openDay.day.hours.map((h, i) => (
                   <div className="weather-hour" key={i}>
                     <div className="weather-hour-label">{h.hourLabel}</div>
                     <div className="weather-hour-icon">{h.icon}</div>
