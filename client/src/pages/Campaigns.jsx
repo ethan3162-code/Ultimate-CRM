@@ -13,6 +13,22 @@ import { dateTime } from '../utils';
 const CHANNEL_LABEL = { sms: 'SMS', email: 'Email', both: 'SMS + Email' };
 const STATUS_LABEL = { active: 'Sending', completed: 'Completed', stopped: 'Stopped' };
 
+// A few starting points for the message body, grouped by where a contact is in the pipeline
+// (see Conversations.jsx's own lead/opportunity split, driven by their deal's stage) — picking
+// one just fills the textarea below, which the rep can still edit before saving.
+const PRESETS = {
+  lead: [
+    { label: 'Checking in', text: "Just checking in — still interested in getting your project moving? Happy to answer any questions." },
+    { label: 'Still thinking it over?', text: "No pressure at all — just let us know if you have questions or want to talk through pricing before deciding." },
+    { label: 'Ready when you are', text: "Whenever you're ready to move forward, reply here and we'll get you set up with a free estimate." },
+  ],
+  opportunity: [
+    { label: 'Estimate follow-up', text: "Following up on your estimate — do you have any questions before we get you scheduled?" },
+    { label: 'Locking in a start date', text: "Just checking in on your upcoming project. Let us know if you'd like to adjust anything or lock in a start date." },
+    { label: 'Ready to get started', text: "We're ready to get started whenever you are — reply here to confirm your details and we'll get you on the schedule." },
+  ],
+};
+
 const BLANK_FORM = { name: '', notes: '', message: '', channel: 'sms', times_per_day: 1, duration_days: 7 };
 
 export default function Campaigns() {
@@ -24,11 +40,13 @@ export default function Campaigns() {
   const [enrollments, setEnrollments] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(BLANK_FORM);
+  const [companyName, setCompanyName] = useState('');
 
   function load() {
     api.campaigns().then(setCampaigns);
   }
   useEffect(load, []);
+  useEffect(() => { api.campaignCompanyName().then((d) => setCompanyName(d.name)); }, []);
 
   async function submit(e) {
     e.preventDefault();
@@ -149,8 +167,23 @@ export default function Campaigns() {
               </select>
             </div>
             <div className="field" style={{ gridColumn: '1 / -1' }}>
-              <label>Message <span className="muted" style={{ fontWeight: 400 }}>— use {'{{first_name}}'} to personalize</span></label>
-              <textarea rows={3} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="Hi {{first_name}}, just following up on your project — happy to answer any questions!" />
+              <label>Start from a preset <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+              <select value="" onChange={(e) => { if (e.target.value) setForm({ ...form, message: e.target.value }); }}>
+                <option value="">— Choose a preset —</option>
+                <optgroup label="For leads">
+                  {PRESETS.lead.map((p) => <option key={p.label} value={p.text}>{p.label}</option>)}
+                </optgroup>
+                <optgroup label="For opportunities">
+                  {PRESETS.opportunity.map((p) => <option key={p.label} value={p.text}>{p.label}</option>)}
+                </optgroup>
+              </select>
+            </div>
+            <div className="field" style={{ gridColumn: '1 / -1' }}>
+              <label>Message <span className="muted" style={{ fontWeight: 400 }}>— the greeting and company sign-off below are added automatically</span></label>
+              <textarea rows={3} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="just following up on your project — happy to answer any questions!" />
+              <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Sent as: &ldquo;Hi {'{{first_name}}'}, {form.message || '…'} — {companyName || 'your company'}&rdquo;
+              </div>
             </div>
             <div className="field">
               <label>Times per day</label>
@@ -203,8 +236,23 @@ export default function Campaigns() {
                       </select>
                     </div>
                     <div className="field" style={{ gridColumn: '1 / -1' }}>
-                      <label>Message <span className="muted" style={{ fontWeight: 400 }}>— use {'{{first_name}}'} to personalize</span></label>
+                      <label>Start from a preset <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+                      <select value="" onChange={(e) => { if (e.target.value) setEditForm({ ...editForm, message: e.target.value }); }}>
+                        <option value="">— Choose a preset —</option>
+                        <optgroup label="For leads">
+                          {PRESETS.lead.map((p) => <option key={p.label} value={p.text}>{p.label}</option>)}
+                        </optgroup>
+                        <optgroup label="For opportunities">
+                          {PRESETS.opportunity.map((p) => <option key={p.label} value={p.text}>{p.label}</option>)}
+                        </optgroup>
+                      </select>
+                    </div>
+                    <div className="field" style={{ gridColumn: '1 / -1' }}>
+                      <label>Message <span className="muted" style={{ fontWeight: 400 }}>— the greeting and company sign-off below are added automatically</span></label>
                       <textarea rows={3} value={editForm.message} onChange={(e) => setEditForm({ ...editForm, message: e.target.value })} />
+                      <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                        Sent as: &ldquo;Hi {'{{first_name}}'}, {editForm.message || '…'} — {companyName || 'your company'}&rdquo;
+                      </div>
                     </div>
                     <div className="field">
                       <label>Times per day</label>
