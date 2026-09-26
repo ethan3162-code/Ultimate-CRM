@@ -55,7 +55,11 @@ export const CUSTOMER_TYPES = ['Residential', 'Commercial'];
 // Lead-detail field options (Salesforce Lead-object parity, Sept 2026) — matches the level
 // of detail Ethan's Salesforce Lead record captures, minus the tool-specific "(Hatch)"
 // nurture-platform statuses, which are dropped in favor of the plain disposition they represent.
-export const LEAD_STATUSES = ['New', 'Follow Up', 'Unresponsive', 'Restart', 'Lost', 'Converted'];
+// "Follow Up AI" (added later that month) is a second, separate follow-up status alongside the
+// original (now human-worked) "Follow Up" — the user's own ask, to be able to flip a lead
+// between a person following up and an automated one. Setting either one auto-enrolls the lead's
+// contact in the active campaign of that exact name (see routes/deals.js's PATCH /:id handler).
+export const LEAD_STATUSES = ['New', 'Follow Up', 'Follow Up AI', 'Unresponsive', 'Restart', 'Lost', 'Converted'];
 export const LEAD_TYPES = ['New business', 'Repeat customer', 'Referral', 'Other'];
 export const JOB_TIMEFRAMES = ['ASAP', 'Within 30 days', '1-3 months', 'Just researching', 'Other'];
 export const METHOD_OF_ENTRY = ['Call center', 'Web form', 'Phone', 'Walk-in', 'Referral', 'Email', 'Other'];
