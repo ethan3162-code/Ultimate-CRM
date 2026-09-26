@@ -184,6 +184,8 @@ export const api = {
 
   campaigns: () => request('/campaigns'),
   campaignCompanyName: () => request('/campaigns/company-name'),
+  campaignTemplates: () => request('/campaigns/templates'),
+  campaignSteps: (campaignId) => request(`/campaigns/${campaignId}/steps`),
   createCampaign: (data) => request('/campaigns', { method: 'POST', body: JSON.stringify(data) }),
   updateCampaign: (id, data) => request(`/campaigns/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteCampaign: (id) => request(`/campaigns/${id}`, { method: 'DELETE' }),
