@@ -286,24 +286,38 @@ export default function Dashboard() {
             )}
           </div>
 
-          <Link to="/reports/system/booking-rate-by-source" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <div className="card">
             <h2>Booking rate by source</h2>
             <p className="sub" style={{ margin: '-4px 0 10px' }}>Share of leads from each source that got at least one appointment on the calendar.</p>
             {reports.bookingRateBySource.length === 0 ? (
               <div className="empty">No leads yet.</div>
             ) : (
-              <BarList data={reports.bookingRateBySource} valueKey="rate" labelKey="label" formatValue={(v) => `${v}%`} />
+              <>
+                <BarList data={reports.bookingRateBySource.slice(0, 5)} valueKey="rate" labelKey="label" formatValue={(v) => `${v}%`} />
+                {reports.bookingRateBySource.length > 5 && (
+                  <div style={{ marginTop: 12 }}>
+                    <Link to="/reports/system/booking-rate-by-source" className="btn sm subtle">See full list ({reports.bookingRateBySource.length}) →</Link>
+                  </div>
+                )}
+              </>
             )}
-          </Link>
+          </div>
 
-          <Link to="/reports/system/sales-by-source" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <div className="card">
             <h2>Sales by source</h2>
             {reports.salesBySource.length === 0 ? (
               <div className="empty">No won opportunities yet.</div>
             ) : (
-              <BarList data={reports.salesBySource} valueKey="amount" labelKey="label" formatValue={money} />
+              <>
+                <BarList data={reports.salesBySource.slice(0, 5)} valueKey="amount" labelKey="label" formatValue={money} />
+                {reports.salesBySource.length > 5 && (
+                  <div style={{ marginTop: 12 }}>
+                    <Link to="/reports/system/sales-by-source" className="btn sm subtle">See full list ({reports.salesBySource.length}) →</Link>
+                  </div>
+                )}
+              </>
             )}
-          </Link>
+          </div>
 
           <Link to="/reports/system/sales-by-estimator" className="card" style={{ textDecoration: 'none', color: 'inherit' }}>
             <h2>Sales by estimator</h2>
