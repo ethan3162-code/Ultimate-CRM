@@ -1,16 +1,25 @@
-// Hatch-style campaigns (Sept 2026; extended later that month to actually send) — see db.js's
-// CREATE TABLE campaigns/campaign_enrollments and automationEngine.js's hasActiveCampaign() for
-// why this table exists: it's the explicit, visible switch that unlocks auto-texting/auto-email
-// once a business has actually set one up, rather than every seeded automation being able to
-// reach a real customer from the moment Twilio/Gmail get connected. A campaign now also owns its
-// own drip message (message/channel/times_per_day/duration_days) that it sends to whichever
-// contacts a rep enrolls in it — see campaignEngine.js for the actual sending, and
-// customerMessages.js's contact-enrollment endpoints (mounted alongside Conversations) for the
-// "Add to campaign" control on a conversation thread.
+// Hatch-style campaigns (Sept 2026; extended later that month to actually send, then again to
+// offer a built-in multi-touch sequence library) — see db.js's CREATE TABLE campaigns/
+// campaign_enrollments/campaign_steps and automationEngine.js's hasActiveCampaign() for why this
+// table exists: it's the explicit, visible switch that unlocks auto-texting/auto-email once a
+// business has actually set one up, rather than every seeded automation being able to reach a
+// real customer from the moment Twilio/Gmail get connected.
+//
+// A campaign is created one of two ways:
+//   - from a template_key (see campaignTemplates.js) — its steps are copied into campaign_steps
+//     right away, and campaignEngine.js drips them out day by day, mixing sms/email per step.
+//   - the older, plain way — a single message/channel/times_per_day/duration_days, still exactly
+//     as it worked before the template library existed, for a rep who just wants one quick
+//     recurring blurb rather than a whole authored sequence.
+// A campaign never has both; campaignEngine.js tells them apart by whether campaign_steps has
+// any rows for it. See campaignEngine.js for the actual sending, and customerMessages.js's
+// contact-enrollment endpoints (mounted alongside Conversations) for the "Add to campaign"
+// control on a conversation thread.
 const express = require('express');
 const db = require('../db');
 const { logActivity } = require('../helpers');
 const { getCompanyProfile } = require('../companyProfile');
+const { CATEGORIES, TEMPLATES, getTemplate } = require('../campaignTemplates');
 
 const router = express.Router();
 
@@ -18,12 +27,20 @@ const VALID_STATUSES = ['active', 'paused'];
 const VALID_CHANNELS = ['sms', 'email', 'both'];
 const VALID_AUDIENCES = ['lead', 'opportunity'];
 
+function withTemplateName(row) {
+  if (!row) return row;
+  const t = row.template_key ? getTemplate(row.template_key) : null;
+  return { ...row, template_name: t ? t.name : null };
+}
+
 function campaignRow(id) {
-  return db.prepare(`
+  const row = db.prepare(`
     SELECT c.*, u.username AS created_by_username,
-      (SELECT COUNT(*) FROM campaign_enrollments e WHERE e.campaign_id = c.id AND e.status = 'active') AS active_enrollment_count
+      (SELECT COUNT(*) FROM campaign_enrollments e WHERE e.campaign_id = c.id AND e.status = 'active') AS active_enrollment_count,
+      (SELECT COUNT(*) FROM campaign_steps s WHERE s.campaign_id = c.id) AS step_count
     FROM campaigns c LEFT JOIN users u ON u.id = c.created_by_user_id WHERE c.id = ?
   `).get(id);
+  return withTemplateName(row);
 }
 
 // The business's own name, for the create/edit form to show what a message actually gets signed
@@ -33,25 +50,58 @@ router.get('/company-name', (req, res) => {
   res.json({ name: getCompanyProfile().name });
 });
 
+// The built-in sequence library — grouped by category — for the "Start from a template" picker.
+// Full step content is included so the create form can show a live preview before saving.
+router.get('/templates', (req, res) => {
+  res.json({ categories: CATEGORIES, templates: TEMPLATES });
+});
+
 router.get('/', (req, res) => {
   const rows = db.prepare(`
     SELECT c.*, u.username AS created_by_username,
-      (SELECT COUNT(*) FROM campaign_enrollments e WHERE e.campaign_id = c.id AND e.status = 'active') AS active_enrollment_count
+      (SELECT COUNT(*) FROM campaign_enrollments e WHERE e.campaign_id = c.id AND e.status = 'active') AS active_enrollment_count,
+      (SELECT COUNT(*) FROM campaign_steps s WHERE s.campaign_id = c.id) AS step_count
     FROM campaigns c LEFT JOIN users u ON u.id = c.created_by_user_id
     ORDER BY c.created_at DESC
   `).all();
-  res.json(rows);
+  res.json(rows.map(withTemplateName));
 });
 
 router.post('/', (req, res) => {
   const name = (req.body.name || '').trim();
   if (!name) return res.status(400).json({ error: 'name is required' });
   const notes = req.body.notes || null;
+  const audience = req.body.audience || 'lead';
+  if (!VALID_AUDIENCES.includes(audience)) return res.status(400).json({ error: `audience must be one of ${VALID_AUDIENCES.join(', ')}` });
+
+  const templateKey = req.body.template_key || null;
+  if (templateKey) {
+    const template = getTemplate(templateKey);
+    if (!template) return res.status(400).json({ error: `unknown template_key ${templateKey}` });
+    const customLink = (req.body.custom_link || '').trim() || null;
+    if (template.needsLink && !customLink) {
+      return res.status(400).json({ error: 'this template needs a link — pass custom_link' });
+    }
+    const durationDays = Math.max(...template.steps.map((s) => s.day_offset)) + 1;
+    const result = db.prepare(`
+      INSERT INTO campaigns (name, notes, status, channel, audience, times_per_day, duration_days, custom_link, template_key, created_by_user_id)
+      VALUES (?, ?, 'active', 'both', ?, 1, ?, ?, ?, ?)
+    `).run(name, notes, audience, durationDays, customLink, templateKey, req.user.id);
+    const campaignId = result.lastInsertRowid;
+    const insertStep = db.prepare(`
+      INSERT INTO campaign_steps (campaign_id, step_order, day_offset, channel, subject, message)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    template.steps.forEach((s, i) => {
+      insertStep.run(campaignId, i, s.day_offset, s.channel, s.subject || null, s.message);
+    });
+    return res.status(201).json(campaignRow(campaignId));
+  }
+
+  // The older, plain single-message campaign — unchanged from before the template library.
   const message = req.body.message || null;
   const channel = req.body.channel || 'sms';
   if (!VALID_CHANNELS.includes(channel)) return res.status(400).json({ error: `channel must be one of ${VALID_CHANNELS.join(', ')}` });
-  const audience = req.body.audience || 'lead';
-  if (!VALID_AUDIENCES.includes(audience)) return res.status(400).json({ error: `audience must be one of ${VALID_AUDIENCES.join(', ')}` });
   const timesPerDay = Math.max(1, Number(req.body.times_per_day) || 1);
   const durationDays = Math.max(1, Number(req.body.duration_days) || 7);
   const result = db.prepare(`
@@ -82,16 +132,27 @@ router.patch('/:id', (req, res) => {
     audience: req.body.audience !== undefined ? req.body.audience : existing.audience,
     times_per_day: req.body.times_per_day !== undefined ? Math.max(1, Number(req.body.times_per_day) || 1) : existing.times_per_day,
     duration_days: req.body.duration_days !== undefined ? Math.max(1, Number(req.body.duration_days) || 1) : existing.duration_days,
+    // A sequence campaign (built from a template) can still have its link corrected after the
+    // fact — e.g. a rep pastes the real review-site link in once the business's profile is set
+    // up — without needing to recreate the whole campaign.
+    custom_link: req.body.custom_link !== undefined ? (req.body.custom_link || null) : existing.custom_link,
   };
   db.prepare(`
-    UPDATE campaigns SET name=?, notes=?, status=?, message=?, channel=?, audience=?, times_per_day=?, duration_days=? WHERE id=?
-  `).run(merged.name, merged.notes, merged.status, merged.message, merged.channel, merged.audience, merged.times_per_day, merged.duration_days, req.params.id);
+    UPDATE campaigns SET name=?, notes=?, status=?, message=?, channel=?, audience=?, times_per_day=?, duration_days=?, custom_link=? WHERE id=?
+  `).run(merged.name, merged.notes, merged.status, merged.message, merged.channel, merged.audience, merged.times_per_day, merged.duration_days, merged.custom_link, req.params.id);
   res.json(campaignRow(req.params.id));
 });
 
 router.delete('/:id', (req, res) => {
-  db.prepare(`DELETE FROM campaigns WHERE id = ?`).run(req.params.id); // cascades to campaign_enrollments
+  db.prepare(`DELETE FROM campaigns WHERE id = ?`).run(req.params.id); // cascades to campaign_enrollments and campaign_steps
   res.status(204).end();
+});
+
+// A sequence campaign's steps, in send order — for the Campaigns page's "View sequence" detail,
+// and for anyone double-checking exactly what a rep is about to enroll a contact into.
+router.get('/:id/steps', (req, res) => {
+  const rows = db.prepare(`SELECT * FROM campaign_steps WHERE campaign_id = ? ORDER BY step_order ASC`).all(req.params.id);
+  res.json(rows);
 });
 
 // Every campaign a given contact is (or has been) enrolled in — for the "Add to campaign"
