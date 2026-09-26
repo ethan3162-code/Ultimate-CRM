@@ -197,6 +197,31 @@ router.patch('/:id', (req, res) => {
       deal_id: existing.id,
     });
   }
+
+  // Auto-enroll into a matching campaign when a lead's status changes to one of the nurture
+  // statuses (Sept 2026 — the user's own ask, from the Leads page's Lead Status dropdown): setting
+  // lead_status to "Follow Up", "Follow Up AI", "Unresponsive", or "Restart" enrolls this deal's
+  // contact in the active campaign of that exact name, if one exists — same campaign_enrollments
+  // row the Conversations thread's manual "Add to campaign" control creates (see
+  // routes/campaigns.js's POST /:id/enroll), just triggered by the status change instead of a
+  // person picking a campaign. No matching campaign, or already actively enrolled in it, is a
+  // silent no-op — this never blocks or errors the status update. New/Lost/Converted don't
+  // trigger it; those aren't nurture statuses.
+  const FOLLOWUP_LEAD_STATUSES = ['Follow Up', 'Follow Up AI', 'Unresponsive', 'Restart'];
+  if (
+    req.body.lead_status && req.body.lead_status !== existing.lead_status &&
+    FOLLOWUP_LEAD_STATUSES.includes(req.body.lead_status) && updates.contact_id
+  ) {
+    const campaign = db.prepare(`SELECT * FROM campaigns WHERE status = 'active' AND lower(name) = lower(?)`).get(req.body.lead_status);
+    if (campaign) {
+      const already = db.prepare(`SELECT 1 FROM campaign_enrollments WHERE campaign_id = ? AND contact_id = ? AND status = 'active'`).get(campaign.id, updates.contact_id);
+      if (!already) {
+        db.prepare(`INSERT INTO campaign_enrollments (campaign_id, contact_id, enrolled_by_user_id) VALUES (?, ?, ?)`).run(campaign.id, updates.contact_id, req.user.id);
+        logActivity('contact', updates.contact_id, 'automation', `Added to campaign "${campaign.name}" automatically — lead status set to "${req.body.lead_status}".`);
+      }
+    }
+  }
+
   res.json(db.prepare(`SELECT * FROM deals WHERE id = ?`).get(req.params.id));
 });
 
