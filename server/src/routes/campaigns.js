@@ -16,6 +16,7 @@ const router = express.Router();
 
 const VALID_STATUSES = ['active', 'paused'];
 const VALID_CHANNELS = ['sms', 'email', 'both'];
+const VALID_AUDIENCES = ['lead', 'opportunity'];
 
 function campaignRow(id) {
   return db.prepare(`
@@ -49,12 +50,14 @@ router.post('/', (req, res) => {
   const message = req.body.message || null;
   const channel = req.body.channel || 'sms';
   if (!VALID_CHANNELS.includes(channel)) return res.status(400).json({ error: `channel must be one of ${VALID_CHANNELS.join(', ')}` });
+  const audience = req.body.audience || 'lead';
+  if (!VALID_AUDIENCES.includes(audience)) return res.status(400).json({ error: `audience must be one of ${VALID_AUDIENCES.join(', ')}` });
   const timesPerDay = Math.max(1, Number(req.body.times_per_day) || 1);
   const durationDays = Math.max(1, Number(req.body.duration_days) || 7);
   const result = db.prepare(`
-    INSERT INTO campaigns (name, notes, status, message, channel, times_per_day, duration_days, created_by_user_id)
-    VALUES (?, ?, 'active', ?, ?, ?, ?, ?)
-  `).run(name, notes, message, channel, timesPerDay, durationDays, req.user.id);
+    INSERT INTO campaigns (name, notes, status, message, channel, audience, times_per_day, duration_days, created_by_user_id)
+    VALUES (?, ?, 'active', ?, ?, ?, ?, ?, ?)
+  `).run(name, notes, message, channel, audience, timesPerDay, durationDays, req.user.id);
   res.status(201).json(campaignRow(result.lastInsertRowid));
 });
 
@@ -67,18 +70,22 @@ router.patch('/:id', (req, res) => {
   if (req.body.channel !== undefined && !VALID_CHANNELS.includes(req.body.channel)) {
     return res.status(400).json({ error: `channel must be one of ${VALID_CHANNELS.join(', ')}` });
   }
+  if (req.body.audience !== undefined && !VALID_AUDIENCES.includes(req.body.audience)) {
+    return res.status(400).json({ error: `audience must be one of ${VALID_AUDIENCES.join(', ')}` });
+  }
   const merged = {
     name: req.body.name !== undefined ? req.body.name.trim() : existing.name,
     notes: req.body.notes !== undefined ? req.body.notes : existing.notes,
     status: req.body.status !== undefined ? req.body.status : existing.status,
     message: req.body.message !== undefined ? req.body.message : existing.message,
     channel: req.body.channel !== undefined ? req.body.channel : existing.channel,
+    audience: req.body.audience !== undefined ? req.body.audience : existing.audience,
     times_per_day: req.body.times_per_day !== undefined ? Math.max(1, Number(req.body.times_per_day) || 1) : existing.times_per_day,
     duration_days: req.body.duration_days !== undefined ? Math.max(1, Number(req.body.duration_days) || 1) : existing.duration_days,
   };
   db.prepare(`
-    UPDATE campaigns SET name=?, notes=?, status=?, message=?, channel=?, times_per_day=?, duration_days=? WHERE id=?
-  `).run(merged.name, merged.notes, merged.status, merged.message, merged.channel, merged.times_per_day, merged.duration_days, req.params.id);
+    UPDATE campaigns SET name=?, notes=?, status=?, message=?, channel=?, audience=?, times_per_day=?, duration_days=? WHERE id=?
+  `).run(merged.name, merged.notes, merged.status, merged.message, merged.channel, merged.audience, merged.times_per_day, merged.duration_days, req.params.id);
   res.json(campaignRow(req.params.id));
 });
 
