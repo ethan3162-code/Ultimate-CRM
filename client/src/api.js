@@ -186,6 +186,10 @@ export const api = {
   createCampaign: (data) => request('/campaigns', { method: 'POST', body: JSON.stringify(data) }),
   updateCampaign: (id, data) => request(`/campaigns/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteCampaign: (id) => request(`/campaigns/${id}`, { method: 'DELETE' }),
+  campaignEnrollments: (campaignId) => request(`/campaigns/${campaignId}/enrollments`),
+  contactCampaignEnrollments: (contactId) => request(`/campaigns/contact/${contactId}`),
+  enrollInCampaign: (campaignId, contactId) => request(`/campaigns/${campaignId}/enroll`, { method: 'POST', body: JSON.stringify({ contact_id: contactId }) }),
+  removeCampaignEnrollment: (enrollmentId) => request(`/campaigns/enrollments/${enrollmentId}`, { method: 'DELETE' }),
 
   tickets: () => request('/tickets'),
   ticket: (id) => request(`/tickets/${id}`),
