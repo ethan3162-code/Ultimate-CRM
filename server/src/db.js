@@ -990,6 +990,11 @@ ensureColumn('campaigns', 'message', 'message TEXT');
 ensureColumn('campaigns', 'channel', "channel TEXT NOT NULL DEFAULT 'sms'");
 ensureColumn('campaigns', 'times_per_day', 'times_per_day INTEGER NOT NULL DEFAULT 1');
 ensureColumn('campaigns', 'duration_days', 'duration_days INTEGER NOT NULL DEFAULT 7');
+// Which side of the pipeline a campaign is written for (Sept 2026) — a rep picks this when
+// creating the campaign, same 'lead'/'opportunity' split Conversations.jsx already computes per
+// contact from their deal stage. Defaults to 'lead' for any campaign created before this column
+// existed, rather than leaving old rows to guess.
+ensureColumn('campaigns', 'audience', "audience TEXT NOT NULL DEFAULT 'lead'");
 // Who logged this note/activity (Sept 2026) — nullable because plenty of activity rows are
 // system-generated (automation engine, stage-change side effects) with no logged-in user behind
 // them at all; those keep reading as unattributed. Notes a person types through the UI (the
