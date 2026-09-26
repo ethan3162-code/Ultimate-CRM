@@ -65,10 +65,12 @@ function readStageDays(body, existing) {
 
 router.get('/', (req, res) => {
   const rows = db.prepare(`
-    SELECT j.*, c.first_name, c.last_name, co.name AS company_name
+    SELECT j.*, c.first_name, c.last_name, co.name AS company_name,
+      sc.name AS subcontractor_name, sc.trade AS subcontractor_trade
     FROM jobs j
     LEFT JOIN contacts c ON c.id = j.contact_id
     LEFT JOIN companies co ON co.id = j.company_id
+    LEFT JOIN subcontractors sc ON sc.id = j.subcontractor_id
     ORDER BY j.created_at DESC
   `).all();
   if (canSeePrices(req.user)) return res.json(rows);
@@ -78,7 +80,7 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { contact_id, company_id, deal_id, title, status, address, scheduled_date, start_date, stage, owner_user_id } = req.body;
+  const { contact_id, company_id, deal_id, title, status, address, scheduled_date, start_date, stage, owner_user_id, subcontractor_id } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
   const days = readStageDays(req.body, null);
   const progress_percent = computeProgress(days, stage);
@@ -96,16 +98,16 @@ router.post('/', (req, res) => {
       contact_id, company_id, deal_id, title, status, address, scheduled_date, start_date, end_date,
       progress_percent, stage, demo_days, site_prep_days, installation_days, final_walkthrough_days,
       labor_crew, desired_start_date, unqualified_reason, job_notes, insurance_requests, request_review,
-      contract_amount, change_order_amount, sales_tax_amount, capital_improvement, labor_paid, owner_user_id
+      contract_amount, change_order_amount, sales_tax_amount, capital_improvement, labor_paid, owner_user_id, subcontractor_id
     )
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).run(
     contact_id || null, company_id || null, deal_id || null, title, status || 'accepted', address || null,
     scheduled_date || null, start_date || null, end_date, progress_percent, stage || null,
     days.demo_days, days.site_prep_days, days.installation_days, days.final_walkthrough_days,
     detail.labor_crew, detail.desired_start_date, detail.unqualified_reason, detail.job_notes, detail.insurance_requests, detail.request_review,
     detail.contract_amount, detail.change_order_amount, detail.sales_tax_amount, detail.capital_improvement, detail.labor_paid,
-    owner_user_id || null
+    owner_user_id || null, subcontractor_id || null
   );
   logActivity('job', result.lastInsertRowid, 'note', `Job "${title}" created.`);
   const fresh = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(result.lastInsertRowid);
@@ -155,6 +157,7 @@ router.patch('/:id', (req, res) => {
   updates.capital_improvement = req.body.capital_improvement !== undefined ? (req.body.capital_improvement ? 1 : 0) : existing.capital_improvement;
   updates.owner_user_id = req.body.owner_user_id !== undefined ? (req.body.owner_user_id || null) : existing.owner_user_id;
   updates.salesperson_user_id = req.body.salesperson_user_id !== undefined ? (req.body.salesperson_user_id || null) : existing.salesperson_user_id;
+  updates.subcontractor_id = req.body.subcontractor_id !== undefined ? (req.body.subcontractor_id || null) : existing.subcontractor_id;
 
   db.prepare(`
     UPDATE jobs SET
@@ -162,7 +165,7 @@ router.patch('/:id', (req, res) => {
       demo_days=?, site_prep_days=?, installation_days=?, final_walkthrough_days=?,
       labor_crew=?, desired_start_date=?, unqualified_reason=?, job_notes=?, insurance_requests=?, request_review=?,
       contract_amount=?, change_order_amount=?, sales_tax_amount=?, capital_improvement=?, labor_paid=?, owner_user_id=?,
-      salesperson_user_id=?,
+      salesperson_user_id=?, subcontractor_id=?,
       updated_at=datetime('now')
     WHERE id=?
   `).run(
@@ -170,7 +173,7 @@ router.patch('/:id', (req, res) => {
     updates.progress_percent, updates.stage, days.demo_days, days.site_prep_days, days.installation_days, days.final_walkthrough_days,
     updates.labor_crew, updates.desired_start_date, updates.unqualified_reason, updates.job_notes, updates.insurance_requests, updates.request_review,
     updates.contract_amount, updates.change_order_amount, updates.sales_tax_amount, updates.capital_improvement, updates.labor_paid, updates.owner_user_id,
-    updates.salesperson_user_id,
+    updates.salesperson_user_id, updates.subcontractor_id,
     req.params.id
   );
   // Re-notify the project's owner if the schedule itself (or who owns it) changed — a billing
