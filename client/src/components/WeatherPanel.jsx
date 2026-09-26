@@ -6,9 +6,12 @@ import { api } from '../api';
 // the user's own ask — New York City on top, Long Island, NY on the bottom, both always shown at
 // once in the same widget (no more location toggle) — see server/src/weather.js for the
 // coordinates and the free Open-Meteo API this calls server-side. A 5-day forecast per location,
-// all shown at once, per the user's own ask. Pressing a day opens its hour-by-hour breakdown
-// (also the user's own ask) in a modal, reusing the app's existing modal-overlay/modal-card
-// pattern.
+// all shown at once, per the user's own ask. Each row is laid out with the (short) location label
+// on the left and its 5 day tiles filling the rest of the row to the right — also the user's own
+// ask, and a slimmer look than the old label-above-tiles layout it replaced. Pressing a day opens
+// its hour-by-hour breakdown (also the user's own ask) in a modal, reusing the app's existing
+// modal-overlay/modal-card pattern; the modal keeps the fuller server-provided location name
+// (e.g. "Long Island, NY") since it has more room than the row's own compact label.
 const LOCATIONS = [
   { key: 'nyc', label: 'NYC' },
   { key: 'long_island', label: 'Long Island' },
@@ -34,7 +37,7 @@ export default function WeatherPanel() {
         const d = data[l.key];
         return (
           <div className="weather-row" key={l.key}>
-            <div className="weather-title">{(d && d.location) || l.label}</div>
+            <div className="weather-title">{l.label}</div>
             {!d ? (
               <div className="weather-empty">Loading…</div>
             ) : d.error ? (
