@@ -9,6 +9,7 @@ const { fireTrigger } = require('./automationEngine');
 const leadInbox = require('./leadInbox');
 const subcontractorCompliance = require('./subcontractorCompliance');
 const vehicleCompliance = require('./vehicleCompliance');
+const campaignEngine = require('./campaignEngine');
 const { readSession, requireAuth, requirePage, requireAnyPage, requireAdmin } = require('./auth');
 
 const app = express();
@@ -230,6 +231,15 @@ async function checkVehicleDocs() {
 }
 checkVehicleDocs();
 setInterval(checkVehicleDocs, 6 * 60 * 60_000);
+
+// --- Periodic check: send each active campaign's next drip message to its enrolled contacts —
+// same 60s cadence as the automation-trigger checks above, since a "3x/day" schedule needs finer
+// granularity than the once-per-6-hours compliance sweeps (see campaignEngine.js). ---
+async function checkCampaignSends() {
+  try { await campaignEngine.processCampaignSends(); } catch (err) { console.error('[campaignEngine] check failed:', err.message); }
+}
+checkCampaignSends();
+setInterval(checkCampaignSends, 60_000);
 
 // Serve the built React client in production
 const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
