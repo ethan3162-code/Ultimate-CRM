@@ -951,6 +951,12 @@ ensureColumn('jobs', 'owner_user_id', 'owner_user_id INTEGER REFERENCES users(id
 ensureColumn('jobs', 'salesperson_user_id', 'salesperson_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 ensureColumn('appointments', 'assigned_user_id', 'assigned_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
 ensureColumn('tasks', 'assigned_user_id', 'assigned_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL');
+// Which subcontractor crew is doing the on-site work for this project (Sept 2026) — separate
+// from owner_user_id/salesperson_user_id above, which both reference internal users, not the
+// subcontractors table. One sub per project (per product decision), nullable/unassigned by
+// default. Lets the Project schedule page show each subcontractor's current job load alongside
+// the existing Gantt so office staff can see who has room to take more work.
+ensureColumn('jobs', 'subcontractor_id', 'subcontractor_id INTEGER REFERENCES subcontractors(id) ON DELETE SET NULL');
 // Who logged this note/activity (Sept 2026) — nullable because plenty of activity rows are
 // system-generated (automation engine, stage-change side effects) with no logged-in user behind
 // them at all; those keep reading as unattributed. Notes a person types through the UI (the
