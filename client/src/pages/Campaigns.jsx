@@ -3,20 +3,28 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { dateTime } from '../utils';
 
-// Hatch-style Campaigns (Sept 2026; extended later that month to actually send). A campaign is
-// still the explicit "we've set this up" switch that unlocks the trigger-based auto-text/
-// auto-email automations on the Automations page (see automationEngine.js's hasActiveCampaign())
-// — but it now ALSO owns its own message and can drip-send it on a times-per-day / for-N-days
-// schedule to whichever contacts a rep enrolls in it. Enrollment itself happens from a
-// Conversations thread ("Add to campaign"), never automatically by segment — this page is where
-// you author the message/schedule and see who's currently in each campaign.
+// Hatch-style Campaigns (Sept 2026; extended later that month to actually send, then again to
+// add a built-in multi-touch sequence library). A campaign is still the explicit "we've set this
+// up" switch that unlocks the trigger-based auto-text/auto-email automations on the Automations
+// page (see automationEngine.js's hasActiveCampaign()) — but it now also owns its own outbound
+// content, in one of two shapes a rep picks when creating it:
+//   - a SEQUENCE, started from one of the built-in templates below: a whole multi-day, mixed
+//     sms/email drip (see campaignTemplates.js on the server, and campaign_steps in db.js) —
+//     the wording is fixed once created (it's a copy of the template, not a live link to it), so
+//     the only things still editable afterward are the campaign's name/audience/notes/link.
+//   - a CUSTOM single message, repeated a number of times a day for a number of days — the
+//     original, simpler style this page has always had, still here unchanged for a rep who just
+//     wants one quick recurring blurb rather than a whole authored sequence.
+// Enrollment itself always happens from a Conversations thread ("Add to campaign"), never
+// automatically by segment — this page is where you author the content/schedule and see who's
+// currently in each campaign.
 const CHANNEL_LABEL = { sms: 'SMS', email: 'Email', both: 'SMS + Email' };
 const STATUS_LABEL = { active: 'Sending', completed: 'Completed', stopped: 'Stopped' };
 const AUDIENCE_LABEL = { lead: 'Leads', opportunity: 'Opportunities' };
 
-// A few starting points for the message body, grouped by where a contact is in the pipeline
-// (see Conversations.jsx's own lead/opportunity split, driven by their deal's stage) — picking
-// one just fills the textarea below, which the rep can still edit before saving.
+// A few starting points for a CUSTOM message's body, grouped by where a contact is in the
+// pipeline (see Conversations.jsx's own lead/opportunity split, driven by their deal's stage) —
+// picking one just fills the textarea below, which the rep can still edit before saving.
 const PRESETS = {
   lead: [
     { label: 'Checking in', text: "Just checking in — still interested in getting your project moving? Happy to answer any questions." },
@@ -31,37 +39,81 @@ const PRESETS = {
 };
 
 const BLANK_FORM = { name: '', notes: '', message: '', channel: 'sms', audience: 'lead', times_per_day: 1, duration_days: 7 };
+const BLANK_TEMPLATE_FORM = { name: '', audience: 'lead', template_key: '', custom_link: '' };
+
+// One step's day + channel + (for email) subject, rendered plainly for the sequence preview and
+// the per-campaign "View sequence" detail — both a not-yet-saved template preview (fields:
+// day_offset/channel/subject/message) and an already-saved step (same fields, from the API) use
+// this same renderer.
+function StepPreview({ step }) {
+  return (
+    <div style={{ padding: '6px 0', borderBottom: '1px solid var(--line-soft)' }}>
+      <div className="row" style={{ gap: 8, fontSize: 12 }}>
+        <span className="pill" style={{ fontSize: 11 }}>Day {step.day_offset}</span>
+        <span className="muted" style={{ fontSize: 12 }}>{CHANNEL_LABEL[step.channel] || step.channel}</span>
+      </div>
+      {step.channel === 'email' && step.subject && (
+        <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4 }}>{step.subject}</div>
+      )}
+      <div className="muted" style={{ fontSize: 13, marginTop: 2, whiteSpace: 'pre-wrap' }}>{step.message}</div>
+    </div>
+  );
+}
 
 export default function Campaigns() {
   const [campaigns, setCampaigns] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [formMode, setFormMode] = useState('template');
   const [form, setForm] = useState(BLANK_FORM);
+  const [templateForm, setTemplateForm] = useState(BLANK_TEMPLATE_FORM);
   const [busyId, setBusyId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [enrollments, setEnrollments] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState(BLANK_FORM);
+  const [editTemplateForm, setEditTemplateForm] = useState({ name: '', audience: 'lead', notes: '', custom_link: '' });
   const [companyName, setCompanyName] = useState('');
+  const [templatesData, setTemplatesData] = useState(null);
+  const [stepsId, setStepsId] = useState(null);
+  const [stepsCache, setStepsCache] = useState({});
 
   function load() {
     api.campaigns().then(setCampaigns);
   }
   useEffect(load, []);
   useEffect(() => { api.campaignCompanyName().then((d) => setCompanyName(d.name)); }, []);
+  useEffect(() => { api.campaignTemplates().then(setTemplatesData); }, []);
+
+  function templateByKey(key) {
+    return templatesData ? templatesData.templates.find((t) => t.key === key) : null;
+  }
 
   async function submit(e) {
     e.preventDefault();
-    if (!form.name.trim()) return;
-    await api.createCampaign({
-      name: form.name,
-      notes: form.notes || null,
-      message: form.message || null,
-      channel: form.channel,
-      audience: form.audience,
-      times_per_day: Number(form.times_per_day) || 1,
-      duration_days: Number(form.duration_days) || 1,
-    });
-    setForm(BLANK_FORM);
+    if (formMode === 'template') {
+      if (!templateForm.name.trim() || !templateForm.template_key) return;
+      const t = templateByKey(templateForm.template_key);
+      if (t && t.needsLink && !templateForm.custom_link.trim()) return;
+      await api.createCampaign({
+        name: templateForm.name,
+        audience: templateForm.audience,
+        template_key: templateForm.template_key,
+        custom_link: templateForm.custom_link || null,
+      });
+      setTemplateForm(BLANK_TEMPLATE_FORM);
+    } else {
+      if (!form.name.trim()) return;
+      await api.createCampaign({
+        name: form.name,
+        notes: form.notes || null,
+        message: form.message || null,
+        channel: form.channel,
+        audience: form.audience,
+        times_per_day: Number(form.times_per_day) || 1,
+        duration_days: Number(form.duration_days) || 1,
+      });
+      setForm(BLANK_FORM);
+    }
     setShowForm(false);
     load();
   }
@@ -78,40 +130,61 @@ export default function Campaigns() {
     await api.deleteCampaign(c.id);
     setBusyId(null);
     if (expandedId === c.id) setExpandedId(null);
+    if (stepsId === c.id) setStepsId(null);
     load();
   }
 
   function startEdit(c) {
     setEditingId(c.id);
-    setEditForm({
-      name: c.name,
-      notes: c.notes || '',
-      message: c.message || '',
-      channel: c.channel || 'sms',
-      audience: c.audience || 'lead',
-      times_per_day: c.times_per_day || 1,
-      duration_days: c.duration_days || 7,
-    });
+    if (c.step_count > 0) {
+      setEditTemplateForm({
+        name: c.name,
+        audience: c.audience || 'lead',
+        notes: c.notes || '',
+        custom_link: c.custom_link || '',
+      });
+    } else {
+      setEditForm({
+        name: c.name,
+        notes: c.notes || '',
+        message: c.message || '',
+        channel: c.channel || 'sms',
+        audience: c.audience || 'lead',
+        times_per_day: c.times_per_day || 1,
+        duration_days: c.duration_days || 7,
+      });
+    }
   }
 
   function cancelEdit() {
     setEditingId(null);
     setEditForm(BLANK_FORM);
+    setEditTemplateForm({ name: '', audience: 'lead', notes: '', custom_link: '' });
   }
 
-  async function saveEdit(e, id) {
+  async function saveEdit(e, c) {
     e.preventDefault();
-    if (!editForm.name.trim()) return;
-    setBusyId(id);
-    await api.updateCampaign(id, {
-      name: editForm.name,
-      notes: editForm.notes || null,
-      message: editForm.message || null,
-      channel: editForm.channel,
-      audience: editForm.audience,
-      times_per_day: Number(editForm.times_per_day) || 1,
-      duration_days: Number(editForm.duration_days) || 1,
-    });
+    setBusyId(c.id);
+    if (c.step_count > 0) {
+      if (!editTemplateForm.name.trim()) { setBusyId(null); return; }
+      await api.updateCampaign(c.id, {
+        name: editTemplateForm.name,
+        audience: editTemplateForm.audience,
+        notes: editTemplateForm.notes || null,
+        custom_link: editTemplateForm.custom_link || null,
+      });
+    } else {
+      if (!editForm.name.trim()) { setBusyId(null); return; }
+      await api.updateCampaign(c.id, {
+        name: editForm.name,
+        notes: editForm.notes || null,
+        message: editForm.message || null,
+        channel: editForm.channel,
+        audience: editForm.audience,
+        times_per_day: Number(editForm.times_per_day) || 1,
+        duration_days: Number(editForm.duration_days) || 1,
+      });
+    }
     setBusyId(null);
     setEditingId(null);
     load();
@@ -124,6 +197,15 @@ export default function Campaigns() {
     api.campaignEnrollments(c.id).then(setEnrollments);
   }
 
+  async function toggleSteps(c) {
+    if (stepsId === c.id) { setStepsId(null); return; }
+    setStepsId(c.id);
+    if (!stepsCache[c.id]) {
+      const rows = await api.campaignSteps(c.id);
+      setStepsCache((prev) => ({ ...prev, [c.id]: rows }));
+    }
+  }
+
   async function removeEnrollment(enrollmentId, campaignId) {
     await api.removeCampaignEnrollment(enrollmentId);
     api.campaignEnrollments(campaignId).then(setEnrollments);
@@ -131,6 +213,7 @@ export default function Campaigns() {
   }
 
   const activeCount = campaigns ? campaigns.filter((c) => c.status === 'active').length : 0;
+  const selectedTemplate = templateByKey(templateForm.template_key);
 
   return (
     <>
@@ -140,7 +223,7 @@ export default function Campaigns() {
           <p className="sub">
             The switch that unlocks automated texting and email — no auto-message from the{' '}
             <Link to="/automations">Automations</Link> page reaches a real customer until at least one campaign here is active.
-            A campaign can also send its own message on a schedule to contacts you add to it from a{' '}
+            Start a campaign from a built-in sequence template, or write your own custom message, then add contacts to it from a{' '}
             <Link to="/conversations">Conversations</Link> thread.
           </p>
         </div>
@@ -160,51 +243,106 @@ export default function Campaigns() {
 
       {showForm && (
         <div className="card" style={{ marginBottom: 18 }}>
-          <form onSubmit={submit} className="form-grid">
-            <div className="field"><label>Campaign name</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Restart a cold conversation" required /></div>
-            <div className="field">
-              <label>Audience</label>
-              <select value={form.audience} onChange={(e) => setForm({ ...form, audience: e.target.value })}>
-                <option value="lead">Leads</option>
-                <option value="opportunity">Opportunities</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>Channel</label>
-              <select value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value })}>
-                <option value="sms">SMS</option>
-                <option value="email">Email</option>
-                <option value="both">Both — SMS and email</option>
-              </select>
-            </div>
-            <div className="field" style={{ gridColumn: '1 / -1' }}>
-              <label>Start from a preset <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
-              <select value="" onChange={(e) => { if (e.target.value) setForm({ ...form, message: e.target.value }); }}>
-                <option value="">— Choose a preset —</option>
-                {(PRESETS[form.audience] || []).map((p) => <option key={p.label} value={p.text}>{p.label}</option>)}
-              </select>
-            </div>
-            <div className="field" style={{ gridColumn: '1 / -1' }}>
-              <label>Message <span className="muted" style={{ fontWeight: 400 }}>— the greeting and company sign-off below are added automatically</span></label>
-              <textarea rows={3} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="just following up on your project — happy to answer any questions!" />
-              <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                Sent as: &ldquo;Hi {'{{first_name}}'}, {form.message || '…'} — {companyName || 'your company'}&rdquo;
+          <div className="row" style={{ gap: 6, marginBottom: 14 }}>
+            <button type="button" className={'btn sm' + (formMode === 'template' ? ' primary' : ' subtle')} onClick={() => setFormMode('template')}>From a template</button>
+            <button type="button" className={'btn sm' + (formMode === 'custom' ? ' primary' : ' subtle')} onClick={() => setFormMode('custom')}>Custom message</button>
+          </div>
+
+          {formMode === 'template' ? (
+            <form onSubmit={submit} className="form-grid">
+              <div className="field"><label>Campaign name</label><input value={templateForm.name} onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })} placeholder="e.g. New leads — speed to lead" required /></div>
+              <div className="field">
+                <label>Audience</label>
+                <select value={templateForm.audience} onChange={(e) => setTemplateForm({ ...templateForm, audience: e.target.value })}>
+                  <option value="lead">Leads</option>
+                  <option value="opportunity">Opportunities</option>
+                </select>
               </div>
-            </div>
-            <div className="field">
-              <label>Times per day</label>
-              <input type="number" min="1" value={form.times_per_day} onChange={(e) => setForm({ ...form, times_per_day: e.target.value })} />
-            </div>
-            <div className="field">
-              <label>For how many days</label>
-              <input type="number" min="1" value={form.duration_days} onChange={(e) => setForm({ ...form, duration_days: e.target.value })} />
-            </div>
-            <div className="field" style={{ gridColumn: '1 / -1' }}>
-              <label>Notes (optional)</label>
-              <textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="What this campaign covers, for your own reference." />
-            </div>
-            <div className="field" style={{ justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Create campaign</button></div>
-          </form>
+              <div className="field" style={{ gridColumn: '1 / -1' }}>
+                <label>Template</label>
+                <select
+                  value={templateForm.template_key}
+                  onChange={(e) => {
+                    const key = e.target.value;
+                    const t = templatesData ? templatesData.templates.find((x) => x.key === key) : null;
+                    setTemplateForm({ ...templateForm, template_key: key, audience: t ? t.audience : templateForm.audience });
+                  }}
+                  required
+                >
+                  <option value="">— Choose a template —</option>
+                  {templatesData && templatesData.categories.map((cat) => (
+                    <optgroup key={cat.key} label={cat.label}>
+                      {templatesData.templates.filter((t) => t.category === cat.key).map((t) => (
+                        <option key={t.key} value={t.key}>{t.name}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                {selectedTemplate && <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{selectedTemplate.description}</div>}
+              </div>
+              {selectedTemplate && selectedTemplate.needsLink && (
+                <div className="field" style={{ gridColumn: '1 / -1' }}>
+                  <label>Link <span className="muted" style={{ fontWeight: 400 }}>— this template refers to a link (payment or review page)</span></label>
+                  <input value={templateForm.custom_link} onChange={(e) => setTemplateForm({ ...templateForm, custom_link: e.target.value })} placeholder="https://…" required />
+                </div>
+              )}
+              {selectedTemplate && (
+                <div className="field" style={{ gridColumn: '1 / -1' }}>
+                  <label>Preview <span className="muted" style={{ fontWeight: 400 }}>({selectedTemplate.steps.length} messages)</span></label>
+                  <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid var(--line-soft)', borderRadius: 6, padding: '0 8px' }}>
+                    {selectedTemplate.steps.map((s, i) => <StepPreview key={i} step={s} />)}
+                  </div>
+                </div>
+              )}
+              <div className="field" style={{ justifyContent: 'flex-end' }}><button className="btn primary" type="submit" disabled={!templatesData}>Create campaign</button></div>
+            </form>
+          ) : (
+            <form onSubmit={submit} className="form-grid">
+              <div className="field"><label>Campaign name</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Restart a cold conversation" required /></div>
+              <div className="field">
+                <label>Audience</label>
+                <select value={form.audience} onChange={(e) => setForm({ ...form, audience: e.target.value })}>
+                  <option value="lead">Leads</option>
+                  <option value="opportunity">Opportunities</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>Channel</label>
+                <select value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value })}>
+                  <option value="sms">SMS</option>
+                  <option value="email">Email</option>
+                  <option value="both">Both — SMS and email</option>
+                </select>
+              </div>
+              <div className="field" style={{ gridColumn: '1 / -1' }}>
+                <label>Start from a preset <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+                <select value="" onChange={(e) => { if (e.target.value) setForm({ ...form, message: e.target.value }); }}>
+                  <option value="">— Choose a preset —</option>
+                  {(PRESETS[form.audience] || []).map((p) => <option key={p.label} value={p.text}>{p.label}</option>)}
+                </select>
+              </div>
+              <div className="field" style={{ gridColumn: '1 / -1' }}>
+                <label>Message <span className="muted" style={{ fontWeight: 400 }}>— the greeting and company sign-off below are added automatically</span></label>
+                <textarea rows={3} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="just following up on your project — happy to answer any questions!" />
+                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                  Sent as: &ldquo;Hi {'{{first_name}}'}, {form.message || '…'} — {companyName || 'your company'}&rdquo;
+                </div>
+              </div>
+              <div className="field">
+                <label>Times per day</label>
+                <input type="number" min="1" value={form.times_per_day} onChange={(e) => setForm({ ...form, times_per_day: e.target.value })} />
+              </div>
+              <div className="field">
+                <label>For how many days</label>
+                <input type="number" min="1" value={form.duration_days} onChange={(e) => setForm({ ...form, duration_days: e.target.value })} />
+              </div>
+              <div className="field" style={{ gridColumn: '1 / -1' }}>
+                <label>Notes (optional)</label>
+                <textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="What this campaign covers, for your own reference." />
+              </div>
+              <div className="field" style={{ justifyContent: 'flex-end' }}><button className="btn primary" type="submit">Create campaign</button></div>
+            </form>
+          )}
         </div>
       )}
 
@@ -231,72 +369,130 @@ export default function Campaigns() {
                 </div>
 
                 {editingId === c.id ? (
-                  <form onSubmit={(e) => saveEdit(e, c.id)} className="form-grid" style={{ marginTop: 10 }}>
-                    <div className="field"><label>Campaign name</label><input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required /></div>
-                    <div className="field">
-                      <label>Audience</label>
-                      <select value={editForm.audience} onChange={(e) => setEditForm({ ...editForm, audience: e.target.value })}>
-                        <option value="lead">Leads</option>
-                        <option value="opportunity">Opportunities</option>
-                      </select>
-                    </div>
-                    <div className="field">
-                      <label>Channel</label>
-                      <select value={editForm.channel} onChange={(e) => setEditForm({ ...editForm, channel: e.target.value })}>
-                        <option value="sms">SMS</option>
-                        <option value="email">Email</option>
-                        <option value="both">Both — SMS and email</option>
-                      </select>
-                    </div>
-                    <div className="field" style={{ gridColumn: '1 / -1' }}>
-                      <label>Start from a preset <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
-                      <select value="" onChange={(e) => { if (e.target.value) setEditForm({ ...editForm, message: e.target.value }); }}>
-                        <option value="">— Choose a preset —</option>
-                        {(PRESETS[editForm.audience] || []).map((p) => <option key={p.label} value={p.text}>{p.label}</option>)}
-                      </select>
-                    </div>
-                    <div className="field" style={{ gridColumn: '1 / -1' }}>
-                      <label>Message <span className="muted" style={{ fontWeight: 400 }}>— the greeting and company sign-off below are added automatically</span></label>
-                      <textarea rows={3} value={editForm.message} onChange={(e) => setEditForm({ ...editForm, message: e.target.value })} />
-                      <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                        Sent as: &ldquo;Hi {'{{first_name}}'}, {editForm.message || '…'} — {companyName || 'your company'}&rdquo;
+                  c.step_count > 0 ? (
+                    <form onSubmit={(e) => saveEdit(e, c)} className="form-grid" style={{ marginTop: 10 }}>
+                      <div className="field"><label>Campaign name</label><input value={editTemplateForm.name} onChange={(e) => setEditTemplateForm({ ...editTemplateForm, name: e.target.value })} required /></div>
+                      <div className="field">
+                        <label>Audience</label>
+                        <select value={editTemplateForm.audience} onChange={(e) => setEditTemplateForm({ ...editTemplateForm, audience: e.target.value })}>
+                          <option value="lead">Leads</option>
+                          <option value="opportunity">Opportunities</option>
+                        </select>
                       </div>
-                    </div>
-                    <div className="field">
-                      <label>Times per day</label>
-                      <input type="number" min="1" value={editForm.times_per_day} onChange={(e) => setEditForm({ ...editForm, times_per_day: e.target.value })} />
-                    </div>
-                    <div className="field">
-                      <label>For how many days</label>
-                      <input type="number" min="1" value={editForm.duration_days} onChange={(e) => setEditForm({ ...editForm, duration_days: e.target.value })} />
-                    </div>
-                    <div className="field" style={{ gridColumn: '1 / -1' }}>
-                      <label>Notes (optional)</label>
-                      <textarea rows={2} value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
-                    </div>
-                    <div className="field" style={{ gridColumn: '1 / -1', justifyContent: 'flex-end', flexDirection: 'row', gap: 8 }}>
-                      <button type="button" className="btn subtle" disabled={busyId === c.id} onClick={cancelEdit}>Cancel</button>
-                      <button className="btn primary" type="submit" disabled={busyId === c.id}>Save changes</button>
-                    </div>
-                  </form>
+                      <div className="field" style={{ gridColumn: '1 / -1' }}>
+                        <label>Link <span className="muted" style={{ fontWeight: 400 }}>(optional unless this sequence uses one)</span></label>
+                        <input value={editTemplateForm.custom_link} onChange={(e) => setEditTemplateForm({ ...editTemplateForm, custom_link: e.target.value })} placeholder="https://…" />
+                      </div>
+                      <div className="field" style={{ gridColumn: '1 / -1' }}>
+                        <label>Notes (optional)</label>
+                        <textarea rows={2} value={editTemplateForm.notes} onChange={(e) => setEditTemplateForm({ ...editTemplateForm, notes: e.target.value })} />
+                      </div>
+                      <div className="muted" style={{ gridColumn: '1 / -1', fontSize: 12 }}>
+                        This campaign's {c.step_count} messages come from the &ldquo;{c.template_name || 'template'}&rdquo; sequence and aren't editable here — delete and recreate from a template to change the wording, or use a Custom message campaign for full control.
+                      </div>
+                      <div className="field" style={{ gridColumn: '1 / -1', justifyContent: 'flex-end', flexDirection: 'row', gap: 8 }}>
+                        <button type="button" className="btn subtle" disabled={busyId === c.id} onClick={cancelEdit}>Cancel</button>
+                        <button className="btn primary" type="submit" disabled={busyId === c.id}>Save changes</button>
+                      </div>
+                    </form>
+                  ) : (
+                    <form onSubmit={(e) => saveEdit(e, c)} className="form-grid" style={{ marginTop: 10 }}>
+                      <div className="field"><label>Campaign name</label><input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required /></div>
+                      <div className="field">
+                        <label>Audience</label>
+                        <select value={editForm.audience} onChange={(e) => setEditForm({ ...editForm, audience: e.target.value })}>
+                          <option value="lead">Leads</option>
+                          <option value="opportunity">Opportunities</option>
+                        </select>
+                      </div>
+                      <div className="field">
+                        <label>Channel</label>
+                        <select value={editForm.channel} onChange={(e) => setEditForm({ ...editForm, channel: e.target.value })}>
+                          <option value="sms">SMS</option>
+                          <option value="email">Email</option>
+                          <option value="both">Both — SMS and email</option>
+                        </select>
+                      </div>
+                      <div className="field" style={{ gridColumn: '1 / -1' }}>
+                        <label>Start from a preset <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+                        <select value="" onChange={(e) => { if (e.target.value) setEditForm({ ...editForm, message: e.target.value }); }}>
+                          <option value="">— Choose a preset —</option>
+                          {(PRESETS[editForm.audience] || []).map((p) => <option key={p.label} value={p.text}>{p.label}</option>)}
+                        </select>
+                      </div>
+                      <div className="field" style={{ gridColumn: '1 / -1' }}>
+                        <label>Message <span className="muted" style={{ fontWeight: 400 }}>— the greeting and company sign-off below are added automatically</span></label>
+                        <textarea rows={3} value={editForm.message} onChange={(e) => setEditForm({ ...editForm, message: e.target.value })} />
+                        <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                          Sent as: &ldquo;Hi {'{{first_name}}'}, {editForm.message || '…'} — {companyName || 'your company'}&rdquo;
+                        </div>
+                      </div>
+                      <div className="field">
+                        <label>Times per day</label>
+                        <input type="number" min="1" value={editForm.times_per_day} onChange={(e) => setEditForm({ ...editForm, times_per_day: e.target.value })} />
+                      </div>
+                      <div className="field">
+                        <label>For how many days</label>
+                        <input type="number" min="1" value={editForm.duration_days} onChange={(e) => setEditForm({ ...editForm, duration_days: e.target.value })} />
+                      </div>
+                      <div className="field" style={{ gridColumn: '1 / -1' }}>
+                        <label>Notes (optional)</label>
+                        <textarea rows={2} value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
+                      </div>
+                      <div className="field" style={{ gridColumn: '1 / -1', justifyContent: 'flex-end', flexDirection: 'row', gap: 8 }}>
+                        <button type="button" className="btn subtle" disabled={busyId === c.id} onClick={cancelEdit}>Cancel</button>
+                        <button className="btn primary" type="submit" disabled={busyId === c.id}>Save changes</button>
+                      </div>
+                    </form>
+                  )
                 ) : (
                   <>
-                    {c.message && (
-                  <div className="muted" style={{ fontSize: 13, marginTop: 6, whiteSpace: 'pre-wrap' }}>&ldquo;{c.message}&rdquo;</div>
-                )}
-                <div className="row" style={{ gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-                  <span className="pill" style={{ fontSize: 12 }}>{AUDIENCE_LABEL[c.audience] || 'Leads'}</span>
-                  <span className="muted" style={{ fontSize: 12 }}>{CHANNEL_LABEL[c.channel] || c.channel}</span>
-                  <span className="muted" style={{ fontSize: 12 }}>{c.times_per_day}×/day for {c.duration_days} day{c.duration_days === 1 ? '' : 's'}</span>
-                  <button type="button" className="link-strong" style={{ fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => toggleEnrollments(c)}>
-                    {c.active_enrollment_count} currently enrolled {expandedId === c.id ? '▴' : '▾'}
-                  </button>
-                </div>
-                {c.notes && <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{c.notes}</div>}
-                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                  Created {dateTime(c.created_at)}{c.created_by_username ? ` by ${c.created_by_username}` : ''}
-                </div>
+                    {c.step_count > 0 ? (
+                      <>
+                        <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>
+                          Sequence: {c.template_name || 'Custom sequence'}
+                        </div>
+                        {c.custom_link && <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Link: {c.custom_link}</div>}
+                      </>
+                    ) : (
+                      c.message && (
+                        <div className="muted" style={{ fontSize: 13, marginTop: 6, whiteSpace: 'pre-wrap' }}>&ldquo;{c.message}&rdquo;</div>
+                      )
+                    )}
+                    <div className="row" style={{ gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                      <span className="pill" style={{ fontSize: 12 }}>{AUDIENCE_LABEL[c.audience] || 'Leads'}</span>
+                      {c.step_count > 0 ? (
+                        <>
+                          <span className="muted" style={{ fontSize: 12 }}>{c.step_count} message{c.step_count === 1 ? '' : 's'} over {c.duration_days} day{c.duration_days === 1 ? '' : 's'}</span>
+                          <button type="button" className="link-strong" style={{ fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => toggleSteps(c)}>
+                            View sequence {stepsId === c.id ? '▴' : '▾'}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="muted" style={{ fontSize: 12 }}>{CHANNEL_LABEL[c.channel] || c.channel}</span>
+                          <span className="muted" style={{ fontSize: 12 }}>{c.times_per_day}×/day for {c.duration_days} day{c.duration_days === 1 ? '' : 's'}</span>
+                        </>
+                      )}
+                      <button type="button" className="link-strong" style={{ fontSize: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => toggleEnrollments(c)}>
+                        {c.active_enrollment_count} currently enrolled {expandedId === c.id ? '▴' : '▾'}
+                      </button>
+                    </div>
+                    {c.notes && <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{c.notes}</div>}
+                    <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                      Created {dateTime(c.created_at)}{c.created_by_username ? ` by ${c.created_by_username}` : ''}
+                    </div>
                   </>
+                )}
+
+                {stepsId === c.id && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--line-soft)' }}>
+                    {!stepsCache[c.id] ? <div className="loading">Loading…</div> : (
+                      <div>
+                        {stepsCache[c.id].map((s) => <StepPreview key={s.id} step={s} />)}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {expandedId === c.id && (
