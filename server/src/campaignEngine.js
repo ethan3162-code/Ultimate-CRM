@@ -15,6 +15,7 @@
 const db = require('./db');
 const { logActivity } = require('./helpers');
 const { render } = require('./automationEngine');
+const { getCompanyProfile } = require('./companyProfile');
 const mailer = require('./mailer');
 const sms = require('./sms');
 
@@ -36,7 +37,15 @@ async function sendRound(campaign, contact) {
     last_name: contact.last_name,
     contact_name: `${contact.first_name} ${contact.last_name}`,
   };
-  const body = render(campaign.message || '', ctx);
+  // Every drip message is auto-bookended: a "Hi {first name}," greeting up front (falls back to
+  // "Hi there," if a contact has no first name on file) and the business's own name signed at the
+  // end — so a campaign's message field is just the middle part, not something a rep has to
+  // reassemble by hand on every campaign. See companyProfile.js for where the business name
+  // itself comes from (the same source the Estimate/Invoice documents already use).
+  const greeting = contact.first_name ? `Hi ${contact.first_name}, ` : 'Hi there, ';
+  const middle = render((campaign.message || '').trim(), ctx);
+  const signature = ` — ${getCompanyProfile().name}`;
+  const body = `${greeting}${middle}${signature}`;
   const wantsSms = campaign.channel === 'sms' || campaign.channel === 'both';
   const wantsEmail = campaign.channel === 'email' || campaign.channel === 'both';
   let sentAny = false;
