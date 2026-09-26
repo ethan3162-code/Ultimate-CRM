@@ -10,6 +10,7 @@
 const express = require('express');
 const db = require('../db');
 const { logActivity } = require('../helpers');
+const { getCompanyProfile } = require('../companyProfile');
 
 const router = express.Router();
 
@@ -23,6 +24,13 @@ function campaignRow(id) {
     FROM campaigns c LEFT JOIN users u ON u.id = c.created_by_user_id WHERE c.id = ?
   `).get(id);
 }
+
+// The business's own name, for the create/edit form to show what a message actually gets signed
+// with (see campaignEngine.js's automatic greeting/signature) — same source the Estimate/Invoice
+// documents already use for their company info.
+router.get('/company-name', (req, res) => {
+  res.json({ name: getCompanyProfile().name });
+});
 
 router.get('/', (req, res) => {
   const rows = db.prepare(`
